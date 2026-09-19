@@ -56,6 +56,12 @@ struct SearchHit {
     line: usize,
     snippet: String,
 }
+#[derive(Serialize)]
+struct BookmarkSearchHit {
+    root: String,
+    path: String,
+    bookmark: Bookmark,
+}
 fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
@@ -262,6 +268,7 @@ async fn save_bookmarks(
 #[derive(Serialize)]
 struct SearchResponse {
     hits: Vec<SearchHit>,
+    bookmarks: Vec<BookmarkSearchHit>,
     warnings: Vec<String>,
 }
 fn scan_search(
@@ -269,9 +276,11 @@ fn scan_search(
     query: String,
     generation: Arc<AtomicU64>,
     ticket: u64,
+    metadata_dir: PathBuf,
 ) -> SearchResponse {
     let mut response = SearchResponse {
         hits: Vec::new(),
+        bookmarks: Vec::new(),
         warnings: Vec::new(),
     };
     let query = query.trim().to_lowercase();
@@ -302,6 +311,44 @@ fn scan_search(
             {
                 continue;
             }
+            let canonical = match fs::canonicalize(&path) {
+                Ok(path) => path,
+                Err(_) => continue,
+            };
+            let metadata = metadata_dir.join(format!(
+                "{}.json",
+                revision(canonical.to_string_lossy().as_bytes())
+            ));
+            if metadata.exists() && response.bookmarks.len() < 80 {
+                match fs::read(&metadata)
+                    .map_err(err)
+                    .and_then(|bytes| serde_json::from_slice::<Vec<Bookmark>>(&bytes).map_err(err))
+                {
+                    Ok(bookmarks) => {
+                        for bookmark in bookmarks {
+                            if bookmark.name.to_lowercase().contains(&query)
+                                || bookmark.quote.to_lowercase().contains(&query)
+                            {
+                                response.bookmarks.push(BookmarkSearchHit {
+                                    root: root.to_string_lossy().into_owned(),
+                                    path: note.path.clone(),
+                                    bookmark,
+                                });
+                                if response.bookmarks.len() == 80 {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    Err(error) => response.warnings.push(format!(
+                        "Couldn't read bookmarks for {}: {error}",
+                        path.display()
+                    )),
+                }
+            }
+            if response.hits.len() == 80 {
+                continue;
+            }
             let file = match fs::File::open(&path) {
                 Ok(file) => file,
                 Err(_) => {
@@ -324,7 +371,7 @@ fn scan_search(
                         snippet: line.chars().take(300).collect(),
                     });
                     if response.hits.len() == 80 {
-                        return response;
+                        break;
                     }
                 }
             }
@@ -334,6 +381,7 @@ fn scan_search(
 }
 #[tauri::command]
 async fn search_notes(
+    app: tauri::AppHandle,
     roots: Vec<String>,
     query: String,
     access: State<'_, Access>,
@@ -351,10 +399,12 @@ async fn search_notes(
     }
     let generation = access.search_generation.clone();
     let ticket = generation.fetch_add(1, Ordering::Relaxed) + 1;
-    let mut response =
-        tauri::async_runtime::spawn_blocking(move || scan_search(paths, query, generation, ticket))
-            .await
-            .map_err(err)?;
+    let metadata_dir = app.path().app_data_dir().map_err(err)?.join("bookmarks");
+    let mut response = tauri::async_runtime::spawn_blocking(move || {
+        scan_search(paths, query, generation, ticket, metadata_dir)
+    })
+    .await
+    .map_err(err)?;
     response.warnings.extend(warnings);
     Ok(response)
 }
@@ -490,11 +540,59 @@ mod tests {
             "needle".into(),
             Arc::new(AtomicU64::new(1)),
             1,
+            a.path().join("bookmarks"),
         );
         assert_eq!(response.hits.len(), 2);
         assert_ne!(response.hits[0].root, response.hits[1].root);
         assert_eq!(response.hits[0].path, response.hits[1].path);
     }
+    #[test]
+    fn searches_bookmark_names_and_quotes_even_after_text_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(dir.path()).unwrap();
+        let metadata = tempfile::tempdir().unwrap();
+        fs::write(root.join("a.md"), "needle\n".repeat(100)).unwrap();
+        let file = root.join("z.md");
+        fs::write(&file, "a passage").unwrap();
+        let mark = Bookmark {
+            id: "user-created".into(),
+            name: "My NEEDLE".into(),
+            from: 0,
+            to: 9,
+            quote: "a passage".into(),
+            unresolved: false,
+        };
+        let target = metadata.path().join(format!(
+            "{}.json",
+            revision(file.to_string_lossy().as_bytes())
+        ));
+        fs::write(&target, serde_json::to_vec(&vec![mark]).unwrap()).unwrap();
+        for query in ["needle", "PASSAGE"] {
+            let result = scan_search(
+                vec![root.clone()],
+                query.into(),
+                Arc::new(AtomicU64::new(1)),
+                1,
+                metadata.path().to_owned(),
+            );
+            assert_eq!(result.bookmarks.len(), 1);
+            assert_eq!(result.bookmarks[0].bookmark.id, "user-created");
+            assert_eq!(result.bookmarks[0].path, "z.md");
+            if query == "needle" {
+                assert_eq!(result.hits.len(), 80);
+            }
+        }
+        fs::remove_file(target).unwrap();
+        let result = scan_search(
+            vec![root],
+            "needle".into(),
+            Arc::new(AtomicU64::new(1)),
+            1,
+            metadata.path().to_owned(),
+        );
+        assert!(result.bookmarks.is_empty());
+    }
+
     #[test]
     fn rejects_stale_save_and_preserves_crlf() {
         let dir = tempfile::tempdir().unwrap();

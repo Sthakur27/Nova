@@ -140,7 +140,9 @@ export async function saveBookmarks(
   localStorage.setItem(prefix + path + ":bookmarks", JSON.stringify(bookmarks));
 }
 export type FolderSearchHit = SearchHit & { root: string };
+export type BookmarkSearchHit = { root: string; path: string; bookmark: Bookmark };
 export type FolderSearchResponse = {
+  bookmarks: BookmarkSearchHit[];
   hits: FolderSearchHit[];
   warnings: string[];
 };
@@ -151,9 +153,17 @@ export async function searchNotes(
   const native = folders.filter((f) => f.root !== "demo" && !f.error);
   const result: FolderSearchResponse = native.length
     ? await invoke("search_notes", { roots: native.map((f) => f.root), query })
-    : { hits: [], warnings: [] };
+    : { hits: [], bookmarks: [], warnings: [] };
   if (folders.some((f) => f.root === "demo")) {
     const hits: FolderSearchHit[] = [];
+    const q = query.trim().toLowerCase();
+    for (const path of Object.keys(demoFiles)) {
+      const note = await readNote("demo", path);
+      for (const bookmark of note.bookmarks) {
+        if (q && (bookmark.name.toLowerCase().includes(q) || bookmark.quote.toLowerCase().includes(q)))
+          result.bookmarks.push({ root: "demo", path, bookmark });
+      }
+    }
     for (const path of Object.keys(demoFiles))
       textFor(path)
         .split("\n")
@@ -169,5 +179,6 @@ export async function searchNotes(
       folders.findIndex((f) => f.root === b.root),
   );
   result.hits = result.hits.slice(0, 80);
+  result.bookmarks = result.bookmarks.slice(0, 80);
   return result;
 }

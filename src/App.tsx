@@ -261,10 +261,10 @@ export default function App() {
     });
   }, []);
   const openNote = useCallback(
-    async (nextPath: string, line?: number, nextWorkspace?: Workspace, pinned=false) => {
+    async (nextPath: string, line?: number, nextWorkspace?: Workspace, bookmarkId?: string, pinned=false) => {
       const requested=nextWorkspace??current.current.workspace;
       if(pinned){pendingPins.current.add(tabId({root:requested.root,path:nextPath}));pin(requested.root,nextPath);}
-      if(current.current.hasDocument&&requested.root===current.current.workspace.root&&nextPath===current.current.path&&!line)return true;
+      if(current.current.hasDocument&&requested.root===current.current.workspace.root&&nextPath===current.current.path&&!line&&!bookmarkId)return true;
       if (voiceBusy.current) {
         setNotice("Finish or cancel voice typing before switching files.");
         return false;
@@ -299,7 +299,16 @@ export default function App() {
         setActiveMark(null);
         setCursor([1, 1]);
         if (!/\.(md|markdown|mdx)$/i.test(nextPath)) setMode("source");
-        if (line) {
+        if (bookmarkId) {
+          const mark = note.bookmarks.find((b) => b.id === bookmarkId);
+          if (mark && !mark.unresolved) {
+            setActiveMark(mark.id);
+            setMode("source");
+            setTimeout(() => jump(mark.from, mark.to), 50);
+          } else {
+            setNotice("This bookmark needs a new anchor. Its original passage could not be found.");
+          }
+        } else if (line) {
           setMode("source");
           setTimeout(() => {
             const lines = note.text.split("\n");
@@ -573,7 +582,7 @@ export default function App() {
           folders={folders}
           activeRoot={workspace.root}
           activePath={path}
-          onOpen={(folder, path,pinned) => void openNote(path, undefined, folder,pinned)}
+          onOpen={(folder, path,pinned) => void openNote(path, undefined, folder,undefined,pinned)}
           onChange={changeFolders}
           onRemove={(root) => void removeFolder(root)}
           onRefresh={(root) => void refreshFolder(root)}
@@ -882,9 +891,9 @@ export default function App() {
             if (mode !== "read")
               editor.current?.jump(editor.current.selection().from);
           }}
-          onOpen={(root, p, l) => {
+          onOpen={(root, p, l, bookmarkId) => {
             const folder = folders.find((f) => f.root === root);
-            if (folder) void openNote(p, l, folder);
+            if (folder) void openNote(p, l, folder, bookmarkId);
           }}
         />
       )}

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FileText, Search, TextSearch, X } from "lucide-react";
+import { Bookmark as BookmarkIcon, FileText, Search, TextSearch, X } from "lucide-react";
 import { filenameMatches, type Workspace } from "./model";
-import { searchNotes, type FolderSearchHit } from "./storage";
+import { searchNotes, type FolderSearchHit, type BookmarkSearchHit } from "./storage";
 export default function Palette({
   folders,
   onClose,
@@ -9,11 +9,12 @@ export default function Palette({
 }: {
   folders: Workspace[];
   onClose: () => void;
-  onOpen: (root: string, path: string, line?: number) => void;
+  onOpen: (root: string, path: string, line?: number, bookmarkId?: string) => void;
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("All");
   const [hits, setHits] = useState<FolderSearchHit[]>([]);
+  const [bookmarks, setBookmarks] = useState<BookmarkSearchHit[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [index, setIndex] = useState(0);
@@ -21,7 +22,7 @@ export default function Palette({
   const input = useRef<HTMLInputElement>(null);
   const files = useMemo(
     () =>
-      filter === "Text"
+      (filter === "Text" || filter === "Bookmarks")
         ? []
         : filenameMatches(
             folders.flatMap((folder) =>
@@ -35,18 +36,22 @@ export default function Palette({
           ),
     [folders, query, filter],
   );
-  const textHits = filter === "Files" ? [] : hits;
+  const textHits = filter === "Files" || filter === "Bookmarks" ? [] : hits;
+  const bookmarkHits = filter === "Files" || filter === "Text" ? [] : bookmarks;
   const rows = [
     ...files.map((f) => ({
       root: f.root,
       path: f.path,
       line: undefined as number | undefined,
+      bookmarkId: undefined as string | undefined,
     })),
-    ...textHits,
+    ...bookmarkHits.map((hit) => ({ root: hit.root, path: hit.path, line: undefined, bookmarkId: hit.bookmark.id })),
+    ...textHits.map((hit) => ({ ...hit, bookmarkId: undefined })),
   ];
   useEffect(() => {
     let cancelled = false;
     setHits([]);
+    setBookmarks([]);
     setError("");
     setIndex(0);
     if (!query.trim() || filter === "Files") {
@@ -59,6 +64,7 @@ export default function Palette({
         .then((results) => {
           if (!cancelled) {
             setHits(results.hits);
+            setBookmarks(results.bookmarks);
             setError(results.warnings.join(" · "));
           }
         })
@@ -79,8 +85,8 @@ export default function Palette({
       ?.querySelector('[aria-selected="true"]')
       ?.scrollIntoView({ block: "nearest" });
   }, [index]);
-  const select = (root: string, path: string, line?: number) => {
-    onOpen(root, path, line);
+  const select = (root: string, path: string, line?: number, bookmarkId?: string) => {
+    onOpen(root, path, line, bookmarkId);
     onClose();
   };
   return (
@@ -112,7 +118,7 @@ export default function Palette({
           }
           if (e.key === "Enter" && e.target === input.current && rows[index]) {
             e.preventDefault();
-            select(rows[index].root, rows[index].path, rows[index].line);
+            select(rows[index].root, rows[index].path, rows[index].line, rows[index].bookmarkId);
           }
           if (e.key === "Tab") {
             const controls = Array.from(
@@ -137,8 +143,8 @@ export default function Palette({
             autoCapitalize="none"
             autoFocus
             ref={input}
-            aria-label="Search files and text"
-            placeholder="A filename, a phrase, a passing thought…"
+            aria-label="Search files, bookmarks, and text"
+            placeholder="A filename, a bookmark, a phrase…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -151,7 +157,7 @@ export default function Palette({
           </button>
         </div>
         <div className="palette-filters">
-          {["All", "Files", "Text"].map((f) => (
+          {["All", "Files", "Bookmarks", "Text"].map((f) => (
             <button
               key={f}
               className={f === filter ? "selected" : ""}
@@ -196,6 +202,31 @@ export default function Palette({
               <kbd>↵</kbd>
             </button>
           ))}
+          {bookmarkHits.length > 0 && (
+            <div className="section-label">
+              Bookmarks <span>{bookmarkHits.length}</span>
+            </div>
+          )}
+          {bookmarkHits.map((hit, i) => (
+            <button
+              role="option"
+              aria-selected={files.length + i === index}
+              className="search-result"
+              key={hit.root + ":" + hit.path + ":" + hit.bookmark.id}
+              onClick={() =>
+                select(hit.root, hit.path, undefined, hit.bookmark.id)
+              }
+            >
+              <BookmarkIcon size={17} />
+              <span>
+                <strong>{hit.bookmark.name}</strong>
+                <small>
+                  {folders.find((f) => f.root === hit.root)?.name} / {hit.path}
+                </small>
+                <small>{hit.bookmark.quote.slice(0, 160)}</small>
+              </span>
+            </button>
+          ))}
           {textHits.length > 0 && (
             <div className="section-label">
               Inside files{" "}
@@ -208,7 +239,7 @@ export default function Palette({
           {textHits.map((hit, i) => (
             <button
               role="option"
-              aria-selected={files.length + i === index}
+              aria-selected={files.length + bookmarkHits.length + i === index}
               className="search-result"
               key={hit.root + ":" + hit.path + ":" + hit.line}
               onClick={() => select(hit.root, hit.path, hit.line)}

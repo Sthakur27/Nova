@@ -1,6 +1,6 @@
 # Nova
 
-A local-first Mac and Windows notes prototype: ordinary folders, plain text and Markdown, filename-first search, and named bookmarks inside any note.
+A local-first Mac and Windows notes prototype: ordinary folders, plain text and Markdown, filename-first search (including bookmark names and excerpts), and named bookmarks inside any note.
 
 ## Run
 
@@ -74,3 +74,5 @@ npm run tauri build
 Tests cover live anchor movement, external reanchoring, missing passages, emoji offsets, search ranking, file scope, symlink escapes on Unix, stale-save rejection, and CRLF preservation. A GitHub Actions workflow builds on Mac and Windows when pushed; Windows has not been tested locally.
 
 Architecture: React/TypeScript → Tauri IPC → Rust file operations. CodeMirror owns the live text buffer. Markdown rendering is lazy-loaded. Full-text search runs off the UI thread and does not retain all note bodies in memory.
+
+Command-K has an **Everywhere / Current tab** scope switch. Everywhere searches all added folders; Current tab searches the focused note, including unsaved edits, and jumps directly to the selected match without saving or reloading. The scope choice is remembered for the session. Current tab is disabled when no note is open.
