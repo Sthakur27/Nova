@@ -87,6 +87,8 @@ import type { LargeReadHandle } from "./LargeRead";
 const LargeRead = lazy(() => import("./LargeRead"));
 const Markdown = lazy(() => import("./Markdown"));
 const mod = navigator.platform.toLowerCase().includes("mac") ? "⌘" : "Ctrl";
+// Windows uses an opaque native window to avoid transparent menu-bar artifacts.
+const supportsTranslucency = !(desktop && navigator.platform.toLowerCase().startsWith("win"));
 function BlackHoleIcon() {
   return (
     <svg className="black-hole-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -1014,7 +1016,7 @@ export default function App() {
     setPreview(editor.current?.text() ?? "");
   };
   return (
-    <div className="app-shell" data-focus-mode={focusMode} data-window-focused={windowFocused} data-galaxy={galaxyMode} data-translucent={translucent} data-editor-size={fontSize} data-text-width={textWidth} data-line-spacing={lineSpacing}
+    <div className="app-shell" data-focus-mode={focusMode} data-window-focused={windowFocused} data-galaxy={galaxyMode} data-translucent={supportsTranslucency && translucent} data-editor-size={fontSize} data-text-width={textWidth} data-line-spacing={lineSpacing}
       onPointerMove={(event) => {
         if (event.pointerType === "touch") return;
         const bounds = event.currentTarget.getBoundingClientRect();
@@ -1220,7 +1222,7 @@ export default function App() {
               {showLineHighlight && <Check size={13} />}
             </span>
           </button>}
-          {galaxyMode && <button
+          {galaxyMode && supportsTranslucency && <button
             className="icon-button toolbar-icon focus-toggle"
             aria-label="Translucent background"
             aria-pressed={translucent}
