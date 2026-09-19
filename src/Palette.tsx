@@ -1,3 +1,4 @@
+import "./palette.css";
 import {
   searchCurrentNote,
   type CurrentNote,
@@ -7,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bookmark as BookmarkIcon,
   FileText,
+  LayoutGrid,
   Search,
   TextSearch,
   X,
@@ -278,6 +280,33 @@ export default function Palette({
               : "All added folders"}
           </span>
         </div>
+        <div className="palette-filters" role="group" aria-label="Search type">
+          {[
+            { name: "All", Icon: LayoutGrid },
+            { name: "Files", Icon: FileText },
+            { name: "Bookmarks", Icon: BookmarkIcon },
+            { name: "Text", Icon: TextSearch },
+          ].map(({ name: f, Icon }) => (
+            <button
+              key={f}
+              aria-label={f}
+              title={f}
+              aria-pressed={f === filter}
+              className={f === filter ? "selected" : ""}
+              onClick={() => {
+                setFilter(f);
+                input.current?.focus();
+              }}
+            >
+              <Icon size={17} strokeWidth={1.7} aria-hidden="true" />
+            </button>
+          ))}
+          <span>
+            {currentOnly
+              ? "Searching current text"
+              : `Searching ${folders.length} ${folders.length === 1 ? "folder" : "folders"}`}
+          </span>
+        </div>
         <div className="palette-input">
           <Search size={22} />
           <input
@@ -302,25 +331,6 @@ export default function Palette({
           >
             <X size={17} />
           </button>
-        </div>
-        <div className="palette-filters">
-          {["All", "Files", "Bookmarks", "Text"].map((f) => (
-            <button
-              key={f}
-              className={f === filter ? "selected" : ""}
-              onClick={() => {
-                setFilter(f);
-                input.current?.focus();
-              }}
-            >
-              {f}
-            </button>
-          ))}
-          <span>
-            {currentOnly
-              ? "Searching current text"
-              : `Searching ${folders.length} ${folders.length === 1 ? "folder" : "folders"}`}
-          </span>
         </div>
         <div
           className="search-results"

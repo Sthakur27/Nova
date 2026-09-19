@@ -1,0 +1,67 @@
+/* The dialog has three distinct rows: scope, type shortcuts, and query. */
+.palette .search-scope {
+  padding: 16px 18px 0;
+  flex-shrink: 0;
+}
+.palette .palette-filters {
+  padding: 12px 18px 10px;
+  gap: 7px;
+  flex-shrink: 0;
+}
+.palette .palette-filters button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: #9992a5;
+}
+.palette .palette-filters button:hover {
+  background: #ffffff08;
+  color: #ded4eb;
+}
+.palette .palette-filters button.selected {
+  color: #d7c2f2;
+  background: #b497dc18;
+  border-color: #b497dc30;
+}
+.palette .palette-filters button:focus-visible {
+  outline: 2px solid #bca0df;
+  outline-offset: 2px;
+}
+.palette .palette-input {
+  position: relative;
+  flex-shrink: 0;
+  margin: 0 18px 14px;
+  padding: 12px 13px;
+  gap: 12px;
+  border: 1px solid #ffffff16;
+  border-radius: 9px;
+  background: #1c1c2280;
+  overflow: hidden;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease;
+}
+.palette .palette-input:focus-within {
+  border-color: #b79adf80;
+  box-shadow: 0 0 0 2px #b79adf10;
+}
+.palette .palette-input input {
+  box-shadow: none;
+  border-radius: 0;
+  outline: none;
+}
+.palette .palette-input::before,
+.palette .palette-input::after {
+  border-radius: inherit;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .palette .palette-input {
+    transition: none;
+  }
+}
