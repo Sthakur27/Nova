@@ -8,7 +8,13 @@ export type Bookmark = {
   line?: number;
 };
 export type NoteFile = { path: string; name: string };
-export type Workspace = { name: string; root: string; files: NoteFile[] };
+export type Workspace = {
+  name: string;
+  root: string;
+  files: NoteFile[];
+  collapsed?: boolean;
+  error?: string;
+};
 export type DocumentData = {
   text: string;
   revision: string;
@@ -55,7 +61,10 @@ export function reanchor(bookmarks: Bookmark[], text: string): Bookmark[] {
     })
     .map((b) => ({ ...b, line: text.slice(0, b.from).split("\n").length }));
 }
-export function filenameMatches(files: NoteFile[], query: string): NoteFile[] {
+export function filenameMatches<T extends NoteFile>(
+  files: T[],
+  query: string,
+): T[] {
   const q = query.trim().toLowerCase();
   return files
     .filter((f) => f.path.toLowerCase().includes(q))

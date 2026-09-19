@@ -1,5 +1,16 @@
+import { GFM } from "@lezer/markdown";
+import {
+  richMarkdown,
+  formatTransaction,
+  type FormatAction,
+} from "./richMarkdown";
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
-import { EditorState, StateEffect, StateField } from "@codemirror/state";
+import {
+  Compartment,
+  EditorState,
+  StateEffect,
+  StateField,
+} from "@codemirror/state";
 import {
   Decoration,
   EditorView,
@@ -61,6 +72,7 @@ const decorations = StateField.define<DecorationSet>({
   provide: (field) => EditorView.decorations.from(field),
 });
 export type EditorHandle = {
+  format: (action: FormatAction) => void;
   text: () => string;
   selection: () => { from: number; to: number; quote: string };
   jump: (from: number, to?: number) => void;
@@ -78,8 +90,10 @@ type Props = {
   onBookmark: () => void;
   onSave: () => void;
   isMarkdown: boolean;
+  visual: boolean;
 };
 export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
+  const presentation = useRef(new Compartment());
   const mount = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const latest = useRef(props);
@@ -87,6 +101,13 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
   useImperativeHandle(
     ref,
     () => ({
+      format: (action) => {
+        const v = view.current;
+        if (v) {
+          v.dispatch(formatTransaction(v.state, action));
+          v.focus();
+        }
+      },
       text: () => view.current?.state.doc.toString() ?? "",
       beginDictation: () => {
         const v = view.current!;
@@ -140,12 +161,18 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
         doc: p.initial,
         extensions: [
           history(),
-          lineNumbers(),
+          presentation.current.of(
+            p.visual
+              ? [
+                  richMarkdown,
+                  EditorView.editorAttributes.of({ class: "live-edit" }),
+                ]
+              : [lineNumbers(), syntaxHighlighting(defaultHighlightStyle)],
+          ),
           highlightActiveLine(),
           highlightSelectionMatches(),
           EditorView.lineWrapping,
-          p.isMarkdown ? markdown() : [],
-          syntaxHighlighting(defaultHighlightStyle),
+          p.isMarkdown ? markdown({ extensions: GFM }) : [],
           bookmarkField,
           dictationAnchor,
           decorations,
@@ -233,5 +260,17 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
     if (v && v.state.field(bookmarkField) !== props.bookmarks)
       v.dispatch({ effects: setMarks.of(props.bookmarks) });
   }, [props.bookmarks]);
+  useEffect(() => {
+    view.current?.dispatch({
+      effects: presentation.current.reconfigure(
+        props.visual
+          ? [
+              richMarkdown,
+              EditorView.editorAttributes.of({ class: "live-edit" }),
+            ]
+          : [lineNumbers(), syntaxHighlighting(defaultHighlightStyle)],
+      ),
+    });
+  }, [props.visual]);
   return <div className="editor-mount" ref={mount} />;
 });

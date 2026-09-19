@@ -15,9 +15,10 @@ If Rust is newly installed on this machine, run `source "$HOME/.cargo/env"` firs
 
 ## Use
 
-- **Open a folder**: browse its `.md`, `.markdown`, `.mdx` (rendered as Markdown, without JSX), and `.txt` files. No vault or changes to folder structure.
-- **Write / Read**: CodeMirror source editing and formatted Markdown. One document is mounted at a time. Inactive files are not loaded.
-- **Command-K / Ctrl-K**: search filenames first, then saved file contents. All / Files / Text filters; arrows and Enter navigate results. Selecting a text result opens its line in Write mode.
+- **Add folders**: keep up to 100 ordinary folders open together and browse its `.md`, `.markdown`, `.mdx` (rendered as Markdown, without JSX), and `.txt` files. No vault or changes to folder structure.
+- **Source / Edit / Read**: raw Markdown, styled live editing, and a reading view. Edit supports headings, emphasis, links, lists, task checkboxes, quotes and inline code, plus a formatting toolbar. Complex tables, fenced code and other unsupported structures remain source in Edit; Read renders full supported Markdown. Switching modes does not rewrite the document. One document is mounted at a time. Inactive files are not loaded.
+- Drag a folder handle to reorder roots. Arrow keys on the handle and the folder menu also reorder. Collapse roots independently; remove only removes the explorer entry. Drop folders from Finder/Explorer to add them. Folder order, collapse state, mode and the active note are remembered in app-data `explorer.json`. Unavailable roots remain visible for retry.
+- **Command-K / Ctrl-K**: search filenames first, then saved file contents across all added folders. Results include their folder. All / Files / Text filters; arrows and Enter navigate results. Selecting a text result opens its line in Source mode.
 - **Command-Shift-B / Ctrl-Shift-B**: bookmark a selection or the current line. Name, rename, remove, preview, and jump from the right rail. Read-mode selection works when the selected visible text maps directly to Markdown source.
 - **Command-S / Ctrl-S**: save. Switching files and closing the native window also save. Adding, renaming, or deleting a bookmark saves the note and its anchors.
 - **Refresh folder**: rescan after files are added or removed externally.
@@ -51,7 +52,7 @@ This explicit integration test downloads the model and fixture into a temporary 
 - Up to 32 MiB per UTF-8 text file and 50,000 notes per folder.
 - Formatted preview is limited to 500,000 characters; larger documents use the virtualized source editor.
 - Text search streams saved files, returns at most 80 matches, and cancels superseded searches between reads. It skips files over 32 MiB and invalid UTF-8 content. `.git`, `.obsidian`, `node_modules`, `target`, and `.Trash` directories are excluded, and directory symlinks are not followed.
-- No filesystem watcher, automatic reload, new-file UI, multiple tabs, image attachments, live inline Markdown, plugin compatibility, or sync yet. Refresh and reopening a file pick up disk changes.
+- No filesystem watcher, automatic reload, new-file UI, multiple tabs, image attachments, plugin compatibility, or sync yet. The folder menu’s Refresh action and reopening a file pick up disk changes.
 - Fonts are bundled locally. Markdown raw HTML is not executed. Image rendering is deliberately a placeholder in this first version.
 - RAM targets are not benchmarked yet. Tauri's webview subprocesses must be included in any measurement.
 

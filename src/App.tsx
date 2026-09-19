@@ -9,11 +9,10 @@ import {
 import {
   Bookmark as BookmarkIcon,
   BookOpen,
-  ChevronDown,
   ChevronRight,
   FileText,
-  Folder,
   FolderOpen,
+  Code2,
   Plus,
   Search,
   PanelRight,
@@ -22,17 +21,22 @@ import {
   X,
   Check,
   Save,
-  ArrowUpRight,
-  RefreshCw,
 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import Editor, { type EditorHandle } from "./Editor";
 import Palette from "./Palette";
+import Explorer from "./Explorer";
+import FormatToolbar from "./FormatToolbar";
+import { addFolders, type EditorMode } from "./folders";
 import VoiceControl from "./VoiceControl";
 import {
-  chooseWorkspace,
+  chooseWorkspaces,
+  loadFolders,
+  loadExplorer,
+  saveExplorer,
+  openWorkspace,
   demoWorkspace,
   desktop,
   readNote,
@@ -42,82 +46,10 @@ import {
 import type { Bookmark, DocumentData, Workspace } from "./model";
 const Markdown = lazy(() => import("./Markdown"));
 const mod = navigator.platform.toLowerCase().includes("mac") ? "⌘" : "Ctrl";
-function FileTree({
-  paths,
-  active,
-  onOpen,
-  prefix = "",
-}: {
-  paths: string[];
-  active: string;
-  onOpen: (path: string) => void;
-  prefix?: string;
-}) {
-  const [closed, setClosed] = useState<Set<string>>(new Set());
-  const groups = new Map<string, string[]>();
-  const files: string[] = [];
-  paths.forEach((path) => {
-    const rest = path.slice(prefix.length),
-      slash = rest.indexOf("/");
-    if (slash < 0) files.push(path);
-    else {
-      const name = rest.slice(0, slash);
-      groups.set(name, [...(groups.get(name) ?? []), path]);
-    }
-  });
-  return (
-    <>
-      {[...groups]
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([name, children]) => (
-          <div key={name}>
-            <button
-              className="tree-row folder-row"
-              aria-expanded={!closed.has(name)}
-              onClick={() =>
-                setClosed((s) => {
-                  const next = new Set(s);
-                  if (next.has(name)) next.delete(name);
-                  else next.add(name);
-                  return next;
-                })
-              }
-            >
-              {closed.has(name) ? (
-                <ChevronRight size={13} />
-              ) : (
-                <ChevronDown size={13} />
-              )}
-              <Folder size={15} />
-              <span>{name}</span>
-            </button>
-            {!closed.has(name) && (
-              <div className="tree-children">
-                <FileTree
-                  paths={children}
-                  active={active}
-                  onOpen={onOpen}
-                  prefix={prefix + name + "/"}
-                />
-              </div>
-            )}
-          </div>
-        ))}
-      {files.sort().map((path) => (
-        <button
-          key={path}
-          className={"tree-row file-row " + (path === active ? "active" : "")}
-          onClick={() => onOpen(path)}
-        >
-          <FileText size={15} />
-          <span>{path.slice(prefix.length)}</span>
-          {path === active && <span className="active-dot" />}
-        </button>
-      ))}
-    </>
-  );
-}
 export default function App() {
+  const [folders, setFolders] = useState<Workspace[]>([demoWorkspace]);
+  const [foldersReady, setFoldersReady] = useState(false);
+  const [externalDrag, setExternalDrag] = useState(false);
   const [workspace, setWorkspace] = useState<Workspace>(demoWorkspace);
   const [path, setPath] = useState("Getting started.md");
   const [data, setData] = useState<DocumentData | null>(null);
@@ -125,7 +57,7 @@ export default function App() {
   const marksRef = useRef<Bookmark[]>([]);
   const [dirty, setDirty] = useState(false);
   const dirtyRef = useRef(false);
-  const [mode, setMode] = useState<"read" | "write">("read");
+  const [mode, setMode] = useState<EditorMode>("edit");
   const [preview, setPreview] = useState("");
   const [palette, setPalette] = useState(false);
   const [rail, setRail] = useState(true);
@@ -147,8 +79,22 @@ export default function App() {
   const operation = useRef(false);
   const voiceBusy = useRef(false);
   const saveInFlight = useRef<Promise<boolean> | null>(null);
-  const current = useRef({ workspace, path });
-  current.current = { workspace, path };
+  const current = useRef({
+    workspace,
+    path,
+    folders,
+    mode,
+    hasDocument: !!data,
+    foldersReady,
+  });
+  current.current = {
+    workspace,
+    path,
+    folders,
+    mode,
+    hasDocument: !!data,
+    foldersReady,
+  };
   const applyMarks = useCallback((marks: Bookmark[]) => {
     marksRef.current = marks;
     setBookmarks(marks);
@@ -158,19 +104,102 @@ export default function App() {
     setDirty(true);
   }, []);
   useEffect(() => {
-    readNote("demo", "Getting started.md")
-      .then((note) => {
-        revision.current = note.revision;
-        setData(note);
-        setPreview(note.text);
-        applyMarks(note.bookmarks);
-      })
-      .catch((e) => setNotice(String(e)))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    void (async () => {
+      try {
+        const prefs = await loadExplorer();
+        const restored = prefs
+          ? await loadFolders(prefs.folders)
+          : [demoWorkspace];
+        if (cancelled) return;
+        setFolders(restored);
+        const mode = prefs?.mode ?? "edit";
+        setMode(mode);
+        const candidates: { folder: Workspace; path: string }[] = [];
+        const active = restored.find(
+          (f) => f.root === prefs?.active?.root && !f.error,
+        );
+        if (active && prefs?.active)
+          candidates.push({ folder: active, path: prefs.active.path });
+        for (const folder of restored)
+          if (!folder.error && folder.files.length)
+            candidates.push({ folder, path: folder.files[0].path });
+        let opened = false;
+        for (const candidate of candidates) {
+          try {
+            const note = await readNote(candidate.folder.root, candidate.path);
+            if (cancelled) return;
+            revision.current = note.revision;
+            setWorkspace(candidate.folder);
+            setPath(candidate.path);
+            setData(note);
+            setPreview(note.text);
+            applyMarks(note.bookmarks);
+            opened = true;
+            if (
+              !/\.(md|markdown|mdx)$/i.test(candidate.path) &&
+              mode === "edit"
+            )
+              setMode("source");
+            break;
+          } catch (error) {
+            setNotice(String(error));
+          }
+        }
+        if (!opened) {
+          setWorkspace(
+            restored[0] ?? { name: "Your folders", root: "", files: [] },
+          );
+          setPath("");
+          setData(null);
+        }
+      } catch (error) {
+        setNotice(String(error));
+      } finally {
+        if (!cancelled) {
+          setFoldersReady(true);
+          setLoading(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [applyMarks]);
+  useEffect(() => {
+    if (!foldersReady) return;
+    void saveExplorer({
+      folders: folders.map(({ root, name, collapsed }) => ({
+        root,
+        name,
+        collapsed,
+      })),
+      active: data ? { root: workspace.root, path } : null,
+      mode,
+    }).catch((error) => setNotice(String(error)));
+  }, [foldersReady, folders, workspace.root, path, mode, !!data]);
   const save = useCallback(async (): Promise<boolean> => {
     if (saveInFlight.current) return saveInFlight.current;
     const run = async () => {
+      if (current.current.foldersReady) {
+        try {
+          const c = current.current;
+          await saveExplorer({
+            folders: c.folders.map(({ root, name, collapsed }) => ({
+              root,
+              name,
+              collapsed,
+            })),
+            active: c.hasDocument
+              ? { root: c.workspace.root, path: c.path }
+              : null,
+            mode: c.mode,
+          });
+        } catch (error) {
+          setNotice(String(error));
+          return false;
+        }
+      }
       if (!editor.current) return true;
       const { workspace: ws, path: file } = current.current;
       const text = editor.current.text(),
@@ -225,17 +254,17 @@ export default function App() {
     async (nextPath: string, line?: number, nextWorkspace?: Workspace) => {
       if (voiceBusy.current) {
         setNotice("Finish or cancel voice typing before switching files.");
-        return;
+        return false;
       }
-      if (operation.current) return;
+      if (operation.current) return false;
       operation.current = true;
       try {
-        if (!(await save())) return;
+        if (!(await save())) return false;
         if (dirtyRef.current) {
           setNotice(
             "The note changed while saving. Save again before switching files.",
           );
-          return;
+          return false;
         }
         setLoading(true);
         const ws = nextWorkspace ?? current.current.workspace;
@@ -248,8 +277,9 @@ export default function App() {
         applyMarks(note.bookmarks);
         setActiveMark(null);
         setCursor([1, 1]);
+        if (!/\.(md|markdown|mdx)$/i.test(nextPath)) setMode("source");
         if (line) {
-          setMode("write");
+          setMode("source");
           setTimeout(() => {
             const lines = note.text.split("\n");
             jump(
@@ -259,8 +289,10 @@ export default function App() {
             );
           }, 50);
         }
+        return true;
       } catch (e) {
         setNotice(String(e));
+        return false;
       } finally {
         setLoading(false);
         operation.current = false;
@@ -268,29 +300,113 @@ export default function App() {
     },
     [applyMarks, jump, save],
   );
-  const openFolder = async () => {
-    if (voiceBusy.current) {
-      setNotice("Finish or cancel voice typing before opening a folder.");
+  const changeFolders = (next: Workspace[]) => {
+    if (current.current.foldersReady) setFolders(next);
+  };
+  const acceptFolders = async (added: Workspace[]) => {
+    if (!current.current.foldersReady) return;
+    const next = addFolders(current.current.folders, added);
+    if (next.length > 100) {
+      setNotice("You can add up to 100 folders.");
       return;
     }
-    if (!(await save())) return;
-    try {
-      const ws = await chooseWorkspace();
-      if (!ws) return;
-      if (ws.files.length) await openNote(ws.files[0].path, undefined, ws);
-      else {
-        setWorkspace(ws);
-        setPath("");
-        setData(null);
-        applyMarks([]);
-        setNotice(
-          "This folder has no .md, .markdown, .txt, or .mdx files yet. Add a file, then refresh the folder.",
-        );
-      }
-    } catch (e) {
-      setNotice(String(e));
+    setFolders(next);
+    if (!current.current.hasDocument) {
+      const first = added.find((f) => !f.error && f.files.length);
+      if (first) await openNote(first.files[0].path, undefined, first);
     }
   };
+  const openFolder = async () => {
+    if (voiceBusy.current) {
+      setNotice("Finish or cancel voice typing before adding folders.");
+      return;
+    }
+    try {
+      await acceptFolders(await chooseWorkspaces());
+    } catch (error) {
+      setNotice(String(error));
+    }
+  };
+  const refreshFolder = async (root: string) => {
+    try {
+      const refreshed = await openWorkspace(root);
+      setFolders((old) =>
+        old.map((f) =>
+          f.root === root ? { ...refreshed, collapsed: f.collapsed } : f,
+        ),
+      );
+    } catch (error) {
+      setNotice(String(error));
+      setFolders((old) =>
+        old.map((f) => (f.root === root ? { ...f, error: String(error) } : f)),
+      );
+    }
+  };
+  const removeFolder = async (root: string) => {
+    if (voiceBusy.current || operation.current) {
+      setNotice("Finish the current operation before removing a folder.");
+      return;
+    }
+    const next = current.current.folders.filter((f) => f.root !== root);
+    if (
+      current.current.workspace.root === root &&
+      current.current.hasDocument
+    ) {
+      const first = next.find((f) => !f.error && f.files.length);
+      if (first) {
+        if (!(await openNote(first.files[0].path, undefined, first))) return;
+      } else {
+        if (!(await save()) || dirtyRef.current) return;
+        setData(null);
+        setPath("");
+        applyMarks([]);
+        setWorkspace(next[0] ?? { name: "Your folders", root: "", files: [] });
+      }
+    }
+    setFolders(next);
+  };
+  const dropHandler = useRef<(paths: string[]) => void>(() => {});
+  dropHandler.current = (paths) => {
+    if (voiceBusy.current) {
+      setNotice("Finish or cancel voice typing before adding folders.");
+      return;
+    }
+    void loadFolders(
+      paths.map((root) => ({ root, name: root.split(/[\\/]/).at(-1) || root })),
+    )
+      .then((added) => {
+        const valid = added.filter((f) => !f.error);
+        if (valid.length !== added.length)
+          setNotice(
+            "Drop folders rather than individual files. Unavailable folders were skipped.",
+          );
+        return acceptFolders(valid);
+      })
+      .catch((error) => setNotice(String(error)));
+  };
+  useEffect(() => {
+    if (!desktop) return;
+    let disposed = false,
+      unlisten: (() => void) | undefined;
+    void getCurrentWindow()
+      .onDragDropEvent((event) => {
+        if (disposed) return;
+        setExternalDrag(
+          event.payload.type === "enter" || event.payload.type === "over",
+        );
+        if (event.payload.type === "drop")
+          dropHandler.current(event.payload.paths);
+      })
+      .then((fn) => {
+        if (disposed) fn();
+        else unlisten = fn;
+      })
+      .catch((error) => setNotice(String(error)));
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
   const beginBookmark = useCallback(() => {
     if (!editor.current) return;
     let selection = editor.current.selection();
@@ -313,15 +429,15 @@ export default function App() {
         .reduce((sum, s) => sum + s.length + 1, 0);
       const from = text.indexOf(quote, offset);
       if (from < 0) {
-        setMode("write");
+        setMode("edit");
         setNotice(
-          "Select this passage in Write mode to bookmark text that crosses Markdown formatting.",
+          "Select this passage in Edit mode to bookmark text that crosses Markdown formatting.",
         );
         return;
       }
       selection = { from, to: from + quote.length, quote };
     } else if (mode === "read") {
-      setMode("write");
+      setMode("edit");
       setNotice(
         "Select a passage, or place your cursor on a line, then add a bookmark.",
       );
@@ -401,7 +517,7 @@ export default function App() {
       window.removeEventListener("beforeunload", beforeUnload);
     };
   }, [save]);
-  const switchMode = (next: "read" | "write") => {
+  const switchMode = (next: EditorMode) => {
     if (next === "read") setPreview(editor.current?.text() ?? data?.text ?? "");
     setMode(next);
   };
@@ -421,62 +537,27 @@ export default function App() {
           <span>Find anything</span>
           <kbd>{mod} K</kbd>
         </button>
-        <div className="workspace-label">
-          <span>EXPLORER</span>
-          <button
-            className="icon-button"
-            aria-label="Open folder"
-            title="Open folder"
-            onClick={openFolder}
-          >
-            <FolderOpen size={15} />
-          </button>
-        </div>
-        <div className="folder-title">
-          <ChevronDown size={14} />
-          <FolderOpen size={16} />
-          <strong>{workspace.name}</strong>
-          <button
-            className="icon-button"
-            aria-label="Refresh folder"
-            title="Refresh folder"
-            onClick={async () => {
-              if (workspace.root !== "demo") {
-                try {
-                  const ws = await invoke<Workspace>("open_workspace", {
-                    root: workspace.root,
-                  });
-                  setWorkspace(ws);
-                } catch (e) {
-                  setNotice(String(e));
-                }
-              } else setNotice("Sample workspace is up to date.");
-            }}
-          >
-            <RefreshCw size={13} />
-          </button>
-        </div>
-        <nav className="file-tree" aria-label="Files">
-          <FileTree
-            paths={workspace.files.map((f) => f.path)}
-            active={path}
-            onOpen={(p) => void openNote(p)}
-          />
-        </nav>
+        <Explorer
+          folders={folders}
+          activeRoot={workspace.root}
+          activePath={path}
+          onOpen={(folder, path) => void openNote(path, undefined, folder)}
+          onChange={changeFolders}
+          onRemove={(root) => void removeFolder(root)}
+          onRefresh={(root) => void refreshFolder(root)}
+          onAdd={() => void openFolder()}
+          externalDrag={externalDrag}
+        />
         <div className="sidebar-bottom">
           <div className="local-indicator">
             <span />
-            {workspace.root === "demo" ? "Sample workspace" : "Local folder"}
+            {folders.length} {folders.length === 1 ? "folder" : "folders"} ·
+            stored locally
           </div>
-          <p>
-            {workspace.root === "demo"
-              ? "A few notes to make yourself at home."
-              : workspace.root}
-          </p>
+          <p>Drag folder handles to organize your space.</p>
           <button className="open-folder" onClick={openFolder}>
-            <FolderOpen size={15} />
-            Open a folder
-            <ArrowUpRight size={14} />
+            <Plus size={15} />
+            Add folders
           </button>
           <div className="sidebar-footnote">Your files. Your space.</div>
         </div>
@@ -507,12 +588,16 @@ export default function App() {
           <VoiceControl
             disabled={!data || loading || saving}
             onBegin={() => {
-              setMode("write");
+              setMode((old) =>
+                old === "read" ? (isMarkdown ? "edit" : "source") : old,
+              );
               editor.current?.beginDictation();
             }}
             onText={(text) => {
               editor.current?.insertDictation(text);
-              setMode("write");
+              setMode((old) =>
+                old === "read" ? (isMarkdown ? "edit" : "source") : old,
+              );
             }}
             onCancel={() => editor.current?.cancelDictation()}
             onBusy={(busy) => {
@@ -522,11 +607,21 @@ export default function App() {
           />
           <div className="view-switch">
             <button
-              onClick={() => switchMode("write")}
-              className={mode === "write" ? "selected" : ""}
+              onClick={() => switchMode("source")}
+              className={mode === "source" ? "selected" : ""}
+              title="Edit Markdown source"
+            >
+              <Code2 size={14} />
+              Source
+            </button>
+            <button
+              onClick={() => switchMode("edit")}
+              disabled={!isMarkdown}
+              className={mode === "edit" ? "selected" : ""}
+              title="Edit formatted Markdown"
             >
               <Pencil size={13} />
-              Write
+              Edit
             </button>
             <button
               onClick={() => switchMode("read")}
@@ -545,12 +640,15 @@ export default function App() {
             <Save size={15} />
           </button>
         </div>
+        {data && mode === "edit" && isMarkdown && (
+          <FormatToolbar onFormat={(style) => editor.current?.format(style)} />
+        )}
         <div className="document-area">
           {loading && <div className="loading">Opening your note…</div>}
           {data && (
-            <div className={"write-pane " + (mode !== "write" ? "hidden" : "")}>
+            <div className={"write-pane " + (mode === "read" ? "hidden" : "")}>
               <Editor
-                key={workspace.root + path + data.revision}
+                key={JSON.stringify([workspace.root, path, data.revision])}
                 ref={editor}
                 initial={data.text}
                 bookmarks={bookmarks}
@@ -560,6 +658,7 @@ export default function App() {
                 onBookmark={beginBookmark}
                 onSave={() => void save()}
                 isMarkdown={isMarkdown}
+                visual={mode === "edit" && isMarkdown}
               />
             </div>
           )}
@@ -580,9 +679,9 @@ export default function App() {
                       </p>
                       <button
                         className="primary"
-                        onClick={() => switchMode("write")}
+                        onClick={() => switchMode("source")}
                       >
-                        Open in Write mode
+                        Open in Source mode
                       </button>
                     </div>
                   ) : isMarkdown ? (
@@ -622,7 +721,7 @@ export default function App() {
                 : "All changes saved"}
           </span>
           <span>
-            {mode === "write"
+            {mode !== "read"
               ? `Ln ${cursor[0]}, Col ${cursor[1]}`
               : "Reading mode"}
           </span>
@@ -704,7 +803,7 @@ export default function App() {
               <BookmarkIcon size={25} />
               <p>Keep a place in your note.</p>
               <small>
-                Select a passage in Write mode, then add your first bookmark.
+                Select a passage in Edit mode, then add your first bookmark.
               </small>
             </div>
           )}
@@ -741,13 +840,16 @@ export default function App() {
       )}
       {palette && (
         <Palette
-          workspace={workspace}
+          folders={folders}
           onClose={() => {
             setPalette(false);
-            if (mode === "write")
+            if (mode !== "read")
               editor.current?.jump(editor.current.selection().from);
           }}
-          onOpen={(p, l) => void openNote(p, l)}
+          onOpen={(root, p, l) => {
+            const folder = folders.find((f) => f.root === root);
+            if (folder) void openNote(p, l, folder);
+          }}
         />
       )}
       {bookmarkDraft && (

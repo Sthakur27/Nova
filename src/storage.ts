@@ -1,6 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { demoFiles } from "./demo";
+import { parsePreferences, type ExplorerPreferences } from "./folders";
 import {
   reanchor,
   type Bookmark,
@@ -20,17 +21,59 @@ export const demoWorkspace: Workspace = {
 };
 const textFor = (path: string) =>
   localStorage.getItem(prefix + path) ?? demoFiles[path] ?? "";
-export async function chooseWorkspace(): Promise<Workspace | null> {
-  if (!desktop)
-    throw new Error(
-      "Open folders in the Nova desktop app. This browser preview uses editable sample notes.",
-    );
-  const root = await open({
+export async function openWorkspace(root: string): Promise<Workspace> {
+  if (root === "demo") return demoWorkspace;
+  return invoke<Workspace>("open_workspace", { root });
+}
+export async function chooseWorkspaces(): Promise<Workspace[]> {
+  if (!desktop) throw new Error("Add local folders in the Nova desktop app.");
+  const selected = await open({
     directory: true,
-    multiple: false,
-    title: "Open a notes folder",
+    multiple: true,
+    title: "Add folders to Nova",
   });
-  return root ? invoke<Workspace>("open_workspace", { root }) : null;
+  if (!selected) return [];
+  return loadFolders(
+    (Array.isArray(selected) ? selected : [selected]).map((root) => ({
+      root,
+      name: root.split(/[\\/]/).at(-1) || root,
+    })),
+  );
+}
+export async function loadFolders(
+  folders: { root: string; name: string; collapsed?: boolean }[],
+): Promise<Workspace[]> {
+  const results: Workspace[] = [];
+  for (const folder of folders) {
+    try {
+      results.push({
+        ...(await openWorkspace(folder.root)),
+        collapsed: folder.collapsed,
+      });
+    } catch (error) {
+      results.push({ ...folder, files: [], error: String(error) });
+    }
+  }
+  return results;
+}
+export async function loadExplorer(): Promise<ExplorerPreferences | null> {
+  return parsePreferences(
+    desktop
+      ? await invoke("load_explorer")
+      : JSON.parse(localStorage.getItem("nova-explorer-v1") ?? "null"),
+  );
+}
+let preferenceQueue = Promise.resolve();
+export function saveExplorer(preferences: ExplorerPreferences): Promise<void> {
+  const payload = JSON.parse(JSON.stringify(preferences));
+  const pending = preferenceQueue
+    .catch(() => {})
+    .then(async () => {
+      if (desktop) await invoke("save_explorer", { preferences: payload });
+      else localStorage.setItem("nova-explorer-v1", JSON.stringify(payload));
+    });
+  preferenceQueue = pending;
+  return pending;
 }
 export async function readNote(
   root: string,
@@ -96,19 +139,35 @@ export async function saveBookmarks(
     return invoke("save_bookmarks", { root, path, bookmarks });
   localStorage.setItem(prefix + path + ":bookmarks", JSON.stringify(bookmarks));
 }
+export type FolderSearchHit = SearchHit & { root: string };
+export type FolderSearchResponse = {
+  hits: FolderSearchHit[];
+  warnings: string[];
+};
 export async function searchNotes(
-  root: string,
+  folders: Workspace[],
   query: string,
-): Promise<SearchHit[]> {
-  if (root !== "demo") return invoke("search_notes", { root, query });
-  const hits: SearchHit[] = [];
-  for (const path of Object.keys(demoFiles)) {
-    textFor(path)
-      .split("\n")
-      .forEach((snippet, i) => {
-        if (snippet.toLowerCase().includes(query.toLowerCase()))
-          hits.push({ path, line: i + 1, snippet });
-      });
+): Promise<FolderSearchResponse> {
+  const native = folders.filter((f) => f.root !== "demo" && !f.error);
+  const result: FolderSearchResponse = native.length
+    ? await invoke("search_notes", { roots: native.map((f) => f.root), query })
+    : { hits: [], warnings: [] };
+  if (folders.some((f) => f.root === "demo")) {
+    const hits: FolderSearchHit[] = [];
+    for (const path of Object.keys(demoFiles))
+      textFor(path)
+        .split("\n")
+        .forEach((snippet, i) => {
+          if (snippet.toLowerCase().includes(query.toLowerCase()))
+            hits.push({ root: "demo", path, line: i + 1, snippet });
+        });
+    result.hits.push(...hits.slice(0, 80));
   }
-  return hits.slice(0, 80);
+  result.hits.sort(
+    (a, b) =>
+      folders.findIndex((f) => f.root === a.root) -
+      folders.findIndex((f) => f.root === b.root),
+  );
+  result.hits = result.hits.slice(0, 80);
+  return result;
 }

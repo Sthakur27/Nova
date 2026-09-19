@@ -1,0 +1,59 @@
+import type { Workspace } from "./model";
+export type FolderPreference = Pick<Workspace, "root" | "name" | "collapsed">;
+export type EditorMode = "source" | "edit" | "read";
+export type ExplorerPreferences = {
+  folders: FolderPreference[];
+  active: { root: string; path: string } | null;
+  mode: EditorMode;
+};
+export function addFolders(
+  current: Workspace[],
+  added: Workspace[],
+): Workspace[] {
+  const roots = new Set(current.map((folder) => folder.root));
+  const next = [...current];
+  for (const folder of added)
+    if (!roots.has(folder.root)) {
+      roots.add(folder.root);
+      next.push(folder);
+    }
+  return next;
+}
+export function reorderFolders<T extends { root: string }>(
+  folders: T[],
+  source: string,
+  target: string,
+): T[] {
+  const from = folders.findIndex((folder) => folder.root === source),
+    to = folders.findIndex((folder) => folder.root === target);
+  if (from < 0 || to < 0 || from === to) return folders;
+  const next = [...folders];
+  const [folder] = next.splice(from, 1);
+  next.splice(to, 0, folder);
+  return next;
+}
+export function parsePreferences(value: unknown): ExplorerPreferences | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Partial<ExplorerPreferences>;
+  if (!Array.isArray(v.folders) || v.folders.length > 100) return null;
+  const folders = v.folders
+    .filter(
+      (f): f is FolderPreference =>
+        !!f && typeof f.root === "string" && typeof f.name === "string",
+    )
+    .map((f) => ({ root: f.root, name: f.name, collapsed: !!f.collapsed }));
+  const unique = folders.filter(
+    (f, i) => folders.findIndex((other) => other.root === f.root) === i,
+  );
+  const active =
+    v.active &&
+    typeof v.active.root === "string" &&
+    typeof v.active.path === "string"
+      ? v.active
+      : null;
+  return {
+    folders: unique,
+    active,
+    mode: v.mode === "source" || v.mode === "read" ? v.mode : "edit",
+  };
+}

@@ -1090,3 +1090,250 @@ kbd {
     justify-content: flex-end;
   }
 }
+
+/* Multiple ordinary folders, with pointer and keyboard reordering. */
+.multi-explorer {
+  position: relative;
+}
+.explorer-count {
+  color: #666675;
+  margin-left: 6px;
+}
+.explorer-root {
+  margin-bottom: 12px;
+  border-radius: 6px;
+}
+.root-header {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 2px;
+}
+.root-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+  color: #bbb8c7;
+  background: none;
+  border: 0;
+  font-size: 12px;
+  padding: 5px 0;
+}
+.root-title strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.root-grip {
+  padding: 3px 0;
+  color: #676371;
+  background: none;
+  border: 0;
+  cursor: grab;
+  touch-action: none;
+}
+.root-grip:active {
+  cursor: grabbing;
+}
+.root-files {
+  padding-left: 9px;
+}
+.root-menu {
+  position: relative;
+}
+.root-menu summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 4px;
+  color: #8f899c;
+}
+.root-menu > div {
+  position: absolute;
+  right: 0;
+  top: 26px;
+  z-index: 20;
+  width: 185px;
+  padding: 5px;
+  background: #29272f;
+  border: 1px solid #45404e;
+  border-radius: 8px;
+  box-shadow: 0 8px 25px #0008;
+}
+.root-menu button {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  width: 100%;
+  border: 0;
+  background: none;
+  color: #ccc;
+  padding: 8px;
+  text-align: left;
+  font-size: 11px;
+}
+.root-menu button:hover {
+  background: #ffffff0a;
+}
+.root-menu button:disabled {
+  opacity: 0.3;
+}
+.is-dragging {
+  opacity: 0.45;
+}
+.drop-target {
+  box-shadow: 0 -2px #b499e0;
+}
+.external-drag {
+  outline: 2px dashed #b499e0;
+  outline-offset: -3px;
+}
+.folder-drop-message {
+  position: sticky;
+  bottom: 10px;
+  background: #393043;
+  color: #e0c9ff;
+  padding: 14px;
+  border-radius: 8px;
+  text-align: center;
+}
+.folder-empty,
+.folder-error,
+.explorer-empty {
+  font-size: 11px;
+  color: #86808f;
+  padding: 12px;
+}
+.folder-error {
+  display: flex;
+  justify-content: space-between;
+}
+.folder-error button {
+  color: #c2a6ee;
+  background: none;
+  border: 0;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.format-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 7px 22px;
+  border-bottom: 1px solid #ffffff09;
+  flex-shrink: 0;
+  background: #ffffff02;
+}
+.format-toolbar button,
+.format-toolbar select {
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #a8a2b3;
+  padding: 5px 9px;
+  font-size: 12px;
+  height: 29px;
+  cursor: pointer;
+}
+.format-toolbar button:hover,
+.format-toolbar select:hover {
+  background: #ffffff0a;
+  color: #eee;
+}
+.format-toolbar select {
+  background: #242229;
+}
+.format-toolbar span {
+  margin-left: auto;
+  color: #666170;
+  font-size: 11px;
+}
+.format-toolbar button[aria-label="Bold"] {
+  font-weight: bold;
+}
+.format-toolbar button[aria-label="Italic"] {
+  font-style: italic;
+}
+.format-toolbar button[aria-label="Strikethrough"] {
+  text-decoration: line-through;
+}
+.cm-editor.live-edit .cm-scroller {
+  font-family: "DM Sans", sans-serif;
+  font-size: 15px;
+  line-height: 1.85;
+}
+.cm-editor.live-edit .cm-content {
+  padding: 40px 48px 150px;
+  max-width: 920px;
+}
+.cm-editor.live-edit .md-heading {
+  font-family: Lora, Georgia, serif;
+  font-weight: 600;
+  line-height: 1.5;
+  padding-top: 14px;
+  padding-bottom: 9px;
+  color: #eee7f5;
+}
+.cm-editor.live-edit .md-h1 {
+  font-size: 32px;
+}
+.cm-editor.live-edit .md-h2 {
+  font-size: 25px;
+}
+.cm-editor.live-edit .md-h3 {
+  font-size: 20px;
+}
+.md-strong {
+  font-weight: 700;
+  color: #ece6f2;
+}
+.md-em {
+  font-style: italic;
+}
+.md-strike {
+  text-decoration: line-through;
+  color: #8b8593;
+}
+.md-code {
+  font-family: monospace;
+  background: #b69de112;
+  color: #c8addf;
+  border-radius: 4px;
+  padding: 1px 3px;
+}
+.md-link {
+  color: #baa0e6;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.cm-editor.live-edit .md-quote {
+  border-left: 2px solid #8c6fb0;
+  padding-left: 18px;
+  color: #a9a0b5;
+}
+.md-bullet {
+  color: #b599d8;
+  padding-right: 4px;
+}
+.cm-editor.live-edit .cm-activeLine {
+  background: transparent;
+}
+@media (max-width: 1050px) {
+  .format-toolbar span {
+    display: none;
+  }
+  .format-toolbar {
+    padding: 7px 12px;
+  }
+}

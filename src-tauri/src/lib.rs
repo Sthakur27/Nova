@@ -51,6 +51,7 @@ struct DocumentData {
 }
 #[derive(Serialize)]
 struct SearchHit {
+    root: String,
     path: String,
     line: usize,
     snippet: String,
@@ -258,48 +259,139 @@ async fn save_bookmarks(
     .await
     .map_err(err)?
 }
-#[tauri::command]
-async fn search_notes(
-    root: String,
+#[derive(Serialize)]
+struct SearchResponse {
+    hits: Vec<SearchHit>,
+    warnings: Vec<String>,
+}
+fn scan_search(
+    roots: Vec<PathBuf>,
     query: String,
-    access: State<'_, Access>,
-) -> Result<Vec<SearchHit>, String> {
-    let root = root_path(&access, &root)?;
-    let generation = access.search_generation.clone();
-    let ticket = generation.fetch_add(1, Ordering::Relaxed) + 1;
-    tauri::async_runtime::spawn_blocking(move || {
-        let mut hits = Vec::new();
-        let query = query.trim().to_lowercase();
-        if query.is_empty() {
-            return Ok(hits);
+    generation: Arc<AtomicU64>,
+    ticket: u64,
+) -> SearchResponse {
+    let mut response = SearchResponse {
+        hits: Vec::new(),
+        warnings: Vec::new(),
+    };
+    let query = query.trim().to_lowercase();
+    if query.is_empty() {
+        return response;
+    }
+    for root in roots {
+        if generation.load(Ordering::Relaxed) != ticket {
+            break;
         }
-        for note in files_in(&root)? {
-            if generation.load(Ordering::Relaxed) != ticket {
-                return Ok(Vec::new());
-            }
-            let path = root.join(&note.path);
-            if fs::metadata(&path).map_err(err)?.len() > MAX_FILE {
+        let files = match files_in(&root) {
+            Ok(files) => files,
+            Err(error) => {
+                response
+                    .warnings
+                    .push(format!("{}: {error}", root.display()));
                 continue;
             }
-            let file = fs::File::open(&path).map_err(err)?;
+        };
+        for note in files {
+            if generation.load(Ordering::Relaxed) != ticket {
+                return response;
+            }
+            let path = root.join(&note.path);
+            if fs::metadata(&path)
+                .map(|m| m.len() > MAX_FILE)
+                .unwrap_or(true)
+            {
+                continue;
+            }
+            let file = match fs::File::open(&path) {
+                Ok(file) => file,
+                Err(_) => {
+                    response
+                        .warnings
+                        .push(format!("Couldn't read {}", path.display()));
+                    continue;
+                }
+            };
             for (i, line) in BufReader::new(file).lines().enumerate() {
                 if i % 128 == 0 && generation.load(Ordering::Relaxed) != ticket {
-                    return Ok(Vec::new());
+                    return response;
                 }
                 let Ok(line) = line else { break };
                 if line.to_lowercase().contains(&query) {
-                    hits.push(SearchHit {
+                    response.hits.push(SearchHit {
+                        root: root.to_string_lossy().into_owned(),
                         path: note.path.clone(),
                         line: i + 1,
                         snippet: line.chars().take(300).collect(),
                     });
-                    if hits.len() == 80 {
-                        return Ok(hits);
+                    if response.hits.len() == 80 {
+                        return response;
                     }
                 }
             }
         }
-        Ok(hits)
+    }
+    response
+}
+#[tauri::command]
+async fn search_notes(
+    roots: Vec<String>,
+    query: String,
+    access: State<'_, Access>,
+) -> Result<SearchResponse, String> {
+    if roots.len() > 100 {
+        return Err("Search supports up to 100 folders.".into());
+    }
+    let mut paths = Vec::new();
+    let mut warnings = Vec::new();
+    for root in roots {
+        match root_path(&access, &root) {
+            Ok(path) => paths.push(path),
+            Err(error) => warnings.push(format!("{root}: {error}")),
+        }
+    }
+    let generation = access.search_generation.clone();
+    let ticket = generation.fetch_add(1, Ordering::Relaxed) + 1;
+    let mut response =
+        tauri::async_runtime::spawn_blocking(move || scan_search(paths, query, generation, ticket))
+            .await
+            .map_err(err)?;
+    response.warnings.extend(warnings);
+    Ok(response)
+}
+fn explorer_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let dir = app.path().app_data_dir().map_err(err)?;
+    fs::create_dir_all(&dir).map_err(err)?;
+    Ok(dir.join("explorer.json"))
+}
+#[tauri::command]
+async fn load_explorer(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let path = explorer_path(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        if !path.exists() {
+            return Ok(serde_json::Value::Null);
+        }
+        if fs::metadata(&path).map_err(err)?.len() > 256 * 1024 {
+            return Err("Explorer preferences are too large.".into());
+        }
+        serde_json::from_slice(&fs::read(path).map_err(err)?).map_err(err)
+    })
+    .await
+    .map_err(err)?
+}
+#[tauri::command]
+async fn save_explorer(
+    preferences: serde_json::Value,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    let bytes = serde_json::to_vec(&preferences).map_err(err)?;
+    if bytes.len() > 256 * 1024 {
+        return Err("Explorer preferences are too large.".into());
+    }
+    let path = explorer_path(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let access = app.state::<Access>();
+        let _guard = access.writes.lock().map_err(err)?;
+        atomic_write(&path, &bytes)
     })
     .await
     .map_err(err)?
@@ -362,6 +454,8 @@ pub fn run() {
             save_note,
             save_bookmarks,
             search_notes,
+            load_explorer,
+            save_explorer,
             quit_app,
             speech::speech_status,
             speech::speech_download,
@@ -385,6 +479,22 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn search_identifies_same_named_files_in_distinct_roots() {
+        let a = tempfile::tempdir().unwrap();
+        let b = tempfile::tempdir().unwrap();
+        fs::write(a.path().join("note.md"), "needle in A").unwrap();
+        fs::write(b.path().join("note.md"), "needle in B").unwrap();
+        let response = scan_search(
+            vec![a.path().to_owned(), b.path().to_owned()],
+            "needle".into(),
+            Arc::new(AtomicU64::new(1)),
+            1,
+        );
+        assert_eq!(response.hits.len(), 2);
+        assert_ne!(response.hits[0].root, response.hits[1].root);
+        assert_eq!(response.hits[0].path, response.hits[1].path);
+    }
     #[test]
     fn rejects_stale_save_and_preserves_crlf() {
         let dir = tempfile::tempdir().unwrap();
