@@ -6,7 +6,7 @@ Nova is a notes app for Mac and Windows that gives your words room to breathe. W
 
 **[Download Nova](#download-nova)** · **[Take a look](#make-yourself-at-home)** · **[Get started](#your-first-few-minutes)**
 
-![Nova showing a note alongside folders and named bookmarks, with Galaxy mode enabled](docs/screenshots/galaxy-mode.jpg)
+![Nova's translucent editor over a soft blue-purple background, with folders and named bookmarks alongside the note](docs/screenshots/galaxy-mode.jpg)
 
 *Your files on the left. Your thoughts in the middle. Your favorite passages on the right.*
 
@@ -37,6 +37,8 @@ Not sure which Mac you have? Open **Apple menu → About This Mac** and look for
 
 Turn **Galaxy mode** on for translucent surfaces and glowing edges, or off for a simple, solid background. Your notes and bookmarks stay right where they are.
 
+Let a little of your background show through the page with **Translucent background**, the overlapping-circles button above your note. You can turn it off while keeping Galaxy's glow.
+
 | Galaxy on | Galaxy off |
 | :---: | :---: |
 | ![Galaxy mode with violet accents and glowing panel edges](docs/screenshots/galaxy-mode.jpg) | ![The same note with Galaxy off and a solid dark background](docs/screenshots/standard-mode.jpg) |
@@ -57,7 +59,7 @@ Enter **focus mode** to hide the folders, bookmarks, and toolbars. Choose your p
 
 ![Focus mode with a centered note and the surrounding panels hidden](docs/screenshots/focus-mode.jpg)
 
-*These screenshots show sample notes in the browser preview. Open your own folders and use voice typing in the desktop app.*
+*These screenshots show sample notes in the browser preview. The Galaxy comparison uses a soft blue-purple backdrop to show the editor's translucency. Open your own folders and use voice typing in the desktop app.*
 
 ## Your first few minutes
 
