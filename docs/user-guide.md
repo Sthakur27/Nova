@@ -38,6 +38,18 @@ Collapse navigation, bookmarks, top bars, or the status bar with the edge contro
 
 The formatting toolbar includes Undo/Redo, headings 1–6, bold, italic, strikethrough, inline code, ordered and unordered lists, tasks, and quotes. In Markdown notes, Command/Ctrl-B and -I apply bold and italic; Command/Ctrl-Shift-X applies strikethrough. Command/Ctrl-Alt-1 through -6 apply headings, and -0 returns to normal text. Command/Ctrl-Shift-7, -8, and -9 apply numbered lists, bullets, and quotes. In formatted Edit, Tab / Shift-Tab nest or outdent list items; in Source, they indent or outdent Markdown by four spaces. Source formatting preserves existing indentation, and Read mode recognizes nested numbered lists that start above 1. Command-A / Ctrl-A selects the whole focused document, including nested lists. Source selection highlighting covers line breaks and blank lines; energy effects follow the selected passage in Source and the fallback reader.
 
+## Terminal
+
+The desktop app includes terminal tabs below the note. Open them with the terminal icon above the note, **Terminal** in the status bar, or **Command-Down / Ctrl-Down**. The browser preview displays an explanation instead of starting a shell.
+
+- **Sessions**: the first shell starts when you first open the terminal. Use **+** to start another session in the active note folder, or your home directory in the sample workspace. Existing sessions keep their own working directory when you switch notes or folders.
+- **Tabs**: switching tabs or collapsing the tray keeps each shell and its output alive. Closing a terminal tab ends its shell; closing the Nova window ends that window's shells. Sessions are not restored after restart. Each tab retains up to 5,000 lines of scrollback.
+- **Sizing**: drag the top divider, empty tab-bar area, or status-bar background. Drag toward the bottom edge to collapse; use the maximize button for more room. Nova remembers the normal tray height. Double-click the divider to reset it.
+- **Keyboard resizing**: focus the divider and use Up/Down, with Shift for larger steps. Home collapses, End expands to the maximum, and Enter resets the height.
+- **Shell**: Mac uses the shell configured by `SHELL` as a login shell (falling back to `/bin/sh`); Windows uses `COMSPEC` (falling back to `cmd.exe`). Commands run with your normal user permissions.
+
+**Panel shortcuts**: Command + arrow keys on Mac, or Ctrl + arrow keys on Windows, toggle navigation (Left), bookmarks (Right), top bars (Up), and terminal (Down). They also work inside editors and terminals; Shift-modified shortcuts retain their normal selection behavior. Panel shortcuts are suspended while app dialogs or search are open. Top bars use their toggle control rather than drag resizing.
+
 ## Tabs
 
 Single-click an explorer filename to open it, or activate its focused button with the keyboard. The first file opens in an italic preview tab. When the active tab is a preview, opening another file replaces that preview; otherwise explorer files open as fixed tabs. Double-click a preview tab or edit its note to keep it open. Double-clicking a fixed tab opens the rename dialog. Opening an already open file selects its existing tab. Close tabs with their × button. Switching or closing retains unsaved edits as recovery drafts; reopening the file restores them. A recovery-storage failure keeps the note open and reports the problem.
@@ -46,13 +58,13 @@ Only the active editor is mounted. Open tabs keep in-memory editor states for cu
 
 ## Voice typing
 
-Click the **Dictate** microphone icon in the document toolbar. Hover or focus it to see voice-typing status and the recording timer. On first use, download the English Whisper tiny.en model (77,704,715 bytes, about 78 MB) from the upstream whisper.cpp Hugging Face repository. Nova checks the download's SHA-256 before installing it in its OS app-data `speech` directory. The model is not bundled into the app or committed to Git.
+Click the **Dictate** microphone icon in the document toolbar. Hover or focus it to see voice-typing status and the recording timer. On Mac, **Command-V** starts or stops dictation, including while an input or terminal has focus; it replaces the usual Paste shortcut. Windows keeps Ctrl-V for paste and uses the microphone button for dictation. On first use, download the English Whisper tiny.en model (77,704,715 bytes, about 78 MB) from the upstream whisper.cpp Hugging Face repository. Nova checks the download's SHA-256 before installing it in its OS app-data `speech` directory. The model is not bundled into the app or committed to Git.
 
-Place the cursor where you want to write, press **Dictate**, allow microphone access, speak, then click the stop icon to insert the transcript. Nova uses the system's default microphone and inserts the transcript at the original insertion point (which follows intervening edits). Voice typing inserts text; it does not replace a selected passage. Each transcript is a separate undo step and existing bookmarks continue to track edits. A recording stops automatically after two minutes.
+Place the cursor where you want to write, press **Dictate**, allow microphone access, speak, then click the stop icon to finalize the transcript. Live previews appear with a short processing delay and can change as more audio is processed. Nova uses the system's default microphone and inserts the transcript at the original insertion point (which follows intervening edits). Voice typing inserts text; it does not replace a selected passage. Each transcript is a separate undo step and existing bookmarks continue to track edits. A recording stops automatically after two minutes.
 
-**Cancel** discards the recording/result. File and folder switching and app close/quit are blocked during active dictation so a result cannot land in another note. Save the inserted text with the usual Save command. There is no live partial transcript yet.
+**Cancel** discards the recording/result and removes unedited preview text. If you edit the preview itself, Nova keeps your version and stops replacing it with later speech results. File and folder switching and app close/quit are blocked during active dictation so a result cannot land in another note. Save the inserted text with the usual Save command. Live previews do not add undo steps; the finalized transcript is inserted as one undoable change.
 
-Audio stays in memory on your machine; it is not written to disk or uploaded. Only the one-time model download uses the network. Audio is downmixed/resampled to 16 kHz mono and capped at 7.68 MB; Whisper loads only while transcribing, uses up to four CPU threads, and is released afterward. Transcription has an additional temporary memory cost that has not yet been benchmarked. This first model is English-only; accuracy varies with speech, background noise, and microphone quality.
+Audio stays in memory on your machine; it is not written to disk or uploaded. Only the one-time model download uses the network. Audio is downmixed/resampled to 16 kHz mono and capped at 7.68 MB; Whisper loads for the dictation session, reuses one decoder for partial and final transcripts, uses up to four CPU threads, and is released afterward. Transcription has an additional temporary memory cost that has not yet been benchmarked. This first model is English-only; accuracy varies with speech, background noise, and microphone quality.
 
 On macOS, allow Nova in **System Settings → Privacy & Security → Microphone** if needed. On Windows, enable microphone access for desktop apps under **Settings → Privacy & security → Microphone**. The browser preview explains the feature but does not record; voice typing requires the desktop build. Use the arrow next to Dictate to reopen voice settings or download the model again if it becomes corrupted. A load error leaves the note untouched.
 
@@ -62,7 +74,7 @@ The speech engine can be checked with a known public JFK audio fixture without o
 cargo test --manifest-path src-tauri/Cargo.toml actual_whisper_transcription -- --ignored --nocapture
 ```
 
-This explicit integration test downloads the model and fixture into a temporary directory. Normal tests do not download a model or request microphone access.
+This explicit integration test checks partial and final transcription and cancellation using downloaded audio, without opening a microphone. It downloads the model and fixture into a temporary directory; set `NOVA_SPEECH_TEST_MODEL` to an existing model file to reuse it. Normal tests do not download a model or request microphone access.
 
 ## Bounds and current limitations
 

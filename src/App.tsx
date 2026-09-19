@@ -2,6 +2,8 @@ import LineSpacingControl, { lineSpacings, type LineSpacing } from "./LineSpacin
 import { loadDraft, storeDraft, clearDraft, moveDraft } from "./drafts";
 import Settings from "./Settings";
 import { codeLanguage } from "./codeLanguages";
+import TerminalPanel from "./TerminalPanel";
+import { installPanelShortcuts } from "./panelShortcuts";
 import SidePanelControls from "./SidePanelControls";
 import TextWidthControl, { textWidths, type TextWidth } from "./TextWidthControl";
 import { usePreference } from "./preferences";
@@ -31,6 +33,7 @@ import {
   Plus,
   Search,
   PanelRight,
+  TerminalSquare,
   Pencil,
   Trash2,
   X,
@@ -174,6 +177,10 @@ export default function App() {
   const [preview, setPreview] = useState("");
   const [searchScope,setSearchScope]=useState<SearchScope>("everywhere");
   const [palette, setPalette] = useState(false);
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalStarted, setTerminalStarted] = useState(false);
+  const [terminalControls, setTerminalControls] = useState<HTMLDivElement | null>(null);
+  const toggleTerminal = () => { setTerminalStarted(true); setTerminalOpen(open => !open); };
   const [rail, setRail, railError] = usePreference<boolean>("bookmarks-panel", true);
   const [navigation, setNavigation, navigationError] = usePreference<boolean>("navigation-panel", true);
   const [topBars, setTopBars, topBarsError] = usePreference<boolean>("top-bars", true);
@@ -856,6 +863,16 @@ export default function App() {
     setFocusMode(focused);
   }, [setFocusMode, setNavigation, setRail, setTopBars, setStatusBar]);
   useEffect(() => {
+    if (settingsOpen || palette || bookmarkDraft || renameTarget || fileAction) return;
+    return installPanelShortcuts(window, mod === "⌘", panel => {
+      if (focusMode) setFocusMode(false);
+      if (panel === "left") setNavigation(focusMode || !navigation);
+      else if (panel === "right") setRail(focusMode || !rail);
+      else if (panel === "top") setTopBars(focusMode || !topBars);
+      else { setTerminalStarted(true); setTerminalOpen(open => focusMode || !open); }
+    });
+  }, [settingsOpen, palette, bookmarkDraft, renameTarget, fileAction, focusMode, navigation, rail, topBars, setFocusMode, setNavigation, setRail, setTopBars]);
+  useEffect(() => {
     const toggleFocus = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "g" || event.isComposing) return;
       event.preventDefault();
@@ -867,6 +884,7 @@ export default function App() {
   }, [focusMode, changeFocusMode, settingsOpen, palette, bookmarkDraft, renameTarget, fileAction]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
+      if (e.target instanceof Element && e.target.closest("#terminal-panel")) return;
       if (!(e.metaKey || e.ctrlKey)) return;
       if (!e.altKey && !e.shiftKey && (e.key.toLowerCase() === "n" || e.key.toLowerCase() === "t")) {
         e.preventDefault();
@@ -1005,7 +1023,7 @@ export default function App() {
         setHoveredEdge(x <= edgeWidth ? "left" : x >= bounds.width - edgeWidth ? "right" : null);
       }}
       onPointerLeave={() => setHoveredEdge(null)}>
-      <SidePanelControls topBars={topBars} onTopBars={() => setTopBars(!topBars)} navigation={navigation} bookmarks={rail} hoveredEdge={hoveredEdge}
+      <SidePanelControls navigation={navigation} bookmarks={rail} hoveredEdge={hoveredEdge}
         onNavigation={() => setNavigation(!navigation)} onBookmarks={() => setRail(!rail)}
         onStorageError={() => setNotice("Panel widths changed, but could not be saved on this device.")} />
       {focusMode && (
@@ -1093,8 +1111,11 @@ export default function App() {
         onPointerMove={(event) => {
           if (event.pointerType === "touch") return;
           const bounds = event.currentTarget.getBoundingClientRect();
-          setHoveredTop(event.clientY - bounds.top <= bounds.height * 0.05);
-          setHoveredBottom(bounds.bottom - event.clientY <= bounds.height * 0.05);
+          const top = event.currentTarget.querySelector(".top-bars-container")!.getBoundingClientRect();
+          setHoveredTop(event.clientY <= Math.max(top.bottom + 12, bounds.top + 48));
+          const bottomPanel = event.currentTarget.querySelector(".terminal-panel");
+          const bottomEdge = bottomPanel?.getBoundingClientRect().top ?? bounds.bottom;
+          setHoveredBottom(Math.abs(event.clientY - bottomEdge) <= 32);
         }}
         onPointerLeave={() => { setHoveredTop(false); setHoveredBottom(false); }}>
         <div className="top-bars-container">
@@ -1152,11 +1173,14 @@ export default function App() {
           </div>
           <button className="icon-button new-tab-button" onClick={() => void newTab()} aria-label="New tab" title="New tab (Ctrl T)"><Plus size={16} /></button>
           <div className="tab-bar-space" />
+          <button className="icon-button" onClick={toggleTerminal}
+            aria-label={terminalOpen ? "Collapse terminal" : "Open terminal"} title={`Toggle terminal (${mod}↓)`} aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+ArrowDown`}
+            aria-expanded={terminalOpen} aria-controls="terminal-panel"><TerminalSquare size={17} /></button>
           <button
             className="icon-button"
             onClick={() => setRail(!rail)}
             aria-label="Toggle bookmarks"
-            title="Toggle bookmarks"
+            title={`Toggle bookmarks (${mod}→)`} aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+ArrowRight`}
           >
             <PanelRight size={17} />
           </button>
@@ -1216,6 +1240,7 @@ export default function App() {
               );
               editor.current?.beginDictation();
             }}
+            onPartial={(text) => editor.current?.previewDictation(text)}
             onText={(text) => {
               editor.current?.insertDictation(text);
               setMode((old) =>
@@ -1271,9 +1296,8 @@ export default function App() {
         )}
         </div>
         <div className="panel-toggle-zone panel-toggle-top" data-expanded={topBars} data-edge-hover={hoveredTop}>
-          <div className="top-panel-resizer" data-panel-drag="top" aria-hidden="true" title="Drag to resize or collapse top bars" />
           <button className="panel-toggle" aria-label={topBars ? "Collapse top bars" : "Expand top bars"}
-            title={topBars ? "Collapse top bars" : "Expand top bars"} aria-expanded={topBars} aria-controls="top-bars"
+            title={`${topBars ? "Collapse" : "Expand"} top bars (${mod}↑)`} aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+ArrowUp`} aria-expanded={topBars} aria-controls="top-bars"
             onClick={() => setTopBars(!topBars)}>
             {topBars ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
@@ -1345,14 +1369,9 @@ export default function App() {
             </div>
           )}
         </div>
+        <TerminalPanel hoveredEdge={hoveredBottom} started={terminalStarted} open={terminalOpen && statusBar} root={workspace.root} controlsContainer={terminalControls}
+          onOpenChange={(open) => { if (open) { setTerminalStarted(true); setStatusBar(true); } setTerminalOpen(open); }} onStorageError={() => setNotice("Terminal height changed, but could not be saved on this device.")} />
         <div className="status-bar-container">
-        <div className="panel-toggle-zone panel-toggle-bottom" data-expanded={statusBar} data-edge-hover={hoveredBottom}>
-          <button className="panel-toggle" aria-label={statusBar ? "Collapse status bar" : "Expand status bar"}
-            title={statusBar ? "Collapse status bar" : "Expand status bar"} aria-expanded={statusBar} aria-controls="status-bar"
-            onClick={() => setStatusBar(!statusBar)}>
-            {statusBar ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
-          </button>
-        </div>
         <footer id="status-bar" className="status-bar" hidden={!statusBar}>
           <span>
             <span className="status-dot" />
@@ -1369,6 +1388,9 @@ export default function App() {
           </span>
           <span>{isMarkdown ? "Markdown" : codeLanguage(path)?.name ?? "Plain text"}</span>
           <span>UTF-8</span>
+          <div className="status-terminal-controls" ref={setTerminalControls}>
+
+          </div>
         </footer>
         </div>
       </main>

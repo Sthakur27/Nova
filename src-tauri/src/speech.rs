@@ -14,7 +14,7 @@ use std::{
     time::{Duration, Instant},
 };
 use tauri::{Emitter, Manager};
-use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
+use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters, WhisperState};
 
 const MODEL_URL: &str =
     "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en.bin";
@@ -38,13 +38,20 @@ struct Session {
     id: String,
     cancel: Arc<AtomicBool>,
     stop: mpsc::Sender<()>,
-    worker: Option<thread::JoinHandle<Result<Vec<f32>, String>>>,
+    stopping: Arc<AtomicBool>,
+    worker: Option<thread::JoinHandle<Result<String, String>>>,
 }
 struct FlagGuard<'a>(&'a AtomicBool);
 impl Drop for FlagGuard<'_> {
     fn drop(&mut self) {
         self.0.store(false, Ordering::SeqCst);
     }
+}
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Transcript {
+    session_id: String,
+    text: String,
 }
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -179,6 +186,7 @@ fn make_stream<T>(
     config: &cpal::StreamConfig,
     audio: Arc<Mutex<AudioBuffer>>,
     failure: Arc<Mutex<Option<String>>>,
+    stopping: Arc<AtomicBool>,
 ) -> Result<cpal::Stream, String>
 where
     T: cpal::SizedSample,
@@ -186,6 +194,7 @@ where
 {
     let channels = config.channels as usize;
     device.build_input_stream(config, move |data: &[T], _| {
+        if stopping.load(Ordering::SeqCst) { return; }
         if let Ok(mut audio) = audio.lock() {
             for frame in data.chunks_exact(channels) {
                 if audio.samples.len() == MAX_SAMPLES {break;}
@@ -199,8 +208,11 @@ fn capture(
     cancel: Arc<AtomicBool>,
     stop: mpsc::Receiver<()>,
     ready: mpsc::Sender<Result<(), String>>,
-) -> Result<Vec<f32>, String> {
-    let run = || {
+    path: PathBuf,
+    stopping: Arc<AtomicBool>,
+    mut partial: impl FnMut(String),
+) -> Result<String, String> {
+    let mut run = || {
         let host = cpal::default_host();
         let device = host
             .default_input_device()
@@ -214,34 +226,45 @@ fn capture(
         let failure = Arc::new(Mutex::new(None));
         let stream = match supported.sample_format() {
             cpal::SampleFormat::F32 => {
-                make_stream::<f32>(&device, &config, audio.clone(), failure.clone())?
+                make_stream::<f32>(&device, &config, audio.clone(), failure.clone(), stopping.clone())?
             }
             cpal::SampleFormat::I16 => {
-                make_stream::<i16>(&device, &config, audio.clone(), failure.clone())?
+                make_stream::<i16>(&device, &config, audio.clone(), failure.clone(), stopping.clone())?
             }
             cpal::SampleFormat::U16 => {
-                make_stream::<u16>(&device, &config, audio.clone(), failure.clone())?
+                make_stream::<u16>(&device, &config, audio.clone(), failure.clone(), stopping.clone())?
             }
             cpal::SampleFormat::I32 => {
-                make_stream::<i32>(&device, &config, audio.clone(), failure.clone())?
+                make_stream::<i32>(&device, &config, audio.clone(), failure.clone(), stopping.clone())?
             }
             cpal::SampleFormat::F64 => {
-                make_stream::<f64>(&device, &config, audio.clone(), failure.clone())?
+                make_stream::<f64>(&device, &config, audio.clone(), failure.clone(), stopping.clone())?
             }
             format => return Err(format!("Unsupported microphone sample format: {format}")),
         };
         if cancel.load(Ordering::SeqCst) {
             return Err(CANCELLED.into());
         }
+        let mut decoder = load_decoder(&path)?;
         stream.play().map_err(err)?;
         let _ = ready.send(Ok(()));
         let start = Instant::now();
+        let mut last_update = Instant::now();
         loop {
             if cancel.load(Ordering::SeqCst) || start.elapsed().as_secs() >= MAX_SECONDS as u64 {
                 break;
             }
             if let Some(error) = failure.lock().map_err(err)?.clone() {
                 return Err(error);
+            }
+            if last_update.elapsed() >= Duration::from_secs(1) {
+                // Only one inference at a time; capture continues on CPAL's callback.
+                // Release the audio lock before decoding so the microphone never waits.
+                let samples = audio.lock().map_err(err)?.samples.clone();
+                if let Ok(text) = decode(&mut decoder, &samples, cancel.clone()) {
+                    if !cancel.load(Ordering::SeqCst) { partial(text); }
+                }
+                last_update = Instant::now();
             }
             if !matches!(
                 stop.recv_timeout(Duration::from_millis(100)),
@@ -255,7 +278,7 @@ fn capture(
             return Err(CANCELLED.into());
         }
         let samples = std::mem::take(&mut audio.lock().map_err(err)?.samples);
-        Ok(samples)
+        decode(&mut decoder, &samples, cancel.clone())
     };
     let result = run();
     if let Err(error) = &result {
@@ -273,6 +296,7 @@ pub async fn speech_start(session_id: String, app: tauri::AppHandle) -> Result<(
         let (stop_tx, stop_rx) = mpsc::channel();
         let (ready_tx, ready_rx) = mpsc::channel();
         let cancel = Arc::new(AtomicBool::new(false));
+        let stopping = Arc::new(AtomicBool::new(false));
         {
             let mut slot = state.session.lock().map_err(err)?;
             if slot.is_some()
@@ -284,8 +308,12 @@ pub async fn speech_start(session_id: String, app: tauri::AppHandle) -> Result<(
             let worker_cancel = cancel.clone();
             let worker_app = app.clone();
             let id = session_id.clone();
+            let path = model_path(&app)?;
+            let worker_stopping = stopping.clone();
             let worker = thread::spawn(move || {
-                let result = capture(worker_cancel, stop_rx, ready_tx);
+                let result = capture(worker_cancel, stop_rx, ready_tx, path, worker_stopping, |text| {
+                    let _ = worker_app.emit("speech:partial", Transcript { session_id: id.clone(), text });
+                });
                 let _ = worker_app.emit("speech:capture-ended", CaptureEnded { session_id: id });
                 result
             });
@@ -293,6 +321,7 @@ pub async fn speech_start(session_id: String, app: tauri::AppHandle) -> Result<(
                 id: session_id.clone(),
                 cancel,
                 stop: stop_tx,
+                stopping,
                 worker: Some(worker),
             });
         }
@@ -311,7 +340,18 @@ pub async fn speech_start(session_id: String, app: tauri::AppHandle) -> Result<(
     .await
     .map_err(err)?
 }
-pub fn transcribe(path: &Path, samples: &[f32], cancel: Arc<AtomicBool>) -> Result<String, String> {
+fn load_decoder(path: &Path) -> Result<WhisperState, String> {
+    let mut context_params = WhisperContextParameters::default();
+    context_params.use_gpu(false);
+    let context =
+        WhisperContext::new_with_params(path.to_str().ok_or("Invalid model path")?, context_params)
+            .map_err(|e| {
+                format!("Couldn't load the speech model. Download it again from Voice typing. {e}")
+            })?;
+    context.create_state().map_err(err)
+
+}
+fn validate_audio(samples: &[f32], cancel: &AtomicBool) -> Result<(), String> {
     if samples.len() < RATE / 2 {
         return Err("That recording was too short. Speak for at least half a second.".into());
     }
@@ -326,14 +366,15 @@ pub fn transcribe(path: &Path, samples: &[f32], cancel: Arc<AtomicBool>) -> Resu
     if cancel.load(Ordering::SeqCst) {
         return Err(CANCELLED.into());
     }
-    let mut context_params = WhisperContextParameters::default();
-    context_params.use_gpu(false);
-    let context =
-        WhisperContext::new_with_params(path.to_str().ok_or("Invalid model path")?, context_params)
-            .map_err(|e| {
-                format!("Couldn't load the speech model. Download it again from Voice typing. {e}")
-            })?;
-    let mut state = context.create_state().map_err(err)?;
+    Ok(())
+}
+#[cfg(test)]
+pub fn transcribe(path: &Path, samples: &[f32], cancel: Arc<AtomicBool>) -> Result<String, String> {
+    validate_audio(samples, &cancel)?;
+    decode(&mut load_decoder(path)?, samples, cancel)
+}
+fn decode(state: &mut WhisperState, samples: &[f32], cancel: Arc<AtomicBool>) -> Result<String, String> {
+    validate_audio(samples, &cancel)?;
     let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
     params.set_n_threads(
         thread::available_parallelism()
@@ -383,7 +424,7 @@ pub fn transcribe(path: &Path, samples: &[f32], cancel: Arc<AtomicBool>) -> Resu
 pub async fn speech_finish(session_id: String, app: tauri::AppHandle) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<SpeechState>();
-        let (worker, cancel) = {
+        let worker = {
             let mut slot = state.session.lock().map_err(err)?;
             let session = slot
                 .as_mut()
@@ -391,15 +432,15 @@ pub async fn speech_finish(session_id: String, app: tauri::AppHandle) -> Result<
                 .ok_or("This dictation session has ended.")?;
             let worker = session.worker.take().ok_or("Already transcribing.")?;
             state.transcribing.store(true, Ordering::SeqCst);
+            session.stopping.store(true, Ordering::SeqCst);
             let _ = session.stop.send(());
-            (worker, session.cancel.clone())
+            worker
         };
         let _guard = FlagGuard(&state.transcribing);
         let result = worker
             .join()
             .map_err(|_| "The microphone worker stopped unexpectedly.".to_string())
-            .and_then(|r| r)
-            .and_then(|samples| transcribe(&model_path(&app)?, &samples, cancel));
+            .and_then(|r| r);
         let mut slot = state.session.lock().map_err(err)?;
         if slot.as_ref().map(|s| s.id.as_str()) == Some(session_id.as_str()) {
             *slot = None;
@@ -416,6 +457,7 @@ pub fn speech_cancel(session_id: String, app: tauri::AppHandle) -> Result<(), St
     if slot.as_ref().map(|s| s.id.as_str()) == Some(session_id.as_str()) {
         if let Some(session) = slot.take() {
             session.cancel.store(true, Ordering::SeqCst);
+            session.stopping.store(true, Ordering::SeqCst);
             let _ = session.stop.send(());
         }
     }
@@ -457,8 +499,13 @@ mod tests {
     #[ignore = "Downloads the 78 MB model and uses the upstream JFK audio fixture; run explicitly"]
     fn actual_whisper_transcription() {
         let dir = tempfile::tempdir().unwrap();
-        let model = dir.path().join("model.bin");
-        download_model(&model, |_| {}).unwrap();
+        let model = if let Some(path) = std::env::var_os("NOVA_SPEECH_TEST_MODEL") {
+            PathBuf::from(path)
+        } else {
+            let path = dir.path().join("model.bin");
+            download_model(&path, |_| {}).unwrap();
+            path
+        };
         let bytes = reqwest::blocking::get(
             "https://raw.githubusercontent.com/ggml-org/whisper.cpp/master/samples/jfk.wav",
         )
@@ -473,7 +520,17 @@ mod tests {
             .into_samples::<i16>()
             .map(|x| x.unwrap() as f32 / 32768.0)
             .collect();
-        let text = transcribe(&model, &samples, Arc::new(AtomicBool::new(false))).unwrap();
+        let mut decoder = load_decoder(&model).unwrap();
+        let cancel = Arc::new(AtomicBool::new(false));
+        for seconds in [2, 4, 8] {
+            let start = Instant::now();
+            let partial = decode(&mut decoder, &samples[..RATE * seconds], cancel.clone()).unwrap();
+            eprintln!("{seconds}s preview in {:?}: {partial}", start.elapsed());
+            assert!(!partial.is_empty());
+        }
+        let text = decode(&mut decoder, &samples, cancel.clone()).unwrap();
+        cancel.store(true, Ordering::SeqCst);
+        assert_eq!(decode(&mut decoder, &samples, cancel).unwrap_err(), CANCELLED);
         assert!(
             text.to_lowercase().contains("ask not what your country"),
             "{text}"

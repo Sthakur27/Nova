@@ -6,7 +6,7 @@ Nova is a notes app for Mac and Windows that gives your words room to breathe. W
 
 **[Download Nova](#download-nova)** · **[Take a look](#make-yourself-at-home)** · **[Get started](#your-first-few-minutes)**
 
-![Nova's translucent editor over a soft blue-purple background, with folders and named bookmarks alongside the note](docs/screenshots/galaxy-mode.jpg)
+![Nova's full workspace with a translucent Markdown editor, folder explorer, starred notes, and bookmarks panel](docs/screenshots/nova-showcase.png)
 
 *Your files on the left. Your thoughts in the middle. Your favorite passages on the right.*
 
@@ -49,6 +49,8 @@ Give a long paragraph more breathing room with **Line spacing**, or choose a com
 
 ![Nova's writing view with the line-spacing menu open, formatting toolbar, and panel controls](docs/screenshots/ergonomic-controls.jpg)
 
+Open **Terminal** from the icon above your note or the control in the status bar to run a shell below your note in the desktop app. Use **+** for another terminal tab, resize the tray by dragging its top edge or empty tab-bar area, and collapse it without stopping your shells. See the [terminal guide](docs/user-guide.md#terminal) for session controls and shortcuts.
+
 Open **Settings** using the gear in the lower-left corner to adjust text size, spacing, and other reading and writing preferences. Nova remembers your choices on this computer.
 
 ![Settings showing Galaxy mode, text size, text width, line spacing, and line highlighting](docs/screenshots/editor-settings.jpg)
@@ -59,7 +61,7 @@ Enter **focus mode** to hide the folders, bookmarks, and toolbars. Choose your p
 
 ![Focus mode with a centered note and the surrounding panels hidden](docs/screenshots/focus-mode.jpg)
 
-*These screenshots show sample notes in the browser preview. The Galaxy comparison uses a soft blue-purple backdrop to show the editor's translucency. Open your own folders and use voice typing in the desktop app.*
+*The opening showcase shows the desktop app. The other screenshots show sample notes in the browser preview. The Galaxy comparison uses a soft blue-purple backdrop to show the editor's translucency. Open your own folders and use voice typing in the desktop app.*
 
 ## Your first few minutes
 
@@ -71,6 +73,8 @@ Enter **focus mode** to hide the folders, bookmarks, and toolbars. Choose your p
 
 ### A few handy shortcuts
 
+Use **⌘ + arrow keys** on Mac or **Ctrl + arrow keys** on Windows to toggle panels: **← navigation**, **→ bookmarks**, **↑ top bars**, and **↓ terminal**. These shortcuts also work while editing a note or using the terminal; adding Shift keeps the normal text-selection shortcut.
+
 | What you'd like to do | Mac | Windows |
 | --- | --- | --- |
 | Find a note, bookmark, or phrase | ⌘ K | Ctrl K |
@@ -78,13 +82,14 @@ Enter **focus mode** to hide the folders, bookmarks, and toolbars. Choose your p
 | Create a note | ⌘ T | Ctrl T |
 | Bookmark a passage | ⌘ Shift B | Ctrl Shift B |
 | Save | ⌘ S | Ctrl S |
+| Start / stop dictation | ⌘ V | Click Dictate |
 | Enter or leave focus mode | ⌘ G | Ctrl G |
 | Open Settings | ⌘ , | Ctrl , |
 | Zoom in / out | ⌘ + / − | Ctrl + / − |
 
 ### Prefer to say it?
 
-Click **Dictate**, the microphone above your note. On first use, Nova asks you to download its English speech model (about 78 MB). Place your cursor, start recording, and stop when you're ready to insert the words. Recordings can be up to two minutes long.
+Click **Dictate**, the microphone above your note. On first use, Nova asks you to download its English speech model (about 78 MB). Place your cursor and start recording: words appear with a short processing delay and may be revised as you speak. Stop to finalize them. Recordings can be up to two minutes long. On Mac, **⌘ V** starts or stops dictation; this replaces the usual Paste shortcut in Nova.
 
 Your audio stays on your computer and isn't uploaded. Voice typing requires the desktop app and microphone access. See the [voice typing guide](docs/user-guide.md#voice-typing) for details.
 

@@ -10,12 +10,65 @@ export const setDictationAnchor = StateEffect.define<number | null>();
 export const dictationAnchor = StateField.define<number | null>({
   create: () => null,
   update(anchor, tr) {
-    if (anchor !== null && tr.docChanged) anchor = tr.changes.mapPos(anchor, 1);
+    if (anchor !== null && tr.docChanged) {
+      const range = tr.startState.field(dictationPreview, false);
+      const previewUpdate = tr.effects.some(effect => effect.is(setPreviewRange));
+      let touched = false;
+      if (range && !previewUpdate) tr.changes.iterChangedRanges((from, to) => {
+        if (from < range.to && to > range.from) touched = true;
+      });
+      anchor = touched ? null : tr.changes.mapPos(anchor, 1);
+    }
     for (const effect of tr.effects)
       if (effect.is(setDictationAnchor)) anchor = effect.value;
     return anchor;
   },
 });
+type PreviewRange = { from: number; to: number };
+const setPreviewRange = StateEffect.define<PreviewRange | null>();
+export const dictationPreview = StateField.define<PreviewRange | null>({
+  create: () => null,
+  update(range, tr) {
+    if (range && tr.docChanged) {
+      let touched = false;
+      tr.changes.iterChangedRanges((from, to) => {
+        if (from < range!.to && to > range!.from) touched = true;
+      });
+      // Once the user edits the live text, keep their version instead of replacing it.
+      range = touched ? null : { from: tr.changes.mapPos(range.from, 1), to: tr.changes.mapPos(range.to, -1) };
+    }
+    for (const effect of tr.effects) {
+      if (effect.is(setPreviewRange)) range = effect.value;
+      if (effect.is(setDictationAnchor)) range = null;
+    }
+    return range;
+  },
+});
+export function previewTransaction(state: EditorState, text: string): TransactionSpec | null {
+  const range = state.field(dictationPreview);
+  const at = range?.from ?? state.field(dictationAnchor);
+  if (at === null || !text.trim()) return null;
+  const to = range?.to ?? at;
+  const before = state.sliceDoc(Math.max(0, at - 1), at);
+  const after = state.sliceDoc(to, to + 1);
+  const insert = (before && !/\s|[([{“‘]/u.test(before) && !/^[.,!?;:)/\]}]/u.test(text) ? " " : "") + text.trim() +
+    (after && !/\s|[.,!?;:)\]}]/u.test(after) ? " " : "");
+  return {
+    changes: { from: at, to, insert },
+    effects: setPreviewRange.of({ from: at, to: at + insert.length }),
+    annotations: Transaction.addToHistory.of(false),
+    scrollIntoView: state.selection.main.head === to,
+  };
+}
+export function clearPreviewTransaction(state: EditorState): TransactionSpec | null {
+  const range = state.field(dictationPreview);
+  if (!range) return null;
+  return {
+    changes: { from: range.from, to: range.to },
+    effects: [setDictationAnchor.of(range.from), setPreviewRange.of(null)],
+    annotations: Transaction.addToHistory.of(false),
+  };
+}
 export function transcriptTransaction(
   state: EditorState,
   transcript: string,
@@ -53,11 +106,13 @@ export class DictationSession {
   id: string | null = null;
   phase: VoicePhase = "idle";
   private ended = false;
+  private lastPartial = "";
   constructor(
     private transport: VoiceTransport,
     private onPhase: (phase: VoicePhase) => void,
     private onText: (text: string) => void,
     private onError: (error: string) => void,
+    private onPartial: (text: string) => void = () => {},
   ) {}
   private setPhase(phase: VoicePhase) {
     this.phase = phase;
@@ -67,6 +122,7 @@ export class DictationSession {
     if (this.id) return;
     this.id = id;
     this.ended = false;
+    this.lastPartial = "";
     this.setPhase("starting");
     try {
       await this.transport.start(id);
@@ -82,6 +138,12 @@ export class DictationSession {
         this.setPhase("idle");
         this.onError(String(error));
       }
+    }
+  }
+  partial(id: string, text: string) {
+    if (id === this.id && text !== this.lastPartial && (this.phase === "recording" || this.phase === "starting")) {
+      this.lastPartial = text;
+      this.onPartial(text);
     }
   }
   captureEnded(id: string) {

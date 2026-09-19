@@ -1,4 +1,5 @@
 mod speech;
+mod terminal;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
@@ -744,7 +745,10 @@ pub fn run() {
                             &PredefinedMenuItem::separator(app)?,
                             &PredefinedMenuItem::cut(app, None)?,
                             &PredefinedMenuItem::copy(app, None)?,
+                            #[cfg(not(target_os = "macos"))]
                             &PredefinedMenuItem::paste(app, None)?,
+                            #[cfg(target_os = "macos")]
+                            &MenuItem::with_id(app, "nova-dictate", "Dictate", true, Some("Cmd+V"))?,
                             &MenuItem::with_id(app, "nova-select-all", "Select All", true, Some("CmdOrCtrl+A"))?,
                         ],
                     )?,
@@ -754,6 +758,10 @@ pub fn run() {
         .on_menu_event(|app, event| {
             if event.id().as_ref() == "nova-quit" {
                 let _ = app.emit("nova:request-quit", ());
+            } else if event.id().as_ref() == "nova-dictate" {
+                if let Some(window) = app.webview_windows().values().find(|window| window.is_focused().unwrap_or(false)) {
+                    let _ = app.emit_to(window.label(), "nova:dictate", ());
+                }
             } else if event.id().as_ref() == "nova-select-all" {
                 // WebKit's native selectAll can stop at an editable list block.
                 // Let the focused editor select its complete document instead.
@@ -765,10 +773,15 @@ pub fn run() {
                 }
             }
         })
+        .manage(terminal::Terminals::default())
         .manage(Access::default())
         .manage(speech::SpeechState::default())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
+            terminal::terminal_open,
+            terminal::terminal_write,
+            terminal::terminal_resize,
+            terminal::terminal_close,
             open_workspace,
             set_file_star,
             read_note,
@@ -795,6 +808,9 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("Unable to run Nova")
         .run(|app, event| {
+            if let tauri::RunEvent::WindowEvent { label, event: tauri::WindowEvent::Destroyed, .. } = &event {
+                app.state::<terminal::Terminals>().close_window(label);
+            }
             if let tauri::RunEvent::ExitRequested { api, .. } = event {
                 if !app.state::<Access>().quitting.load(Ordering::Relaxed)
                     && !app.webview_windows().is_empty()

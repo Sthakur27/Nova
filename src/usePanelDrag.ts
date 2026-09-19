@@ -1,11 +1,12 @@
 import { useEffect, useRef } from "react";
 
-export type DragPanel = "left" | "right" | "top";
+export type DragPanel = "left" | "right" | "bottom";
 export const panelSnapDistance = 48;
 const activeControls = 'button, input, textarea, select, a, label, summary, [contenteditable]:not([contenteditable="false"]), [role="button"], [role="tab"], [role="treeitem"], [role="slider"], [role="menuitem"], [draggable="true"], [data-panel-no-drag]';
 
 /** A small movement threshold preserves ordinary clicks on panel backgrounds. */
-export function usePanelDrag({ shell, onStart, onMove, onFinish }: {
+export function usePanelDrag({ shell, onStart, onMove, onFinish, bottomOnly = false }: {
+  bottomOnly?: boolean;
   shell: () => HTMLElement | null | undefined;
   onStart: (panel: DragPanel) => number;
   onMove: (panel: DragPanel, size: number) => void;
@@ -22,21 +23,21 @@ export function usePanelDrag({ shell, onStart, onMove, onFinish }: {
       const handle = target.closest<HTMLElement>("[data-panel-drag]");
       if (!handle && target.closest(activeControls)) return;
       const panel = handle?.dataset.panelDrag as DragPanel | undefined
-        ?? (target.closest(".sidebar") ? "left" : target.closest(".bookmark-rail") ? "right" : target.closest(".top-bars") ? "top" : undefined);
-      if (!panel) return;
+        ?? (target.closest(".sidebar") ? "left" : target.closest(".bookmark-rail") ? "right" : target.closest(".terminal-panel, .status-bar") ? "bottom" : undefined);
+      if (!["left", "right", "bottom"].includes(panel ?? "") || !panel || (bottomOnly ? panel !== "bottom" : panel === "bottom")) return;
       drag.current = { panel, id: event.pointerId, x: event.clientX, y: event.clientY, size: onStart(panel), moving: false };
     }
     function move(event: PointerEvent) {
       const active = drag.current;
       if (!active || event.pointerId !== active.id) return;
-      const delta = active.panel === "top" ? event.clientY - active.y : (event.clientX - active.x) * (active.panel === "left" ? 1 : -1);
+      const delta = active.panel === "bottom" ? active.y - event.clientY : (event.clientX - active.x) * (active.panel === "left" ? 1 : -1);
       if (!active.moving && Math.abs(delta) < 5) return;
       active.moving = true;
       event.preventDefault();
       element!.dataset.panelDragging = active.panel;
       const bounds = element!.getBoundingClientRect();
       const distance = active.panel === "left" ? event.clientX - bounds.left
-        : active.panel === "right" ? bounds.right - event.clientX : event.clientY - bounds.top;
+        : active.panel === "right" ? bounds.right - event.clientX : bounds.bottom - event.clientY;
       onMove(active.panel, distance <= panelSnapDistance ? 0 : Math.max(0, active.size + delta));
     }
     function finish(commit: boolean) {
@@ -64,5 +65,5 @@ export function usePanelDrag({ shell, onStart, onMove, onFinish }: {
       window.removeEventListener("keydown", key);
       window.removeEventListener("blur", blur);
     };
-  }, [shell, onStart, onMove, onFinish]);
+  }, [shell, onStart, onMove, onFinish, bottomOnly]);
 }

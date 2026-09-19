@@ -3,6 +3,7 @@ import { panelSnapDistance, usePanelDrag } from "./usePanelDrag";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { defaultPanelWidths, editorMinimum, fitPanelWidths, panelMaximum, panelMinimums, type PanelSide, type PanelWidths } from "./panelWidths";
 
+const modifier = navigator.platform.toLowerCase().includes("mac") ? "Meta" : "Control";
 const storageKey = "nova:panel-widths:v1";
 function readWidths(): Partial<PanelWidths> {
   try {
@@ -16,8 +17,7 @@ function readWidths(): Partial<PanelWidths> {
   } catch { return {}; }
 }
 
-export default function SidePanelControls({ navigation, bookmarks, hoveredEdge, topBars, onTopBars, onNavigation, onBookmarks, onStorageError }: {
-  topBars: boolean; onTopBars: () => void;
+export default function SidePanelControls({ navigation, bookmarks, hoveredEdge, onNavigation, onBookmarks, onStorageError }: {
   navigation: boolean; bookmarks: boolean; hoveredEdge: PanelSide | null;
   onNavigation: () => void; onBookmarks: () => void; onStorageError: () => void;
 }) {
@@ -27,7 +27,6 @@ export default function SidePanelControls({ navigation, bookmarks, hoveredEdge, 
   const [draft, setDraft] = useState<PanelWidths | null>(null);
   const drag = useRef<{ side: PanelSide; x: number; start: PanelWidths; latest: PanelWidths } | null>(null);
   const initiallyExpanded = useRef(true);
-  const topDrag = useRef({ latest: 0, original: "" });
   const defaults = defaultPanelWidths(available);
   const widths = fitPanelWidths(draft ?? { ...defaults, ...saved }, available, navigation, bookmarks);
 
@@ -66,25 +65,13 @@ export default function SidePanelControls({ navigation, bookmarks, hoveredEdge, 
   usePanelDrag({
     shell: () => anchor.current?.closest<HTMLElement>(".app-shell"),
     onStart: (panel) => {
-      initiallyExpanded.current = panel === "top" ? topBars : panel === "left" ? navigation : bookmarks;
-      if (panel === "top") {
-        const top = document.getElementById("top-bars")!;
-        topDrag.current = { latest: topBars ? top.getBoundingClientRect().height : 0, original: top.style.height };
-        return topDrag.current.latest;
-      }
+      if (panel === "bottom") return 0;
+      initiallyExpanded.current = panel === "left" ? navigation : bookmarks;
       drag.current = { side: panel, x: 0, start: widths, latest: widths };
       return (panel === "left" ? navigation : bookmarks) ? widths[panel] : 0;
     },
     onMove: (panel, size) => {
-      if (panel === "top") {
-        const top = document.getElementById("top-bars")!;
-        topDrag.current.latest = size;
-        if (!topBars && size > panelSnapDistance) onTopBars();
-        const minimum = Array.from(top.children).reduce((height, child) => height + (child as HTMLElement).offsetHeight, 0);
-        top.style.height = `${Math.max(minimum, Math.min(window.innerHeight * .45, size))}px`;
-        top.dataset.snapCollapse = String(size <= panelSnapDistance);
-        return;
-      }
+      if (panel === "bottom") return;
       const active = drag.current;
       if (!active) return;
       active.latest = { ...active.start, [panel]: size <= panelSnapDistance ? 0 : clamp(panel, size) };
@@ -93,19 +80,10 @@ export default function SidePanelControls({ navigation, bookmarks, hoveredEdge, 
       setDraft(active.latest);
     },
     onFinish: (panel, commit) => {
-      const expanded = panel === "top" ? topBars : panel === "left" ? navigation : bookmarks;
+      if (panel === "bottom") return;
+      const expanded = panel === "left" ? navigation : bookmarks;
       if (!commit && initiallyExpanded.current !== expanded)
-        (panel === "top" ? onTopBars : panel === "left" ? onNavigation : onBookmarks)();
-      if (panel === "top") {
-        const top = document.getElementById("top-bars")!;
-        delete top.dataset.snapCollapse;
-        if (!commit) top.style.height = topDrag.current.original;
-        else if (topDrag.current.latest <= panelSnapDistance && topBars) {
-          top.style.height = topDrag.current.original;
-          onTopBars();
-        }
-        return;
-      }
+        (panel === "left" ? onNavigation : onBookmarks)();
       const active = drag.current;
       drag.current = null;
       if (commit && active) {
@@ -143,7 +121,8 @@ export default function SidePanelControls({ navigation, bookmarks, hoveredEdge, 
             persist(side, clamp(side, next));
           }} />
         <button className="panel-toggle" aria-label={`${expanded ? "Collapse" : "Expand"} ${label}`}
-          title={`${expanded ? "Collapse" : "Expand"} ${label}`} aria-expanded={expanded} aria-controls={controls}
+          title={`${expanded ? "Collapse" : "Expand"} ${label} (${modifier === "Meta" ? "⌘" : "Ctrl"}${side === "left" ? "←" : "→"})`}
+          aria-keyshortcuts={`${modifier}+${side === "left" ? "ArrowLeft" : "ArrowRight"}`} aria-expanded={expanded} aria-controls={controls}
           onClick={side === "left" ? onNavigation : onBookmarks}>
           {(side === "left" ? expanded : !expanded) ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
         </button>

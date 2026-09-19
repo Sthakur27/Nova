@@ -4,6 +4,9 @@ import { history, undo } from "@codemirror/commands";
 import { bookmarkField } from "./Editor";
 import {
   DictationSession,
+  dictationPreview,
+  previewTransaction,
+  clearPreviewTransaction,
   dictationAnchor,
   setDictationAnchor,
   transcriptTransaction,
@@ -11,7 +14,7 @@ import {
 function state(doc: string, at: number) {
   return EditorState.create({
     doc,
-    extensions: [history(), dictationAnchor],
+    extensions: [history(), dictationAnchor, dictationPreview],
   }).update({ effects: setDictationAnchor.of(at) }).state;
 }
 const deferred = <T>() => {
@@ -136,5 +139,53 @@ describe("dictation session lifecycle", () => {
     expect(t.session.phase).toBe("idle");
     t.session.captureEnded("old");
     expect(t.transport.finish).not.toHaveBeenCalled();
+  });
+});
+
+ describe("live dictation", () => {
+  it("replaces partial hypotheses, keeps surrounding edits, and finalizes with one undo", () => {
+    let doc = state("Hello world", 5);
+    doc = doc.update(previewTransaction(doc, "beauty")!).state;
+    expect(doc.doc.toString()).toBe("Hello beauty world");
+    doc = doc.update({ changes: { from: 0, insert: "A: " } }).state;
+    doc = doc.update(previewTransaction(doc, "beautiful day")!).state;
+    expect(doc.doc.toString()).toBe("A: Hello beautiful day world");
+    doc = doc.update(clearPreviewTransaction(doc)!).state;
+    doc = doc.update(transcriptTransaction(doc, "beautiful day")!).state;
+    expect(doc.doc.toString()).toBe("A: Hello beautiful day world");
+    expect(undo({ state: doc, dispatch: tr => { doc = tr.state; } })).toBe(true);
+    expect(doc.doc.toString()).toBe("A: Hello world");
+    expect(undo({ state: doc, dispatch: tr => { doc = tr.state; } })).toBe(true);
+    expect(doc.doc.toString()).toBe("Hello world");
+  });
+  it("cancels just the live text and stops replacing it if the user edits it", () => {
+    let doc = state("Hello world", 5);
+    doc = doc.update(previewTransaction(doc, "beautiful")!).state;
+    doc = doc.update(clearPreviewTransaction(doc)!).state;
+    doc = doc.update({ effects: setDictationAnchor.of(null) }).state;
+    expect(doc.doc.toString()).toBe("Hello world");
+    expect(previewTransaction(doc, "late")).toBeNull();
+    doc = state("Hello world", 5);
+    doc = doc.update(previewTransaction(doc, "beautiful")!).state;
+    doc = doc.update({ changes: { from: 6, to: 15, insert: "lovely" } }).state;
+    expect(previewTransaction(doc, "different words")).toBeNull();
+    expect(clearPreviewTransaction(doc)).toBeNull();
+    expect(transcriptTransaction(doc, "different words")).toBeNull();
+    expect(doc.doc.toString()).toBe("Hello lovely world");
+  });
+  it("rejects partial events from cancelled, old, and finalizing sessions", async () => {
+    const partial = vi.fn();
+    const session = new DictationSession({ start: async () => {}, finish: async () => "final", cancel: async () => {} }, vi.fn(), vi.fn(), vi.fn(), partial);
+    await session.start("a");
+    session.partial("old", "wrong");
+    session.partial("a", "live");
+    expect(partial).toHaveBeenCalledExactlyOnceWith("live");
+    await session.cancel();
+    session.partial("a", "late");
+    await session.start("b");
+    const finish = session.finish();
+    session.partial("b", "late again");
+    await finish;
+    expect(partial).toHaveBeenCalledTimes(1);
   });
 });

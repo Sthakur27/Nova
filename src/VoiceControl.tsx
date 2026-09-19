@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import {
   ChevronDown,
   Download,
@@ -16,6 +17,7 @@ type Props = {
   disabled: boolean;
   onBegin: () => void;
   onText: (text: string) => void;
+  onPartial?: (text: string) => void;
   onCancel: () => void;
   onBusy: (busy: boolean) => void;
   onError: (error: string) => void;
@@ -31,6 +33,7 @@ export default function VoiceControl(props: Props) {
   const [progress, setProgress] = useState(0);
   const [seconds, setSeconds] = useState(0);
   const [message, setMessage] = useState("");
+  const dictateButton = useRef<HTMLButtonElement>(null);
   const setupRef = useRef<HTMLDivElement>(null);
   const downloadBusy = useRef(false);
   const [session] = useState(
@@ -51,6 +54,7 @@ export default function VoiceControl(props: Props) {
           setMessage(error);
           latest.current.onError(error);
         },
+        (text) => latest.current.onPartial?.(text),
       ),
   );
   useEffect(() => {
@@ -59,6 +63,9 @@ export default function VoiceControl(props: Props) {
     const subscriptions = Promise.all([
       listen<number>("speech:download-progress", (event) => {
         if (!disposed) setProgress(event.payload);
+      }),
+      listen<{ sessionId: string; text: string }>("speech:partial", (event) => {
+        if (!disposed) session.partial(event.payload.sessionId, event.payload.text);
       }),
       listen<{ sessionId: string }>("speech:capture-ended", (event) => {
         if (!disposed) session.captureEnded(event.payload.sessionId);
@@ -97,6 +104,28 @@ export default function VoiceControl(props: Props) {
   useEffect(() => {
     if (setup) setupRef.current?.querySelector<HTMLElement>("button")?.focus();
   }, [setup]);
+  useEffect(() => {
+    // Capture before focused editors, inputs, or terminals consume the key.
+    const key = (event: KeyboardEvent) => {
+      if (!event.metaKey || event.ctrlKey || event.shiftKey || event.altKey ||
+          event.isComposing || event.key.toLowerCase() !== "v") return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (!event.repeat) dictateButton.current?.click();
+    };
+    window.addEventListener("keydown", key, { capture: true });
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    if (desktop) {
+      void getCurrentWindow().listen("nova:dictate", () => dictateButton.current?.click())
+        .then(fn => { if (disposed) fn(); else unlisten = fn; });
+    }
+    return () => {
+      disposed = true;
+      unlisten?.();
+      window.removeEventListener("keydown", key, { capture: true });
+    };
+  }, []);
   async function download() {
     if (downloadBusy.current) return;
     downloadBusy.current = true;
@@ -132,13 +161,15 @@ export default function VoiceControl(props: Props) {
   const active = phase !== "idle";
   const description = downloading ? `Downloading ${progress}%`
     : checking ? "Checking voice typing…"
-    : phase === "recording" ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")} · Stop dictation and insert text`
+    : phase === "recording" ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")} · Stop dictation`
     : phase === "starting" ? "Opening mic…"
     : phase === "transcribing" ? "Transcribing…"
     : "Dictate · on-device · English";
   return (
     <div className="voice-control">
       <button
+        ref={dictateButton}
+        aria-keyshortcuts="Meta+V"
         className={"voice-button toolbar-icon focus-toggle " + (active ? "voice-active" : "")}
         disabled={
           props.disabled ||
@@ -147,7 +178,7 @@ export default function VoiceControl(props: Props) {
           phase === "starting" ||
           phase === "transcribing"
         }
-        aria-label={phase === "recording" ? "Stop dictation and insert text" : "Dictate"}
+        aria-label={phase === "recording" ? "Stop dictation" : "Dictate"}
         aria-describedby="dictation-tooltip"
         onClick={() =>
           phase === "recording" ? void session.finish() : start()
@@ -160,7 +191,10 @@ export default function VoiceControl(props: Props) {
         ) : (
           <Mic size={15} />
         )}
-        <span className="focus-tooltip" id="dictation-tooltip" role="tooltip">{description}</span>
+        <span className="focus-tooltip" id="dictation-tooltip" role="tooltip">
+          <span>{description}</span>
+          <span className="focus-tooltip-keys"><kbd>⌘</kbd><kbd>V</kbd></span>
+        </span>
       </button>
       {!active && (
         <button
@@ -217,8 +251,8 @@ export default function VoiceControl(props: Props) {
           ) : (
             <>
               <p>
-                Speak, stop, and your words appear at the insertion point where
-                you started.
+                Words appear as you speak, with a short processing delay, at the
+                insertion point where you started. Stop to finalize the text.
               </p>
               <div className="voice-details">
                 <span>On-device · English</span>
@@ -226,7 +260,7 @@ export default function VoiceControl(props: Props) {
               </div>
               <p className="voice-privacy">
                 Audio stays on this device and is discarded after transcription.
-                The model loads only while transcribing.
+                The model loads only while dictating.
               </p>
               {!ready && (
                 <p>
@@ -276,7 +310,7 @@ export default function VoiceControl(props: Props) {
       )}
       <span className="sr-only" role="status">
         {phase === "recording"
-          ? "Recording. Press Stop dictation to insert your words."
+          ? "Recording. Words appear as you speak. Press Stop dictation to finish."
           : phase === "transcribing"
             ? "Transcribing on this device."
             : ""}

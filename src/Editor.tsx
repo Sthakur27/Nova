@@ -44,6 +44,9 @@ import {
 import type { Bookmark } from "./model";
 import {
   dictationAnchor,
+  dictationPreview,
+  previewTransaction,
+  clearPreviewTransaction,
   setDictationAnchor,
   transcriptTransaction,
 } from "./dictation";
@@ -130,6 +133,7 @@ export type EditorHandle = {
   marks: () => Bookmark[];
   beginDictation: () => void;
   insertDictation: (text: string) => void;
+  previewDictation: (text: string) => void;
   cancelDictation: () => void;
   toggleTask: (offset: number, checked: boolean) => void;
   isDocumentView: () => boolean;
@@ -213,8 +217,16 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
         });
         if (!latest.current.documentMode) v.focus();
       },
+      previewDictation: (text) => {
+        const v = view.current;
+        if (!v) return;
+        const tr = previewTransaction(v.state, text);
+        if (tr) v.dispatch(tr);
+      },
       insertDictation: (text) => {
         const v = view.current!;
+        const clear = clearPreviewTransaction(v.state);
+        if (clear) v.dispatch(clear);
         const tr = transcriptTransaction(v.state, text);
         if (tr) {
           v.dispatch(tr);
@@ -223,6 +235,10 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
         }
       },
       cancelDictation: () => {
+        if (view.current) {
+          const clear = clearPreviewTransaction(view.current.state);
+          if (clear) view.current.dispatch(clear);
+        }
         view.current?.dispatch({ effects: setDictationAnchor.of(null) });
       },
       marks: () => view.current?.state.field(bookmarkField) ?? [],
@@ -289,6 +305,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
       indentUnit.of("    "),
       bookmarkField,
       dictationAnchor,
+      dictationPreview,
       decorations,
       keymap.of([
         { key: "Ctrl-a", run: selectAll },

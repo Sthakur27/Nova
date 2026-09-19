@@ -23,6 +23,7 @@ whisper-rs = "0.16"
 cpal = "0.16"
 sha2 = "0.10"
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+portable-pty = "0.9"
 
 [dev-dependencies]
 hound = "3"
