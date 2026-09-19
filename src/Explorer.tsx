@@ -100,8 +100,7 @@ function FileTree({
           <button
             className="file-open"
             title={path}
-            onClick={event => { if (event.detail === 0) onOpen(path); }}
-            onDoubleClick={() => onOpen(path)}
+            onClick={event => { if (event.detail <= 1) onOpen(path); }}
           >
             <FileText size={14} />
             <span>{path.slice(prefix.length)}</span>

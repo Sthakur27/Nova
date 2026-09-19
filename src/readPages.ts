@@ -4,6 +4,7 @@ import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
 import remarkRehype from "remark-rehype";
 import remarkNestedNumbers from "./remarkNestedNumbers";
+import remarkTaskOffsets from "./remarkTaskOffsets";
 
 const PAGE_SIZE = 24_000;
 export type ReadPage = { tree: Root; line: number; endLine: number };
@@ -29,8 +30,8 @@ export function buildReadPages(text: string, markdown: boolean): ReadPage[] {
     }
     return pages;
   }
-  const processor = unified().use(remarkParse).use(remarkGfm).use(remarkNestedNumbers).use(remarkRehype, { allowDangerousHtml: true });
-  const tree = processor.runSync(processor.parse(text)) as Root;
+  const processor = unified().use(remarkParse).use(remarkGfm).use(remarkNestedNumbers).use(remarkTaskOffsets).use(remarkRehype, { allowDangerousHtml: true });
+  const tree = processor.runSync(processor.parse(text), { value: text }) as Root;
   const pages: ReadPage[] = [];
   let children: RootContent[] = [];
   let size = 0;

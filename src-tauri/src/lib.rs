@@ -745,7 +745,7 @@ pub fn run() {
                             &PredefinedMenuItem::cut(app, None)?,
                             &PredefinedMenuItem::copy(app, None)?,
                             &PredefinedMenuItem::paste(app, None)?,
-                            &PredefinedMenuItem::select_all(app, None)?,
+                            &MenuItem::with_id(app, "nova-select-all", "Select All", true, Some("CmdOrCtrl+A"))?,
                         ],
                     )?,
                 ],
@@ -754,6 +754,15 @@ pub fn run() {
         .on_menu_event(|app, event| {
             if event.id().as_ref() == "nova-quit" {
                 let _ = app.emit("nova:request-quit", ());
+            } else if event.id().as_ref() == "nova-select-all" {
+                // WebKit's native selectAll can stop at an editable list block.
+                // Let the focused editor select its complete document instead.
+                let windows = app.webview_windows();
+                let target = windows.values().find(|window| window.is_focused().unwrap_or(false))
+                    .or_else(|| if windows.len() == 1 { windows.values().next() } else { None });
+                if let Some(window) = target {
+                    let _ = app.emit_to(window.label(), "nova:select-all", ());
+                }
             }
         })
         .manage(Access::default())

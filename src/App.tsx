@@ -25,6 +25,7 @@ import {
   Code2,
   ListOrdered,
   ScanLine,
+  Layers,
   Plus,
   Search,
   PanelRight,
@@ -50,6 +51,9 @@ import type { FormatAction } from "./richMarkdown";
 import { addFolders, type EditorMode } from "./folders";
 import VoiceControl from "./VoiceControl";
 import NovaMark from "./NovaMark";
+import GalaxyMark from "./GalaxyMark";
+import { readFileMode, saveFileMode } from "./fileModes";
+import { RICH_DOCUMENT_LIMIT, supportsDocumentView } from "./documentLimits";
 import PlasmaEffects from "./PlasmaEffects";
 import {
   chooseWorkspaces,
@@ -105,6 +109,7 @@ export default function App() {
   const [renameTarget, setRenameTarget] = useState<{ folder: Workspace; path: string } | null>(null);
   const [readControls, setReadControls] = useState<HTMLDivElement | null>(null);
   const [galaxyMode, setGalaxyMode, galaxyError] = usePreference<boolean>("galaxy", true);
+  const [translucent, setTranslucent, translucencyError] = usePreference<boolean>("translucent", true);
   const [plasmaEnabled, setPlasmaEnabled, plasmaError] = usePreference<boolean>("plasma", true);
   const [showLineNumbers, setShowLineNumbers, numbersError] = usePreference<boolean>("line-numbers", true);
   const [showLineHighlight, setShowLineHighlight, highlightError] = usePreference<boolean>("line-highlight", true);
@@ -286,7 +291,15 @@ export default function App() {
     let cancelled = false;
     void (async () => {
       try {
-        const prefs = await loadExplorer();
+        const savedPrefs = await loadExplorer();
+        // Secondary desktop windows and browser windows opened with Control-N
+        // share the explorer, but start on the existing welcome screen.
+        const freshWindow = desktop
+          ? getCurrentWindow().label.startsWith("nova-")
+          : new URLSearchParams(window.location.search).get("new-window") === "true";
+        const prefs = freshWindow
+          ? { ...savedPrefs, folders: savedPrefs?.folders ?? [demoWorkspace], active: null, tabs: [] }
+          : savedPrefs;
         const restored = prefs
           ? await loadFolders(prefs.folders)
           : [demoWorkspace];
@@ -330,11 +343,7 @@ export default function App() {
             setPreview(note.text);
             applyMarks(note.bookmarks);
             opened = true;
-            if (
-              !/\.(md|markdown|mdx)$/i.test(candidate.path) &&
-              mode === "edit"
-            )
-              setMode("source");
+            setMode(readFileMode(candidate.path, mode));
             break;
           } catch (error) {
             setNotice(String(error));
@@ -525,7 +534,7 @@ export default function App() {
         applyMarks(note.bookmarks);
         setActiveMark(null);
         setCursor([1, 1]);
-        if (!/\.(md|markdown|mdx)$/i.test(nextPath)) setMode("source");
+        setMode(readFileMode(nextPath));
         if (bookmarkId) {
           const mark = note.bookmarks.find((b) => b.id === bookmarkId);
           if (mark && !mark.unresolved) {
@@ -577,8 +586,7 @@ export default function App() {
     } catch (error) { setNotice(String(error)); }
     finally { operation.current = false; }
     if (nextPath && folder) {
-      if (await openNote(nextPath, undefined, folder, undefined, true))
-        setMode(/\.(md|markdown|mdx)$/i.test(nextPath) ? "edit" : "source");
+      await openNote(nextPath, undefined, folder, undefined, true);
     }
   }, [preserveDraft, openNote, defaultExtension]);
   const renameFile = async (folder: Workspace, oldPath: string, name: string, moving = false) => {
@@ -788,6 +796,7 @@ export default function App() {
     const browserSelection = window.getSelection();
     if (
       mode === "read" &&
+      !editor.current.isDocumentView() &&
       browserSelection?.toString() &&
       previewElement.current?.contains(browserSelection.anchorNode)
     ) {
@@ -811,7 +820,7 @@ export default function App() {
         return;
       }
       selection = { from, to: from + quote.length, quote };
-    } else if (mode === "read") {
+    } else if (mode === "read" && !editor.current.isDocumentView()) {
       setMode("edit");
       setNotice(
         "Select a passage, or place your cursor on a line, then add a bookmark.",
@@ -848,7 +857,11 @@ export default function App() {
         if (e.repeat) return;
         if (e.key.toLowerCase() === "n") {
           if (desktop) void invoke("new_window").catch(error => setNotice(String(error)));
-          else window.open(window.location.href, "_blank", "noopener");
+          else {
+            const url = new URL(window.location.href);
+            url.searchParams.set("new-window", "true");
+            window.open(url.href, "_blank", "noopener");
+          }
         } else if (!settingsOpen && !palette && !bookmarkDraft && !renameTarget && !fileAction) void newTab();
         return;
       }
@@ -939,13 +952,35 @@ export default function App() {
       window.removeEventListener("beforeunload", beforeUnload);
     };
   }, [preserveDraft]);
+  useEffect(() => {
+    if (!desktop) return;
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void getCurrentWindow().listen("nova:select-all", () => {
+      if (editor.current?.selectAll()) return;
+      // Preserve Select All in search, rename, and other native text fields.
+      const active = document.activeElement;
+      if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) active.select();
+      else document.execCommand("selectAll");
+    }).then(fn => { if (disposed) fn(); else unlisten = fn; });
+    return () => { disposed = true; unlisten?.(); };
+  }, []);
   const switchMode = (next: EditorMode) => {
     if (next === "read") setPreview(editor.current?.text() ?? data?.text ?? "");
     setMode(next);
+    try { saveFileMode(path, next); }
+    catch { setNotice("View mode changed, but could not be saved on this device."); }
   };
   const isMarkdown = /\.(md|markdown|mdx)$/i.test(path);
+  const documentView = isMarkdown && supportsDocumentView(
+    data?.text.length ?? 0, editorSnapshot?.state.doc.length ?? 0, preview.length,
+  );
+  const toggleReadTask = (offset: number, checked: boolean) => {
+    editor.current?.toggleTask(offset, checked);
+    setPreview(editor.current?.text() ?? "");
+  };
   return (
-    <div className="app-shell" data-focus-mode={focusMode} data-window-focused={windowFocused} data-galaxy={galaxyMode} data-editor-size={fontSize} data-text-width={textWidth}
+    <div className="app-shell" data-focus-mode={focusMode} data-window-focused={windowFocused} data-galaxy={galaxyMode} data-translucent={translucent} data-editor-size={fontSize} data-text-width={textWidth}
       onPointerMove={(event) => {
         if (event.pointerType === "touch") return;
         const bounds = event.currentTarget.getBoundingClientRect();
@@ -982,15 +1017,9 @@ export default function App() {
             nova<span className="brand-period">.</span>
           </span>
           <button className="galaxy-toggle" aria-label="Galaxy mode" aria-pressed={galaxyMode}
-            title={galaxyMode ? "Galaxy mode on · Switch to solid" : "Galaxy mode · Translucent editor"}
+            title={galaxyMode ? "Galaxy mode on · Click to turn off" : "Galaxy mode off · Click to turn on"}
             onClick={toggleGalaxy}>
-            <svg className="galaxy-symbol" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <g transform="rotate(-30 12 12)" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round">
-                <ellipse cx="12" cy="12" rx="9" ry="4.5" opacity=".4" />
-                <path d="M3 12c0-3 5-5 9-3 5 2 2 6-2 5-3-.7-2-3 0-3M21 12c0 3-5 5-9 3-5-2-2-6 2-5 3 .7 2 3 0 3" />
-              </g>
-              <circle cx="12" cy="12" r="1.8" fill="currentColor" />
-            </svg>
+            <GalaxyMark className="galaxy-symbol" />
           </button>
         </div>
         <button className="search-trigger" onClick={() => setPalette(true)}>
@@ -1006,7 +1035,7 @@ export default function App() {
             const active = current.current;
             const focusedFlex = active.hasDocument && tabsRef.current.some(tab =>
               !tab.pinned && tab.root === active.workspace.root && tab.path === active.path);
-            void openNote(path, undefined, folder, undefined, !focusedFlex);
+            void openNote(path, undefined, folder, undefined, tabsRef.current.length > 0 && !focusedFlex);
           }}
           onFileAction={(folder, path, action) => {
             if (action === "reveal") void revealNote(folder.root, path).catch(error => setNotice(String(error)));
@@ -1117,7 +1146,7 @@ export default function App() {
             <PanelRight size={17} />
           </button>
         </header>
-        <div className="document-toolbar" data-paginated={mode === "read" && preview.length > 500_000}>
+        <div className="document-toolbar" data-paginated={mode === "read" && !documentView && preview.length > RICH_DOCUMENT_LIMIT}>
           <div className="breadcrumbs">
             <span>{workspace.name}</span>
             <ChevronRight size={13} />
@@ -1128,7 +1157,7 @@ export default function App() {
             <span>Text width</span>
             <TextWidthControl value={textWidth} onChange={setTextWidth} />
           </label>
-          {mode !== "read" && (
+          {mode !== "read" && !(documentView && mode === "edit") && (
             <button
               className="line-numbers-toggle"
               aria-pressed={showLineNumbers}
@@ -1142,7 +1171,7 @@ export default function App() {
               </span>
             </button>
           )}
-          <button
+          {!(documentView && mode !== "source") && <button
             className="line-numbers-toggle"
             aria-pressed={showLineHighlight}
             title={showLineHighlight ? "Hide line highlight" : "Show line highlight"}
@@ -1153,7 +1182,19 @@ export default function App() {
             <span className="line-numbers-check" aria-hidden="true">
               {showLineHighlight && <Check size={13} />}
             </span>
-          </button>
+          </button>}
+          {galaxyMode && <button
+            className="line-numbers-toggle"
+            aria-pressed={translucent}
+            title={translucent ? "Use solid black editor background" : "Use translucent editor background"}
+            onClick={() => setTranslucent(!translucent)}
+          >
+            <Layers size={15} aria-hidden="true" />
+            Translucent
+            <span className="line-numbers-check" aria-hidden="true">
+              {translucent && <Check size={13} />}
+            </span>
+          </button>}
           <VoiceControl
             disabled={!data || loading || saving}
             onBegin={() => {
@@ -1188,7 +1229,7 @@ export default function App() {
             <button
               onClick={() => switchMode(isMarkdown ? "edit" : "source")}
               className={(isMarkdown ? mode === "edit" : mode !== "read") ? "selected" : ""}
-              title={isMarkdown ? "Edit formatted Markdown" : "Edit text"}
+              title={documentView ? "Edit formatted Markdown" : isMarkdown ? "Edit Markdown source (large note)" : "Edit text"}
             >
               <Pencil size={13} />
               Edit
@@ -1227,7 +1268,7 @@ export default function App() {
         <div className="document-area">
           {loading && <div className="loading">Opening your note…</div>}
           {data && (
-            <div className={"write-pane " + (mode === "read" ? "hidden" : "")}>
+            <div className={"write-pane " + (mode === "read" && !documentView ? "hidden" : "")}>
               <Editor
                 key={JSON.stringify([workspace.root, path, data.revision])}
                 ref={editor}
@@ -1240,8 +1281,9 @@ export default function App() {
                 onCursor={(line, col) => setCursor([line, col])}
                 onBookmark={beginBookmark}
                 onSave={() => void save()}
+                onSourceSearch={() => setMode("source")}
                 isMarkdown={isMarkdown}
-                visual={mode === "edit" && isMarkdown}
+                documentMode={documentView && mode !== "source" ? mode : undefined}
                 showLineNumbers={showLineNumbers}
                 showLineHighlight={showLineHighlight}
                 wordWrap={wordWrap}
@@ -1249,17 +1291,17 @@ export default function App() {
               />
             </div>
           )}
-          {data && mode === "read" && (
+          {data && mode === "read" && !documentView && (
             <div className="read-pane" ref={previewElement}>
               <article className="prose">
                 <div className="document-eyebrow">
                   {isMarkdown ? "A NOTE IN YOUR SPACE" : "PLAIN & SIMPLE"}
                 </div>
                 <Suspense fallback={<p>Rendering your note…</p>}>
-                  {preview.length > 500_000 ? (
-                    <LargeRead ref={largeRead} text={preview} markdown={isMarkdown} controlsContainer={readControls} />
+                  {preview.length > RICH_DOCUMENT_LIMIT ? (
+                    <LargeRead ref={largeRead} text={preview} markdown={isMarkdown} controlsContainer={readControls} onToggleTask={toggleReadTask} />
                   ) : isMarkdown ? (
-                    <Markdown text={preview} />
+                    <Markdown text={preview} onToggleTask={toggleReadTask} />
                   ) : (
                     <pre className="plain-preview">
                       {preview.split("\n").map((line, i) => (
@@ -1271,7 +1313,7 @@ export default function App() {
                   )}
                 </Suspense>
                 <div className="end-mark">
-                  <NovaMark />
+                  <GalaxyMark circled />
                 </div>
               </article>
             </div>
@@ -1497,7 +1539,7 @@ export default function App() {
         defaultExtension={defaultExtension} onDefaultExtension={setDefaultExtension}
         fontSize={fontSize} onFontSize={setFontSize}
         textWidth={textWidth} onTextWidth={setTextWidth}
-        storageError={extensionError || widthError || galaxyError || plasmaError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
+        storageError={extensionError || widthError || galaxyError || translucencyError || plasmaError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
       {bookmarkDraft && (
         <div
           className="overlay"

@@ -80,3 +80,13 @@ it("handles empty documents and lines outside the available range", () => {
     expect(pageForLine(pages, 0)).toBe(0);
   }
 });
+
+it("carries exact checkbox source offsets through the paginated read path", () => {
+  const text = "# Tasks\n\n- [ ] one\n    - [x] nested\n";
+  const direct = renderToStaticMarkup(<Markdown text={text} onToggleTask={() => {}} />);
+  const paged = renderToStaticMarkup(<Markdown tree={buildReadPages(text, true)[0].tree} onToggleTask={() => {}} />);
+  expect(paged).toBe(direct);
+  expect(paged).toContain(`data-task-offset="${text.indexOf('[ ]') + 1}"`);
+  expect(paged).toContain(`data-task-offset="${text.indexOf('[x]') + 1}"`);
+  expect(paged).not.toContain('disabled');
+});

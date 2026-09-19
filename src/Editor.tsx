@@ -1,8 +1,11 @@
 import { editorSearch } from "./editorSearch";
+import { DocumentEditor } from "./DocumentEditor";
+import { supportsDocumentView } from "./documentLimits";
+import { textChanges } from "./documentMarkdown";
+import GalaxyMark from "./GalaxyMark";
 import { GFM } from "@lezer/markdown";
 import { tags } from "@lezer/highlight";
 import {
-  richMarkdown,
   formatTransaction,
   formattingKeymap,
   indentationKeymap,
@@ -27,8 +30,8 @@ import {
   GutterMarker,
   type DecorationSet,
 } from "@codemirror/view";
-import { defaultKeymap, history, historyKeymap, undo, redo } from "@codemirror/commands";
-import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
+import { defaultKeymap, history, historyKeymap, undo, redo, selectAll } from "@codemirror/commands";
+import { searchKeymap, highlightSelectionMatches, openSearchPanel } from "@codemirror/search";
 import { markdown } from "@codemirror/lang-markdown";
 import {
   syntaxHighlighting,
@@ -118,6 +121,7 @@ export type EditorHandle = {
   format: (action: FormatAction) => void;
   undo: () => void;
   redo: () => void;
+  selectAll: () => boolean;
   text: () => string;
   selection: () => { from: number; to: number; quote: string };
   jump: (from: number, to?: number) => void;
@@ -125,6 +129,8 @@ export type EditorHandle = {
   beginDictation: () => void;
   insertDictation: (text: string) => void;
   cancelDictation: () => void;
+  toggleTask: (offset: number, checked: boolean) => void;
+  isDocumentView: () => boolean;
 };
 type Props = {
   initial: string;
@@ -136,21 +142,29 @@ type Props = {
   onCursor: (line: number, col: number) => void;
   onBookmark: () => void;
   onSave: () => void;
+  onSourceSearch?: () => void;
   isMarkdown: boolean;
-  visual: boolean;
+  documentMode?: "edit" | "read";
   showLineNumbers: boolean;
   showLineHighlight: boolean;
   wordWrap: boolean;
   spellcheck: boolean;
 };
 export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
-  const presentation = useRef(new Compartment());
   const wrapping = useRef(new Compartment());
   const spelling = useRef(new Compartment());
   const highlighting = useRef(new Compartment());
   const numbering = useRef(new Compartment());
   const mount = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
+  const documentMount = useRef<HTMLDivElement>(null);
+  const documentPane = useRef<HTMLDivElement>(null);
+  const documentEditor = useRef<DocumentEditor | null>(null);
+  const bridging = useRef(false);
+  // Guard the editor itself as well, including restored tabs with large drafts.
+  if (!supportsDocumentView(props.initial.length, props.snapshot?.state.doc.length ?? 0)) {
+    props = { ...props, documentMode: undefined };
+  }
   const latest = useRef(props);
   latest.current = props;
   useImperativeHandle(
@@ -158,37 +172,61 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
     () => ({
       snapshot: () => ({
         state: view.current!.state,
-        scrollTop: view.current!.scrollDOM.scrollTop,
+        scrollTop: latest.current.documentMode ? documentPane.current?.scrollTop ?? 0 : view.current!.scrollDOM.scrollTop,
       }),
       format: (action) => {
+        if (latest.current.documentMode) { documentEditor.current?.format(action); return; }
         const v = view.current;
         if (v) {
           v.dispatch(formatTransaction(v.state, action));
           v.focus();
         }
       },
-      undo: () => { if (view.current) { undo(view.current); view.current.focus(); } },
-      redo: () => { if (view.current) { redo(view.current); view.current.focus(); } },
+      undo: () => { if (view.current && latest.current.documentMode !== "read") { undo(view.current); if (!latest.current.documentMode) view.current.focus(); } },
+      redo: () => { if (view.current && latest.current.documentMode !== "read") { redo(view.current); if (!latest.current.documentMode) view.current.focus(); } },
+      selectAll: () => {
+        const active = document.activeElement;
+        if (latest.current.documentMode && documentMount.current?.contains(active)) {
+          const rich = documentEditor.current?.editor;
+          if (!rich) return false;
+          rich.commands.selectAll();
+          rich.view.focus();
+          return true;
+        }
+        if (!latest.current.documentMode && view.current && mount.current?.contains(active)) {
+          selectAll(view.current);
+          view.current.focus();
+          return true;
+        }
+        return false;
+      },
       text: () => view.current?.state.doc.toString() ?? "",
       beginDictation: () => {
         const v = view.current!;
         v.dispatch({
           effects: setDictationAnchor.of(v.state.selection.main.head),
         });
-        v.focus();
+        if (!latest.current.documentMode) v.focus();
       },
       insertDictation: (text) => {
         const v = view.current!;
         const tr = transcriptTransaction(v.state, text);
         if (tr) {
           v.dispatch(tr);
-          v.focus();
+          if (latest.current.documentMode) documentEditor.current?.select(v.state.selection.main.from);
+          else v.focus();
         }
       },
       cancelDictation: () => {
         view.current?.dispatch({ effects: setDictationAnchor.of(null) });
       },
       marks: () => view.current?.state.field(bookmarkField) ?? [],
+      isDocumentView: () => !!latest.current.documentMode,
+      toggleTask: (offset, checked) => {
+        const v = view.current;
+        if (!v || !/\[[ xX]\]/.test(v.state.sliceDoc(offset - 1, offset + 2))) return;
+        v.dispatch({ changes: { from: offset, to: offset + 1, insert: checked ? "x" : " " }, userEvent: "input" });
+      },
       selection: () => {
         const state = view.current!.state;
         let { from, to } = state.selection.main;
@@ -209,7 +247,8 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
           selection: { anchor: clamp(from), head: clamp(to) },
           effects: EditorView.scrollIntoView(clamp(from), { y: "center" }),
         });
-        v.focus();
+        if (latest.current.documentMode) documentEditor.current?.select(clamp(from), clamp(to));
+        else v.focus();
       },
     }),
     [],
@@ -235,14 +274,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
         },
         lineMarkerChange: (update) => update.selectionSet || update.docChanged,
       }),
-      presentation.current.of(
-        p.visual
-          ? [
-              richMarkdown,
-              EditorView.editorAttributes.of({ class: "live-edit" }),
-            ]
-          : [syntaxHighlighting(sourceHighlightStyle)],
-      ),
+      syntaxHighlighting(sourceHighlightStyle),
       highlighting.current.of(p.showLineHighlight ? highlightActiveLine() : []),
       editorSearch,
       highlightSelectionMatches(),
@@ -254,6 +286,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
       dictationAnchor,
       decorations,
       keymap.of([
+        { key: "Ctrl-a", run: selectAll },
         {
           key: "Mod-s",
           run: () => {
@@ -280,6 +313,12 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
       })),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
+          if (documentEditor.current && !bridging.current && latest.current.documentMode) {
+            bridging.current = true;
+            try {
+              documentEditor.current.setSource(update.state.doc.toString(), update.state.selection.main.anchor, update.state.selection.main.head);
+            } finally { bridging.current = false; }
+          }
           latest.current.onChange();
           latest.current.onBookmarks(update.state.field(bookmarkField));
         }
@@ -303,7 +342,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
             lineHeight: "1.9",
             overflow: "auto",
           },
-          ".cm-content": { padding: "40px 36px 150px", maxWidth: "var(--text-width, 900px)" },
+          ".cm-content": { padding: "40px 36px 100cqh", maxWidth: "var(--text-width, 900px)" },
           ".cm-gutters": {
             backgroundColor: "transparent",
             color: "#54565f",
@@ -340,21 +379,44 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
   }, []);
   useEffect(() => {
     const v = view.current;
+    if (!v || !props.documentMode || !documentMount.current) return;
+    if (!documentEditor.current) {
+      documentEditor.current = new DocumentEditor(documentMount.current, v.state.doc.toString(), {
+        change: (source, selection) => {
+          bridging.current = true;
+          try { v.dispatch({ changes: textChanges(v.state.doc.toString(), source), selection, userEvent: "input" }); }
+          finally { bridging.current = false; }
+        },
+        selection: (anchor, head, style) => {
+          if (bridging.current || !latest.current.documentMode) return;
+          v.dispatch({ selection: { anchor, head } });
+          latest.current.onParagraphStyle?.(style);
+        },
+        undo: () => { undo(v); },
+        redo: () => { redo(v); },
+        save: () => latest.current.onSave(),
+        bookmark: () => latest.current.onBookmark(),
+        find: () => {
+          latest.current.onSourceSearch?.();
+          requestAnimationFrame(() => { openSearchPanel(v); });
+        },
+      });
+      if (props.snapshot && documentPane.current) documentPane.current.scrollTop = props.snapshot.scrollTop;
+      documentEditor.current.setBookmarks(latest.current.bookmarks);
+    }
+    bridging.current = true;
+    try {
+      documentEditor.current.setSource(v.state.doc.toString(), v.state.selection.main.anchor, v.state.selection.main.head);
+      documentEditor.current.setEditable(props.documentMode === "edit", props.spellcheck);
+    } finally { bridging.current = false; }
+  }, [props.documentMode, props.spellcheck]);
+  useEffect(() => () => { documentEditor.current?.destroy(); documentEditor.current = null; }, []);
+  useEffect(() => {
+    const v = view.current;
+    documentEditor.current?.setBookmarks(props.bookmarks);
     if (v && v.state.field(bookmarkField) !== props.bookmarks)
       v.dispatch({ effects: setMarks.of(props.bookmarks) });
   }, [props.bookmarks]);
-  useEffect(() => {
-    view.current?.dispatch({
-      effects: presentation.current.reconfigure(
-        props.visual
-          ? [
-              richMarkdown,
-              EditorView.editorAttributes.of({ class: "live-edit" }),
-            ]
-          : [syntaxHighlighting(sourceHighlightStyle)],
-      ),
-    });
-  }, [props.visual]);
   useEffect(() => {
     view.current?.dispatch({
       effects: numbering.current.reconfigure(props.showLineNumbers ? lineNumbers() : []),
@@ -373,5 +435,14 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
       "aria-label": "Note editor", spellcheck: String(props.spellcheck),
     })) });
   }, [props.spellcheck]);
-  return <div className="editor-mount" ref={mount} />;
+  return <div className="editor-mount">
+    <div className="source-editor-mount" ref={mount} hidden={!!props.documentMode} />
+    <div className="document-pane" ref={documentPane} hidden={!props.documentMode} data-mode={props.documentMode}>
+      <article className="prose document-prose">
+        <div className="document-eyebrow">A NOTE IN YOUR SPACE</div>
+        <div ref={documentMount} />
+        <div className="end-mark"><GalaxyMark circled /></div>
+      </article>
+    </div>
+  </div>;
 });

@@ -1,12 +1,12 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import Markdown from "./Markdown";
+import Markdown, { type TaskToggle } from "./Markdown";
 import { pageForLine, type ReadPage } from "./readPages";
 
 export type LargeReadHandle = { jump: (line: number) => void };
 
-export default forwardRef<LargeReadHandle, { text: string; markdown: boolean; controlsContainer: HTMLDivElement | null }>(function LargeRead({ text, markdown, controlsContainer }, ref) {
+export default forwardRef<LargeReadHandle, { text: string; markdown: boolean; controlsContainer: HTMLDivElement | null; onToggleTask?: TaskToggle }>(function LargeRead({ text, markdown, controlsContainer, onToggleTask }, ref) {
   const [result, setResult] = useState<{ text: string; markdown: boolean; pages: ReadPage[] } | null>(null);
   const [error, setError] = useState("");
   const [page, setPage] = useState(0);
@@ -17,7 +17,6 @@ export default forwardRef<LargeReadHandle, { text: string; markdown: boolean; co
   useEffect(() => {
     setResult(null);
     setError("");
-    setPage(0);
     let worker: Worker | undefined;
     try {
       worker = new Worker(new URL("./readPages.worker.ts", import.meta.url), { type: "module" });
@@ -65,7 +64,7 @@ export default forwardRef<LargeReadHandle, { text: string; markdown: boolean; co
       <button aria-label="Next page" title="Next page" disabled={page >= pages.length - 1} onClick={() => changePage(page + 1)}><ChevronRight size={14} aria-hidden="true" /></button>
     </nav>, controlsContainer)}
     <div ref={content} className={markdown ? undefined : "plain-preview"}>
-      <Markdown tree={active.tree} />
+      <Markdown tree={active.tree} onToggleTask={onToggleTask} />
     </div>
   </>;
 });
