@@ -1,3 +1,4 @@
+mod speech;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
@@ -353,6 +354,7 @@ pub fn run() {
             }
         })
         .manage(Access::default())
+        .manage(speech::SpeechState::default())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             open_workspace,
@@ -360,7 +362,12 @@ pub fn run() {
             save_note,
             save_bookmarks,
             search_notes,
-            quit_app
+            quit_app,
+            speech::speech_status,
+            speech::speech_download,
+            speech::speech_start,
+            speech::speech_finish,
+            speech::speech_cancel
         ])
         .build(tauri::generate_context!())
         .expect("Unable to run Nova")

@@ -16,6 +16,11 @@ import {
   defaultHighlightStyle,
 } from "@codemirror/language";
 import type { Bookmark } from "./model";
+import {
+  dictationAnchor,
+  setDictationAnchor,
+  transcriptTransaction,
+} from "./dictation";
 const setMarks = StateEffect.define<Bookmark[]>();
 export const bookmarkField = StateField.define<Bookmark[]>({
   create: () => [],
@@ -60,6 +65,9 @@ export type EditorHandle = {
   selection: () => { from: number; to: number; quote: string };
   jump: (from: number, to?: number) => void;
   marks: () => Bookmark[];
+  beginDictation: () => void;
+  insertDictation: (text: string) => void;
+  cancelDictation: () => void;
 };
 type Props = {
   initial: string;
@@ -80,6 +88,24 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
     ref,
     () => ({
       text: () => view.current?.state.doc.toString() ?? "",
+      beginDictation: () => {
+        const v = view.current!;
+        v.dispatch({
+          effects: setDictationAnchor.of(v.state.selection.main.head),
+        });
+        v.focus();
+      },
+      insertDictation: (text) => {
+        const v = view.current!;
+        const tr = transcriptTransaction(v.state, text);
+        if (tr) {
+          v.dispatch(tr);
+          v.focus();
+        }
+      },
+      cancelDictation: () => {
+        view.current?.dispatch({ effects: setDictationAnchor.of(null) });
+      },
       marks: () => view.current?.state.field(bookmarkField) ?? [],
       selection: () => {
         const state = view.current!.state;
@@ -121,6 +147,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
           p.isMarkdown ? markdown() : [],
           syntaxHighlighting(defaultHighlightStyle),
           bookmarkField,
+          dictationAnchor,
           decorations,
           keymap.of([
             {

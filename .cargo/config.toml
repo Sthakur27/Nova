@@ -1,0 +1,4 @@
+[env]
+# Use the crate's shipped bindings and a portable CPU build for distribution.
+WHISPER_DONT_GENERATE_BINDINGS = "1"
+GGML_NATIVE = "OFF"

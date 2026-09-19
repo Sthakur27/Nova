@@ -16,6 +16,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+      - name: Check CMake
+        run: cmake --version
       - run: npm ci
       - run: npm test
       - run: npm run build

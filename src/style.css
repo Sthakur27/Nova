@@ -962,3 +962,131 @@ kbd {
     display: none;
   }
 }
+
+.voice-control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 2px;
+}
+.voice-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #b69bda22;
+  padding: 7px 9px;
+  border-radius: 6px;
+  font-size: 10px;
+  color: #bba4d2;
+  white-space: nowrap;
+}
+.voice-button:hover {
+  background: #b296cf12;
+}
+.voice-button.voice-active {
+  border-color: #e3a5b650;
+  color: #e6b1c0;
+  background: #d07a9610;
+}
+.voice-popover {
+  position: absolute;
+  top: 42px;
+  right: 0;
+  width: 325px;
+  z-index: 40;
+  background: #27262e;
+  border: 1px solid #b399cf30;
+  border-radius: 10px;
+  padding: 19px;
+  box-shadow: 0 12px 50px #0007;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #b8afc4;
+}
+.voice-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #d9c7ec;
+}
+.voice-heading strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.voice-heading button {
+  margin-left: auto;
+}
+.voice-popover p {
+  margin: 13px 0;
+}
+.voice-details {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #c5abd9;
+}
+.voice-privacy {
+  font-size: 11px;
+  color: #93879e;
+}
+.voice-popover small {
+  display: block;
+  margin-top: 12px;
+  color: #897b97;
+  font-size: 10px;
+}
+.voice-popover progress {
+  width: 100%;
+  height: 6px;
+  accent-color: #b598d1;
+}
+.voice-popover .primary {
+  width: 100%;
+  justify-content: center;
+  font-size: 11px;
+  margin-top: 8px;
+}
+.voice-reinstall {
+  display: block;
+  margin: 10px auto 0;
+  font-size: 10px;
+  text-decoration: underline;
+  color: #9b8aaa;
+}
+.voice-message {
+  color: #d0b4e8;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.spin {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+@media (max-width: 1050px) {
+  .voice-button > span {
+    max-width: 92px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .breadcrumbs {
+    display: none;
+  }
+  .document-toolbar {
+    justify-content: flex-end;
+  }
+}

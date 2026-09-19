@@ -30,6 +30,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import Editor, { type EditorHandle } from "./Editor";
 import Palette from "./Palette";
+import VoiceControl from "./VoiceControl";
 import {
   chooseWorkspace,
   demoWorkspace,
@@ -144,6 +145,7 @@ export default function App() {
   const previewElement = useRef<HTMLDivElement>(null);
   const revision = useRef("");
   const operation = useRef(false);
+  const voiceBusy = useRef(false);
   const saveInFlight = useRef<Promise<boolean> | null>(null);
   const current = useRef({ workspace, path });
   current.current = { workspace, path };
@@ -221,6 +223,10 @@ export default function App() {
   }, []);
   const openNote = useCallback(
     async (nextPath: string, line?: number, nextWorkspace?: Workspace) => {
+      if (voiceBusy.current) {
+        setNotice("Finish or cancel voice typing before switching files.");
+        return;
+      }
       if (operation.current) return;
       operation.current = true;
       try {
@@ -263,6 +269,10 @@ export default function App() {
     [applyMarks, jump, save],
   );
   const openFolder = async () => {
+    if (voiceBusy.current) {
+      setNotice("Finish or cancel voice typing before opening a folder.");
+      return;
+    }
     if (!(await save())) return;
     try {
       const ws = await chooseWorkspace();
@@ -349,7 +359,7 @@ export default function App() {
   }, [save, beginBookmark]);
   useEffect(() => {
     const beforeUnload = (e: BeforeUnloadEvent) => {
-      if (dirtyRef.current) {
+      if (dirtyRef.current || voiceBusy.current) {
         e.preventDefault();
         e.returnValue = "";
       }
@@ -362,6 +372,10 @@ export default function App() {
       void getCurrentWindow()
         .onCloseRequested(async (e) => {
           e.preventDefault();
+          if (voiceBusy.current) {
+            setNotice("Finish or cancel voice typing before closing Nova.");
+            return;
+          }
           if ((await save()) && !dirtyRef.current)
             await getCurrentWindow().destroy();
         })
@@ -371,6 +385,10 @@ export default function App() {
         });
     if (desktop)
       void listen("nova:request-quit", async () => {
+        if (voiceBusy.current) {
+          setNotice("Finish or cancel voice typing before quitting Nova.");
+          return;
+        }
         if ((await save()) && !dirtyRef.current) await invoke("quit_app");
       }).then((fn) => {
         if (disposed) fn();
@@ -486,6 +504,22 @@ export default function App() {
             <ChevronRight size={13} />
             <span>{path.split("/").at(-1)}</span>
           </div>
+          <VoiceControl
+            disabled={!data || loading || saving}
+            onBegin={() => {
+              setMode("write");
+              editor.current?.beginDictation();
+            }}
+            onText={(text) => {
+              editor.current?.insertDictation(text);
+              setMode("write");
+            }}
+            onCancel={() => editor.current?.cancelDictation()}
+            onBusy={(busy) => {
+              voiceBusy.current = busy;
+            }}
+            onError={(error) => setNotice(error)}
+          />
           <div className="view-switch">
             <button
               onClick={() => switchMode("write")}
