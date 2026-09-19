@@ -3,6 +3,7 @@ import { DocumentEditor } from "./DocumentEditor";
 import { supportsDocumentView } from "./documentLimits";
 import { textChanges } from "./documentMarkdown";
 import GalaxyMark from "./GalaxyMark";
+import { scrollSpaceStyle } from "./scrollSpace";
 import { GFM } from "@lezer/markdown";
 import { tags } from "@lezer/highlight";
 import {
@@ -115,7 +116,7 @@ const decorations = StateField.define<DecorationSet>({
   },
   provide: (field) => EditorView.decorations.from(field),
 });
-export type EditorSnapshot = { state: EditorState; scrollTop: number };
+export type EditorSnapshot = { state: EditorState; scrollTop: number; scrollSpace?: { before: string; after: string } };
 export type EditorHandle = {
   snapshot: () => EditorSnapshot;
   format: (action: FormatAction) => void;
@@ -173,6 +174,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
       snapshot: () => ({
         state: view.current!.state,
         scrollTop: latest.current.documentMode ? documentPane.current?.scrollTop ?? 0 : view.current!.scrollDOM.scrollTop,
+        scrollSpace: scrollSpaceStyle(latest.current.documentMode ? documentPane.current : view.current?.scrollDOM),
       }),
       format: (action) => {
         if (latest.current.documentMode) { documentEditor.current?.format(action); return; }
@@ -339,10 +341,10 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
           ".cm-scroller": {
             fontFamily: '"SFMono-Regular", Consolas, monospace',
             fontSize: "var(--editor-font-size, 14px)",
-            lineHeight: "1.9",
+            lineHeight: "var(--editor-line-height, 1.9)",
             overflow: "auto",
           },
-          ".cm-content": { padding: "40px 36px 100cqh", maxWidth: "var(--text-width, 900px)" },
+          ".cm-content": { padding: "calc(100cqh + 40px + var(--extra-scroll-before, 0px)) 36px calc(100cqh + var(--extra-scroll-after, 0px))", maxWidth: "var(--text-width, 900px)" },
           ".cm-gutters": {
             backgroundColor: "transparent",
             color: "#54565f",
@@ -365,7 +367,25 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
         }).state
       : EditorState.create({ doc: p.initial, extensions });
     const v = new EditorView({ parent: mount.current!, state });
-    if (p.snapshot) v.scrollDOM.scrollTop = p.snapshot.scrollTop;
+    if (p.snapshot?.scrollSpace) {
+      v.scrollDOM.style.setProperty("--extra-scroll-before", p.snapshot.scrollSpace.before);
+      v.scrollDOM.style.setProperty("--extra-scroll-after", p.snapshot.scrollSpace.after);
+    }
+    // A source editor can mount hidden behind Read mode. Wait until it has a
+    // viewport before positioning the first line below the space above it.
+    const positionSource = () => {
+      v.scrollDOM.scrollTop = p.snapshot?.scrollTop ?? v.scrollDOM.clientHeight;
+    };
+    let openingObserver: ResizeObserver | undefined;
+    if (v.scrollDOM.clientHeight) positionSource();
+    else if (typeof ResizeObserver !== "undefined") {
+      openingObserver = new ResizeObserver(() => {
+        if (!v.scrollDOM.clientHeight) return;
+        positionSource();
+        openingObserver?.disconnect();
+      });
+      openingObserver.observe(v.scrollDOM);
+    }
     view.current = v;
     v.dispatch({ effects: setMarks.of(p.bookmarks) });
     const head = v.state.selection.main.head,
@@ -373,6 +393,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
     p.onCursor(line.number, head - line.from + 1);
     p.onParagraphStyle?.(paragraphStyle(v.state));
     return () => {
+      openingObserver?.disconnect();
       v.destroy();
       view.current = null;
     };
@@ -401,7 +422,13 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
           requestAnimationFrame(() => { openSearchPanel(v); });
         },
       });
-      if (props.snapshot && documentPane.current) documentPane.current.scrollTop = props.snapshot.scrollTop;
+      if (documentPane.current) {
+        if (props.snapshot?.scrollSpace) {
+          documentPane.current.style.setProperty("--extra-scroll-before", props.snapshot.scrollSpace.before);
+          documentPane.current.style.setProperty("--extra-scroll-after", props.snapshot.scrollSpace.after);
+        }
+        documentPane.current.scrollTop = props.snapshot?.scrollTop ?? documentPane.current.clientHeight;
+      }
       documentEditor.current.setBookmarks(latest.current.bookmarks);
     }
     bridging.current = true;
@@ -438,6 +465,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
   return <div className="editor-mount">
     <div className="source-editor-mount" ref={mount} hidden={!!props.documentMode} />
     <div className="document-pane" ref={documentPane} hidden={!props.documentMode} data-mode={props.documentMode}>
+      <div className="start-mark" aria-hidden="true"><GalaxyMark circled /></div>
       <article className="prose document-prose">
         <div className="document-eyebrow">A NOTE IN YOUR SPACE</div>
         <div ref={documentMount} />

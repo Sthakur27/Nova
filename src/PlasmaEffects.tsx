@@ -1,17 +1,18 @@
 import { useEffect, useRef } from "react";
 import { EditorView } from "@codemirror/view";
 
-const targets = "button:not(:disabled), a, summary, select, input, .bookmark-card";
-type Edge = { x: number; y: number; width: number; height: number; radius?: number; selected?: boolean };
+const SUPERNOVA_DURATION = 3000;
+const targets = "button:not(:disabled), a, summary, select, input, .bookmark-card, .note-tab";
+type Edge = { x: number; y: number; width: number; height: number; radius?: number; selected?: boolean; burst?: number };
 type SelectedLine = { kind: "reader"; element: Element; row: number } | { kind: "editor"; element: HTMLElement };
 
 /** A fixed violet-blue rim emits energy dots inward, clipped to each box. */
-export default function PlasmaEffects({ active, dirty, lineHighlight }: { active: boolean; dirty: boolean; lineHighlight: boolean }) {
+export default function PlasmaEffects({ active, dirty, lineHighlight, supernova = 0 }: { active: boolean; dirty: boolean; lineHighlight: boolean; supernova?: number }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const selectedLine = useRef<SelectedLine | null>(null);
   useEffect(() => {
     const layer = canvas.current;
-    if (!active || !layer) return;
+    if ((!active && !supernova) || !layer) return;
     const ctx = layer.getContext("2d");
     if (!ctx) return;
     // Cache two tiny light sprites; particles animate without allocating gradients.
@@ -65,6 +66,12 @@ export default function PlasmaEffects({ active, dirty, lineHighlight }: { active
     };
     const visible = (element: Element) => {
       if (!element.isConnected || !element.getClientRects().length) return false;
+      // Opacity-hidden controls still have layout boxes, but must not leave a
+      // standalone rim on the canvas (including when an ancestor fades out).
+      for (let node: Element | null = element; node; node = node.parentElement) {
+        const style = getComputedStyle(node);
+        if (style.visibility === "hidden" || style.visibility === "collapse" || style.opacity === "0") return false;
+      }
       const modal = document.querySelector(".overlay");
       if (modal && !modal.contains(element)) return false;
       const r = element.getBoundingClientRect();
@@ -132,28 +139,45 @@ export default function PlasmaEffects({ active, dirty, lineHighlight }: { active
       ctx.strokeStyle = rim;
       ctx.beginPath();
       ctx.roundRect(x + 1, y + 1, w - 2, h - 2, Math.max(0, radius - 1));
-      const breath = 0.93 + Math.sin(time * 0.9 + seed) * 0.07;
-      for (const [lineWidth, opacity] of [[9, 0.035], [5, 0.07], [2.5, 0.13], [0.9, 0.58]]) {
-        ctx.lineWidth = lineWidth;
+      const burst = edge.burst;
+      const strength = burst === undefined ? 1 : burst;
+      const supernovaMotion = burst !== undefined && !motion.matches;
+      const breath = burst === undefined ? 0.93 + Math.sin(time * 0.9 + seed) * 0.07 : strength;
+      const rimLayers = supernovaMotion
+        ? [[180, 0.025], [100, 0.045], [48, 0.09], [22, 0.18], [8, 0.45], [2.5, 1]]
+        : [[9, 0.035], [5, 0.07], [2.5, 0.13], [0.9, 0.58]];
+      for (const [lineWidth, opacity] of rimLayers) {
+        ctx.lineWidth = lineWidth * (burst !== undefined && !supernovaMotion ? 2.5 : 1);
         ctx.globalAlpha = opacity * breath;
         ctx.stroke();
       }
-      const count = Math.max(5, Math.min(64, Math.ceil(perimeter / 20)));
-      const depth = Math.min(19, Math.min(w, h) * 0.25);
+      const count = Math.max(5, Math.min(supernovaMotion ? 440 : burst === undefined ? 64 : 220, Math.ceil(perimeter / (supernovaMotion ? 10 : 16))));
+      const depth = Math.min(supernovaMotion ? 240 : burst === undefined ? 19 : 52, Math.min(w, h) * 0.35);
       for (let i = 0; i < count; i++) {
         // Stable, uneven spacing and lifetimes prevent synchronized rows of dots.
         const jitter = Math.sin(i * 91.7 + seed) * 0.35;
         const p = point(((i + 0.5 + jitter) / count) * perimeter);
         const phase = (i * 0.61803398875 + seed) % 1;
         const duration = 2.2 + (Math.sin(i * 7.3) + 1) * 0.8;
-        const age = (time / duration + phase) % 1;
+        const age = (time / (burst === undefined ? duration : 0.6) + phase) % 1;
         const fade = Math.min(1, age * 9) * Math.pow(1 - age, 1.4);
         const inward = 1.4 + age * depth;
-        const drift = Math.sin(i * 2.1 + age * 2) * age * Math.min(3, depth * 0.2);
+        const drift = Math.sin(i * 2.1 + age * 2) * age * Math.min(supernovaMotion ? 14 : 3, depth * 0.2);
         const px = p.x - p.nx * inward - p.ny * drift;
         const py = p.y - p.ny * inward + p.nx * drift;
-        const size = 2.5 + (Math.sin(i * 13.1) + 1) * 0.75;
-        ctx.globalAlpha = fade * (edge.selected ? 0.78 : 0.9);
+        const size = (2.5 + (Math.sin(i * 13.1) + 1) * 0.75) * (supernovaMotion ? 1.8 : 1);
+        if (supernovaMotion) {
+          // Short comet tails point back toward the edge the sparks launched from.
+          const tail = Math.min(inward - 1, 12 + age * 24);
+          ctx.beginPath();
+          ctx.moveTo(px + p.nx * tail, py + p.ny * tail);
+          ctx.lineTo(px, py);
+          ctx.strokeStyle = i % 2 ? "#a6d7ff" : "#dcc3ff";
+          ctx.lineWidth = 1.2;
+          ctx.globalAlpha = fade * strength * 0.5;
+          ctx.stroke();
+        }
+        ctx.globalAlpha = Math.min(1, fade * (supernovaMotion ? 2 : edge.selected ? 0.78 : 0.9) * strength);
         ctx.drawImage(sparks[i % 2], px - size, py - size, size * 2, size * 2);
       }
       ctx.restore();
@@ -169,11 +193,17 @@ export default function PlasmaEffects({ active, dirty, lineHighlight }: { active
       ctx.clearRect(0, 0, width, height);
       const edges: Edge[] = [];
       const elements = new Set<Element>();
-      if (hover) elements.add(hover);
-      if (focus) elements.add(focus);
+      const addControl = (element: Element) => {
+        const tab = element.closest(".note-tab");
+        // Keep the full tab rim when moving onto its close button.
+        elements.add(tab ?? element);
+        if (tab && element.matches(".tab-close")) elements.add(element);
+      };
+      if (active && hover?.matches(":hover")) addControl(hover);
+      if (active && focus?.matches(":focus-visible")) addControl(focus);
       const emblem = document.querySelector(".brand-emblem");
-      if (emblem) elements.add(emblem);
-      const save = dirty ? document.querySelector('[data-unsaved="true"]') : null;
+      if (active && emblem) elements.add(emblem);
+      const save = active && dirty ? document.querySelector('[data-unsaved="true"]') : null;
       if (save) elements.add(save);
       for (const element of elements) {
         if (!visible(element)) continue;
@@ -182,7 +212,7 @@ export default function PlasmaEffects({ active, dirty, lineHighlight }: { active
           radius: parseFloat(getComputedStyle(element).borderTopLeftRadius) || 0 });
       }
       const selected = selectedLine.current;
-      if (lineHighlight && selected && visible(selected.element.closest(".read-pane") ?? selected.element)) {
+      if (active && lineHighlight && selected && visible(selected.element.closest(".read-pane") ?? selected.element)) {
         const pane = selected.element.closest(".read-pane, .cm-scroller")?.getBoundingClientRect();
         let line: { left: number; right: number; top: number; bottom: number } | undefined;
         if (selected.kind === "reader") {
@@ -249,7 +279,20 @@ export default function PlasmaEffects({ active, dirty, lineHighlight }: { active
         }
       }
       edges.forEach((edge, i) => drawEdge(edge, motion.matches ? 0 : now / 1000, i * 2.4));
-      if (!motion.matches) frame = requestAnimationFrame(paint);
+      const elapsed = now - supernova;
+      const bursting = supernova > 0 && elapsed < SUPERNOVA_DURATION;
+      if (bursting) {
+        // Light up only the outer app boundary, then settle over three seconds.
+        const intensity = motion.matches ? 0.6 : Math.min(1, elapsed / 45) * Math.pow(1 - elapsed / SUPERNOVA_DURATION, 0.45);
+        document.querySelectorAll(".app-shell").forEach((element, i) => {
+          if (!visible(element)) return;
+          const r = element.getBoundingClientRect();
+          drawEdge({ x: r.left, y: r.top, width: r.width, height: r.height,
+            radius: parseFloat(getComputedStyle(element).borderTopLeftRadius) || 0, burst: intensity },
+            motion.matches ? 0 : elapsed / 1000, i * 2.4);
+        });
+      }
+      if (!motion.matches && (active || bursting)) frame = requestAnimationFrame(paint);
     };
     const refresh = () => {
       if (!frame) frame = requestAnimationFrame(paint);
@@ -298,6 +341,8 @@ export default function PlasmaEffects({ active, dirty, lineHighlight }: { active
     focus = document.activeElement?.matches(":focus-visible") ? target(document.activeElement) : null;
     size();
     refresh();
+    // Reduced motion gets a steady rim, then a single redraw to clear it.
+    const burstEnd = supernova > 0 ? window.setTimeout(refresh, Math.max(0, supernova + SUPERNOVA_DURATION - performance.now())) : undefined;
     document.addEventListener("pointerover", over);
     document.addEventListener("pointerout", out);
     document.addEventListener("focusin", focused);
@@ -307,10 +352,12 @@ export default function PlasmaEffects({ active, dirty, lineHighlight }: { active
     document.addEventListener("input", refresh);
     document.addEventListener("keyup", refresh);
     document.addEventListener("selectionchange", selectionChanged);
+    document.addEventListener("transitionend", refresh);
     window.addEventListener("resize", resize);
     motion.addEventListener("change", refresh);
     return () => {
       cancelAnimationFrame(frame);
+      window.clearTimeout(burstEnd);
       ctx.clearRect(0, 0, width, height);
       document.removeEventListener("pointerover", over);
       document.removeEventListener("pointerout", out);
@@ -321,9 +368,10 @@ export default function PlasmaEffects({ active, dirty, lineHighlight }: { active
       document.removeEventListener("input", refresh);
       document.removeEventListener("keyup", refresh);
       document.removeEventListener("selectionchange", selectionChanged);
+      document.removeEventListener("transitionend", refresh);
       window.removeEventListener("resize", resize);
       motion.removeEventListener("change", refresh);
     };
-  }, [active, dirty, lineHighlight]);
+  }, [active, dirty, lineHighlight, supernova]);
   return <canvas ref={canvas} className="plasma-effects" aria-hidden="true" />;
 }

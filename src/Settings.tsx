@@ -1,3 +1,4 @@
+import LineSpacingControl, { type LineSpacing } from "./LineSpacingControl";
 import { normalizeExtension } from "./fileExtensions";
 import { useEffect, useId, useRef, useState } from "react";
 import TextWidthControl, { type TextWidth } from "./TextWidthControl";
@@ -19,13 +20,13 @@ function Toggle({ title, description, checked, onChange }: {
 type Props = {
   onClose: () => void;
   galaxy: boolean; onGalaxy: (value: boolean) => void;
-  plasma: boolean; onPlasma: (value: boolean) => void;
   lineHighlight: boolean; onLineHighlight: (value: boolean) => void;
   lineNumbers: boolean; onLineNumbers: (value: boolean) => void;
   wordWrap: boolean; onWordWrap: (value: boolean) => void;
   spellcheck: boolean; onSpellcheck: (value: boolean) => void;
   bookmarks: boolean; onBookmarks: (value: boolean) => void;
   fontSize: string; onFontSize: (value: string) => void;
+  lineSpacing: LineSpacing; onLineSpacing: (value: LineSpacing) => void;
   textWidth: TextWidth; onTextWidth: (value: TextWidth) => void;
   defaultExtension: string; onDefaultExtension: (value: string) => void;
   storageError: boolean;
@@ -54,8 +55,7 @@ export default function Settings(props: Props) {
     </header>
     <div className="settings-content">
       <section aria-labelledby="settings-appearance"><h2 id="settings-appearance">Appearance</h2>
-        <Toggle title="Galaxy mode" description="Give your editor a translucent backdrop." checked={props.galaxy} onChange={props.onGalaxy} />
-        <Toggle title="Energy effects" description="A little motion and glow around your workspace." checked={props.plasma} onChange={props.onPlasma} />
+        <Toggle title="Galaxy mode" description="A translucent backdrop with motion and glow around your workspace." checked={props.galaxy} onChange={props.onGalaxy} />
       </section>
       <section aria-labelledby="settings-editor"><h2 id="settings-editor">Editor</h2>
         <div className="settings-row"><div><label htmlFor="settings-font-size">Text size</label><p>Adjust the text in Edit and Source modes.</p></div>
@@ -65,6 +65,9 @@ export default function Settings(props: Props) {
         </div>
         <div className="settings-row"><div><label htmlFor="settings-text-width">Text width</label><p>Set the text area in Edit, Source, and Read modes.</p></div>
           <TextWidthControl id="settings-text-width" value={props.textWidth} onChange={props.onTextWidth} />
+        </div>
+        <div className="settings-row"><div><label htmlFor="settings-line-spacing">Line spacing</label><p>Adjust the space between lines in Edit, Source, and Read modes.</p></div>
+          <LineSpacingControl id="settings-line-spacing" value={props.lineSpacing} onChange={props.onLineSpacing} />
         </div>
         <Toggle title="Line numbers" description="Find your place in longer notes." checked={props.lineNumbers} onChange={props.onLineNumbers} />
         <Toggle title="Line highlight" description="Highlight your current line while editing or reading." checked={props.lineHighlight} onChange={props.onLineHighlight} />

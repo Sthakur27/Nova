@@ -130,10 +130,16 @@ export default function VoiceControl(props: Props) {
     void session.start(crypto.randomUUID());
   }
   const active = phase !== "idle";
+  const description = downloading ? `Downloading ${progress}%`
+    : checking ? "Checking voice typing…"
+    : phase === "recording" ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")} · Stop dictation and insert text`
+    : phase === "starting" ? "Opening mic…"
+    : phase === "transcribing" ? "Transcribing…"
+    : "Dictate · on-device · English";
   return (
     <div className="voice-control">
       <button
-        className={"voice-button " + (active ? "voice-active" : "")}
+        className={"voice-button toolbar-icon focus-toggle " + (active ? "voice-active" : "")}
         disabled={
           props.disabled ||
           checking ||
@@ -141,12 +147,8 @@ export default function VoiceControl(props: Props) {
           phase === "starting" ||
           phase === "transcribing"
         }
-        aria-label={
-          phase === "recording"
-            ? "Stop dictation and insert text"
-            : "Voice typing"
-        }
-        title="Voice typing · on-device · English"
+        aria-label={phase === "recording" ? "Stop dictation and insert text" : "Dictate"}
+        aria-describedby="dictation-tooltip"
         onClick={() =>
           phase === "recording" ? void session.finish() : start()
         }
@@ -158,17 +160,7 @@ export default function VoiceControl(props: Props) {
         ) : (
           <Mic size={15} />
         )}
-        <span>
-          {downloading
-            ? `Downloading ${progress}%`
-            : phase === "recording"
-              ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")} · Stop`
-              : phase === "starting"
-                ? "Opening mic…"
-                : phase === "transcribing"
-                  ? "Transcribing…"
-                  : "Dictate"}
-        </span>
+        <span className="focus-tooltip" id="dictation-tooltip" role="tooltip">{description}</span>
       </button>
       {!active && (
         <button

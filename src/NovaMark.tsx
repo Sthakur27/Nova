@@ -1,4 +1,4 @@
-/** The folded N used by the energy-effects button and empty state. */
+/** The folded N used by the supernova button and empty state. */
 export default function NovaMark({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 32 32" fill="currentColor" aria-hidden="true">

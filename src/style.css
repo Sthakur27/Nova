@@ -382,7 +382,7 @@ kbd {
   max-width: var(--text-width, 760px);
   margin: auto;
   padding: 30px 66px 50px;
-  line-height: 1.95;
+  line-height: var(--editor-line-height, 1.95);
   color: #adadb8;
   font-size: 13px;
 }
@@ -535,15 +535,30 @@ kbd {
   color: #8c8499;
   font-size: 11px;
 }
+.start-mark,
 .end-mark {
   text-align: center;
-  color: #776480;
-  font-size: 25px;
+  pointer-events: none;
+}
+.end-mark {
   margin: 40px 0 0;
 }
+.start-mark {
+  height: calc(100cqh + var(--extra-scroll-before, 0px));
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 64px;
+}
+.start-mark svg,
 .end-mark svg {
+  visibility: hidden;
   width: 25px;
   height: 25px;
+  color: #81778c;
+  opacity: 1;
+  background: none;
+  filter: none;
 }
 .status-bar {
   height: 29px;
@@ -1140,11 +1155,6 @@ kbd {
   border: 0;
 }
 @media (max-width: 1050px) {
-  .voice-button > span {
-    max-width: 92px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
   .breadcrumbs {
     display: none;
   }
@@ -1333,7 +1343,7 @@ kbd {
 .cm-editor.live-edit .cm-scroller {
   font-family: "DM Sans", sans-serif;
   font-size: 15px;
-  line-height: 1.85;
+  line-height: var(--editor-line-height, 1.85);
 }
 .cm-bookmark-entry {
   width: 30px;
@@ -1473,6 +1483,10 @@ kbd {
   background: #ffffff05;
   color: #ded7e9;
 }
+.note-tab:hover {
+  background: #ffffff0a;
+  color: #f0eafc;
+}
 .note-tab > button {
   border: 0;
   background: transparent;
@@ -1503,6 +1517,7 @@ kbd {
 }
 .note-tab .tab-close:hover {
   background: #ffffff15;
+  color: #ffffff;
 }
 .note-tab button:focus-visible {
   outline: 1px solid #c4a6ed;
@@ -1796,7 +1811,7 @@ kbd {
   height: 36px;
 }
 
-/* Focus mode preserves the individual panel preferences for the return trip. */
+/* Focus mode hides all workspace panels; exiting expands them all. */
 .app-shell[data-focus-mode="true"] :is(.sidebar, .bookmark-rail, .top-bars, .status-bar, .panel-toggle-zone) {
   display: none;
 }
@@ -1879,10 +1894,17 @@ kbd {
 .app-shell[data-text-width="narrow"] { --text-width: 680px; }
 .app-shell[data-text-width="wide"] { --text-width: 1200px; }
 .app-shell[data-text-width="full"] { --text-width: none; }
-.text-width-control { display: flex; align-items: center; gap: 6px; flex-shrink: 0; color: #b8acc9; font-size: 11px; }
-.text-width-control select { font: inherit; color: inherit; background: #1d1925; border: 1px solid #b497dc25; border-radius: 6px; padding: 6px; }
-.text-width-control select:focus-visible { outline: 2px solid #bda0ed; outline-offset: 2px; }
-@media (max-width: 1100px) { .text-width-control > span { display: none; } }
+.text-width-control { position: relative; flex-shrink: 0; color: #b8acc9; font-size: 11px; }
+.text-width-trigger { display: flex; align-items: center; gap: 7px; height: 30px; padding: 0 9px; color: inherit; font: inherit; border-radius: 6px; }
+.text-width-trigger:hover, .text-width-trigger[aria-expanded="true"] { background: #b296cf12; color: #e6dcef; }
+.text-width-menu { position: absolute; top: calc(100% + 7px); right: 0; z-index: 45; width: 156px; padding: 5px; border: 1px solid #b99ade40; border-radius: 9px; background: linear-gradient(135deg, #302739, #1c1924); box-shadow: 0 6px 24px #00000055; }
+.text-width-menu button { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 8px 10px; border-radius: 5px; color: #cbbfd8; font-size: 12px; text-align: left; }
+.text-width-menu button:hover, .text-width-menu button:focus-visible { background: #bda0ed18; }
+.text-width-menu button[aria-checked="true"] { color: #e5d5fb; }
+.text-width-control button:focus-visible, .toolbar-icon:focus-visible { outline: 2px solid #bda0ed; outline-offset: 2px; }
+.document-toolbar .toolbar-icon { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 6px; color: #b8acc9; }
+.document-toolbar .toolbar-icon:hover, .document-toolbar .toolbar-icon[aria-pressed="true"] { background: #b296cf12; color: #d6bdf4; }
+.document-toolbar .toolbar-icon .focus-tooltip { display: flex; top: calc(100% + 9px); bottom: auto; left: auto; right: 0; }
 
 /* Keep view and width controls reachable when the side panels narrow the editor. */
 .document-toolbar { height: auto; min-height: 59px; flex-wrap: wrap; padding-top: 12px; padding-bottom: 12px; }
@@ -2006,7 +2028,8 @@ kbd {
 /* Edit and Read use the same document DOM and typography. */
 .source-editor-mount, .document-pane { height: 100%; }
 .document-pane { overflow: auto; }
-.read-pane > .prose, .document-pane > .prose { padding-bottom: 100cqh; }
+.read-pane > .prose, .document-pane > .prose { padding-bottom: calc(100cqh + var(--extra-scroll-after, 0px)); }
+.read-pane, .document-pane, .cm-scroller { overflow-anchor: none; }
 .document-prose { font-size: var(--editor-visual-size, 15px); }
 .document-content { outline: none; min-height: 1.95em; overflow-wrap: anywhere; }
 .document-content .document-all-selected { background: #b393d63b; }
@@ -2033,3 +2056,8 @@ kbd {
 .document-content td, .document-content th { position: relative; }
 .document-content .selectedCell::after { position: absolute; inset: 0; content: ""; background: #a98be433; pointer-events: none; }
 .document-content .raw-markdown { min-height: 0; }
+
+/* Default preserves each editor mode's original line spacing. */
+.app-shell[data-line-spacing="compact"] { --editor-line-height: 1.4; }
+.app-shell[data-line-spacing="relaxed"] { --editor-line-height: 2.2; }
+.app-shell[data-line-spacing="spacious"] { --editor-line-height: 2.6; }

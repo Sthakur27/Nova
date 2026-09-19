@@ -1,3 +1,4 @@
+import LineSpacingControl, { lineSpacings, type LineSpacing } from "./LineSpacingControl";
 import { loadDraft, storeDraft, clearDraft, moveDraft } from "./drafts";
 import Settings from "./Settings";
 import SidePanelControls from "./SidePanelControls";
@@ -25,7 +26,7 @@ import {
   Code2,
   ListOrdered,
   ScanLine,
-  Layers,
+  Blend,
   Plus,
   Search,
   PanelRight,
@@ -52,6 +53,7 @@ import { addFolders, type EditorMode } from "./folders";
 import VoiceControl from "./VoiceControl";
 import NovaMark from "./NovaMark";
 import GalaxyMark from "./GalaxyMark";
+import { extendScrollSpace } from "./scrollSpace";
 import { readFileMode, saveFileMode } from "./fileModes";
 import { RICH_DOCUMENT_LIMIT, supportsDocumentView } from "./documentLimits";
 import PlasmaEffects from "./PlasmaEffects";
@@ -110,15 +112,15 @@ export default function App() {
   const [readControls, setReadControls] = useState<HTMLDivElement | null>(null);
   const [galaxyMode, setGalaxyMode, galaxyError] = usePreference<boolean>("galaxy", true);
   const [translucent, setTranslucent, translucencyError] = usePreference<boolean>("translucent", true);
-  const [plasmaEnabled, setPlasmaEnabled, plasmaError] = usePreference<boolean>("plasma", true);
+  const [supernova, setSupernova] = useState(0);
   const [showLineNumbers, setShowLineNumbers, numbersError] = usePreference<boolean>("line-numbers", true);
   const [showLineHighlight, setShowLineHighlight, highlightError] = usePreference<boolean>("line-highlight", true);
   const [wordWrap, setWordWrap, wrapError] = usePreference<boolean>("word-wrap", true);
   const [spellcheck, setSpellcheck, spellingError] = usePreference<boolean>("spellcheck", true);
   const [fontSize, setFontSize, fontError] = usePreference<string>("editor-size", "default", ["small", "default", "large", "extra-large"]);
   const [textWidth, setTextWidth, widthError] = usePreference<TextWidth>("text-width", "default", textWidths);
+  const [lineSpacing, setLineSpacing, spacingError] = usePreference<LineSpacing>("line-spacing", "default", lineSpacings);
   const toggleGalaxy = () => setGalaxyMode(!galaxyMode);
-  const togglePlasma = () => setPlasmaEnabled(!plasmaEnabled);
   const toggleLineNumbers = () => setShowLineNumbers(!showLineNumbers);
   const [windowFocused, setWindowFocused] = useState(() => document.hasFocus());
   useEffect(() => {
@@ -233,6 +235,10 @@ export default function App() {
   } | null>(null);
   const editor = useRef<EditorHandle>(null);
   const previewElement = useRef<HTMLDivElement>(null);
+  const attachPreview = useCallback((element: HTMLDivElement | null) => {
+    previewElement.current = element;
+    if (element) element.scrollTo({ top: element.clientHeight, behavior: "instant" });
+  }, []);
   const largeRead = useRef<LargeReadHandle>(null);
   const revision = useRef("");
   const operation = useRef(false);
@@ -839,16 +845,25 @@ export default function App() {
     setDirty(true);
     preserveDraft();
   };
+  const changeFocusMode = useCallback((focused: boolean) => {
+    if (!focused) {
+      setNavigation(true);
+      setRail(true);
+      setTopBars(true);
+      setStatusBar(true);
+    }
+    setFocusMode(focused);
+  }, [setFocusMode, setNavigation, setRail, setTopBars, setStatusBar]);
   useEffect(() => {
     const toggleFocus = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "g" || event.isComposing) return;
       event.preventDefault();
       event.stopPropagation();
-      if (!event.repeat && !settingsOpen && !palette && !bookmarkDraft && !renameTarget && !fileAction) setFocusMode(!focusMode);
+      if (!event.repeat && !settingsOpen && !palette && !bookmarkDraft && !renameTarget && !fileAction) changeFocusMode(!focusMode);
     };
     window.addEventListener("keydown", toggleFocus, { capture: true });
     return () => window.removeEventListener("keydown", toggleFocus, { capture: true });
-  }, [focusMode, setFocusMode, settingsOpen, palette, bookmarkDraft, renameTarget, fileAction]);
+  }, [focusMode, changeFocusMode, settingsOpen, palette, bookmarkDraft, renameTarget, fileAction]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
@@ -980,7 +995,7 @@ export default function App() {
     setPreview(editor.current?.text() ?? "");
   };
   return (
-    <div className="app-shell" data-focus-mode={focusMode} data-window-focused={windowFocused} data-galaxy={galaxyMode} data-translucent={translucent} data-editor-size={fontSize} data-text-width={textWidth}
+    <div className="app-shell" data-focus-mode={focusMode} data-window-focused={windowFocused} data-galaxy={galaxyMode} data-translucent={translucent} data-editor-size={fontSize} data-text-width={textWidth} data-line-spacing={lineSpacing}
       onPointerMove={(event) => {
         if (event.pointerType === "touch") return;
         const bounds = event.currentTarget.getBoundingClientRect();
@@ -994,22 +1009,21 @@ export default function App() {
         onStorageError={() => setNotice("Panel widths changed, but could not be saved on this device.")} />
       {focusMode && (
         <button className="sidebar-action focus-toggle focus-mode-exit" aria-label="Exit focus mode" aria-pressed={true}
-          aria-describedby="exit-focus-tooltip" aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+G`} onClick={() => setFocusMode(false)}>
+          aria-describedby="exit-focus-tooltip" aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+G`} onClick={() => changeFocusMode(false)}>
           <BlackHoleIcon />
           <span className="focus-tooltip" id="exit-focus-tooltip" role="tooltip">
             <span>Exit focus mode</span><span className="focus-tooltip-keys"><kbd>{mod}</kbd><kbd>G</kbd></span>
           </span>
         </button>
       )}
-      <PlasmaEffects active={plasmaEnabled && windowFocused} dirty={dirty} lineHighlight={showLineHighlight} />
+      <PlasmaEffects active={galaxyMode && windowFocused} supernova={supernova} dirty={dirty} lineHighlight={showLineHighlight} />
       <aside id="global-navigation" className="sidebar" hidden={!navigation}>
         <div className="brand">
           <button
             className="brand-emblem"
-            aria-label="Energy effects"
-            aria-pressed={plasmaEnabled}
-            title={plasmaEnabled ? "Energy effects on · Click to turn off" : "Energy effects off · Click to turn on"}
-            onClick={togglePlasma}
+            aria-label="Supernova"
+            title="Supernova · Light up your workspace"
+            onClick={() => setSupernova(performance.now())}
           >
             <NovaMark className="brand-symbol" />
           </button>
@@ -1065,7 +1079,7 @@ export default function App() {
               <SettingsIcon size={17} aria-hidden="true" />
             </button>
             <button className="sidebar-action focus-toggle" aria-label="Enter focus mode" aria-pressed={focusMode}
-              aria-describedby="enter-focus-tooltip" aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+G`} onClick={() => setFocusMode(true)}>
+              aria-describedby="enter-focus-tooltip" aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+G`} onClick={() => changeFocusMode(true)}>
               <BlackHoleIcon />
               <span className="focus-tooltip" id="enter-focus-tooltip" role="tooltip">
                 <span>Focus mode</span><span className="focus-tooltip-keys"><kbd>{mod}</kbd><kbd>G</kbd></span>
@@ -1153,10 +1167,8 @@ export default function App() {
             <span>{path.split("/").at(-1)}</span>
           </div>
           <div className="read-controls" ref={setReadControls} />
-          <label className="text-width-control">
-            <span>Text width</span>
-            <TextWidthControl value={textWidth} onChange={setTextWidth} />
-          </label>
+          <TextWidthControl toolbar value={textWidth} onChange={setTextWidth} />
+          <LineSpacingControl toolbar value={lineSpacing} onChange={setLineSpacing} />
           {mode !== "read" && !(documentView && mode === "edit") && (
             <button
               className="line-numbers-toggle"
@@ -1184,15 +1196,15 @@ export default function App() {
             </span>
           </button>}
           {galaxyMode && <button
-            className="line-numbers-toggle"
+            className="icon-button toolbar-icon focus-toggle"
+            aria-label="Translucent background"
             aria-pressed={translucent}
-            title={translucent ? "Use solid black editor background" : "Use translucent editor background"}
+            aria-describedby="translucency-tooltip"
             onClick={() => setTranslucent(!translucent)}
           >
-            <Layers size={15} aria-hidden="true" />
-            Translucent
-            <span className="line-numbers-check" aria-hidden="true">
-              {translucent && <Check size={13} />}
+            <Blend size={17} aria-hidden="true" />
+            <span className="focus-tooltip" id="translucency-tooltip" role="tooltip">
+              Translucent background · {translucent ? "On" : "Off"}
             </span>
           </button>}
           <VoiceControl
@@ -1265,7 +1277,7 @@ export default function App() {
           </button>
         </div>
         </div>
-        <div className="document-area">
+        <div className="document-area" onWheelCapture={extendScrollSpace}>
           {loading && <div className="loading">Opening your note…</div>}
           {data && (
             <div className={"write-pane " + (mode === "read" && !documentView ? "hidden" : "")}>
@@ -1292,7 +1304,8 @@ export default function App() {
             </div>
           )}
           {data && mode === "read" && !documentView && (
-            <div className="read-pane" ref={previewElement}>
+            <div className="read-pane" ref={attachPreview}>
+              <div className="start-mark" aria-hidden="true"><GalaxyMark circled /></div>
               <article className="prose">
                 <div className="document-eyebrow">
                   {isMarkdown ? "A NOTE IN YOUR SPACE" : "PLAIN & SIMPLE"}
@@ -1532,14 +1545,15 @@ export default function App() {
         />
       )}
       {settingsOpen && <Settings onClose={() => setSettingsOpen(false)}
-        galaxy={galaxyMode} onGalaxy={setGalaxyMode} plasma={plasmaEnabled} onPlasma={setPlasmaEnabled}
+        galaxy={galaxyMode} onGalaxy={setGalaxyMode}
         lineHighlight={showLineHighlight} onLineHighlight={setShowLineHighlight}
         lineNumbers={showLineNumbers} onLineNumbers={setShowLineNumbers} wordWrap={wordWrap} onWordWrap={setWordWrap}
         spellcheck={spellcheck} onSpellcheck={setSpellcheck} bookmarks={rail} onBookmarks={setRail}
         defaultExtension={defaultExtension} onDefaultExtension={setDefaultExtension}
         fontSize={fontSize} onFontSize={setFontSize}
         textWidth={textWidth} onTextWidth={setTextWidth}
-        storageError={extensionError || widthError || galaxyError || translucencyError || plasmaError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
+        lineSpacing={lineSpacing} onLineSpacing={setLineSpacing}
+        storageError={extensionError || spacingError || widthError || galaxyError || translucencyError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
       {bookmarkDraft && (
         <div
           className="overlay"
