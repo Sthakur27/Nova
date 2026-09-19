@@ -25,11 +25,27 @@ Choose the download for your computer:
 | Mac with an Intel processor | [Download for Mac — Intel](https://github.com/Sthakur27/Nova/releases/latest/download/Nova-mac-intel.dmg) |
 | Windows PC with an Intel or AMD 64-bit processor | [Download for Windows](https://github.com/Sthakur27/Nova/releases/latest/download/Nova-windows-x64.exe) |
 
-On **Mac**, open the downloaded file and drag Nova into Applications. On **Windows**, open the installer and follow the steps. You don't need a GitHub account or developer tools.
+Nova is free to download and use. You don't need a GitHub account or developer tools.
 
-Not sure which Mac you have? Open **Apple menu → About This Mac** and look for **Chip** or **Processor**.
+**Mac installation**
 
-**Nova is an early preview.** The installers aren't digitally signed yet, so your computer may display a security warning. See [all releases and release notes](https://github.com/Sthakur27/Nova/releases/latest) for available builds. Download links become available after the first successful release.
+1. Open the downloaded DMG and drag **Nova** into **Applications**.
+2. Open Nova from Applications. If macOS blocks it, open **System Settings → Privacy & Security** and click **Open Anyway** if available, then confirm.
+3. If you see **“Nova is damaged”** or cannot open it that way, click **Cancel**, open **Terminal** (search for it with **⌘ Space**), paste this command, and press Return:
+
+   ```sh
+   xattr -dr com.apple.quarantine "/Applications/Nova.app"
+   ```
+
+   Open Nova from Applications again. Only use this command for a copy from this project's official downloads. It removes the download restriction for Nova alone; no administrator password is needed for a copy you own. A new download may need this step again.
+
+Nova's Mac builds use free ad-hoc signing, but aren't Apple-notarized, so macOS may require this extra approval.
+
+Not sure which Mac you have? Open **Apple menu → About This Mac**: choose Apple Silicon for an Apple M-series **Chip**, or Intel for an Intel **Processor**.
+
+**Windows installation:** open the EXE and follow the installer steps. These preview builds aren't publisher-signed, so Windows may display a security warning.
+
+See [all releases and release notes](https://github.com/Sthakur27/Nova/releases/latest) for available builds.
 
 ## Make yourself at home
 

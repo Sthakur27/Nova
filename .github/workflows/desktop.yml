@@ -46,6 +46,10 @@ jobs:
       - run: npm test
       - run: cargo test --manifest-path src-tauri/Cargo.toml
       - run: npm run package -- --target ${{ matrix.target }}
+      - name: Verify packaged Mac signature
+        if: runner.os == 'macOS'
+        shell: bash
+        run: bash scripts/verify-macos-installer.sh src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
@@ -95,9 +99,21 @@ jobs:
           - **Mac (Intel):** `Nova-mac-intel.dmg`
           - **Windows (x64):** `Nova-windows-x64.exe`
 
-          On Mac, open the DMG and drag Nova into Applications. On Windows, run the EXE installer.
+          Nova is free. No developer tools or paid accounts are needed.
 
-          These are early, unsigned builds; macOS or Windows may show security warnings. Voice typing downloads its model on first use.
+          **Mac:** open the DMG, drag Nova into **Applications**, then open it from there. If blocked, try **System Settings → Privacy & Security → Open Anyway** if available.
+
+          If macOS says **“Nova is damaged”** or still blocks it, click **Cancel**, open **Terminal** (⌘ Space, then type Terminal), paste this command and press Return:
+
+          ```sh
+          xattr -dr com.apple.quarantine "/Applications/Nova.app"
+          ```
+
+          Open Nova again. Only do this for Nova from this repository's official downloads. It removes the download restriction for Nova alone; a new download may need this again. Mac builds are ad-hoc signed, but aren't Apple-notarized.
+
+          **Windows:** run the EXE installer. Windows builds aren't publisher-signed and may show a security warning.
+
+          Voice typing downloads its model on first use.
           EOF
           printf '\nBuilt from commit `%s`.\n' "$GITHUB_SHA" >> release-notes.md
           gh release create "$tag" --target "$GITHUB_SHA" --title "Nova · $(date -u +%Y-%m-%d) · ${GITHUB_SHA:0:7}" --notes-file release-notes.md --draft

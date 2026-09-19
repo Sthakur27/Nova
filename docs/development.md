@@ -50,7 +50,13 @@ For another architecture on the same OS, install its Rust target with `rustup ta
 
 The **Desktop installers** GitHub Actions workflow runs on every push and pull request, and can also be started with **Actions → Desktop installers → Run workflow**. It runs tests and generates separate Apple Silicon Mac, Intel Mac, and Windows x64 installers. Successful builds on `main` publish a GitHub Release after all three platforms pass. Each release uses a unique build tag and includes installers with stable filenames plus `SHA256SUMS.txt`; the README links always resolve to the latest complete release. The release is assembled as a draft and published only after all files upload. Pull requests and other branches only upload Actions artifacts, retained for 14 days and requiring GitHub sign-in. Installer binaries are release assets, not files committed to Git history.
 
-Installer generation does not configure developer certificates or notarization. Current iteration builds may require OS security approval to open; public distribution still needs signing setup, including Apple notarization. Existing Tauri signing environment variables and configuration are honored by the script. See [Tauri distribution](https://v2.tauri.app/distribute/). Generated installers stay out of Git.
+Mac bundles use Tauri's free ad-hoc signing (`bundle.macOS.signingIdentity: "-"`), requiring no Apple membership, certificates, or CI secrets. This seals the complete app bundle, unlike the linker's executable-only signature. After packaging, CI mounts each Mac DMG read-only and runs `codesign --verify --deep --strict` on the app inside it; invalid or missing signatures prevent publication. You can run the same check locally:
+
+```sh
+bash scripts/verify-macos-installer.sh src-tauri/target/release/bundle/dmg/*.dmg
+```
+
+Ad-hoc signing is not notarization or proof of publisher identity. Gatekeeper can still block a browser download; see the [Mac installation instructions](../README.md#download-nova) for approval and the app-specific quarantine workaround. Gatekeeper acceptance (`spctl`) is deliberately not the release check because non-notarized builds are expected to be rejected. Windows builds remain unsigned. See [Tauri ad-hoc signing](https://v2.tauri.app/distribute/sign/macos/#ad-hoc-signing). Generated installers stay out of Git.
 
 ```sh
 npm test
