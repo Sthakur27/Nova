@@ -149,6 +149,8 @@ it.each(["- first\n- second", "1. first\n2. second", "- [ ] first\n- [ ] second"
   expect(editor.editor.state.doc.child(0).childCount).toBe(2);
 });
 
+// Building 10,000 DOM blocks takes longer on Windows CI; retain the full fixture
+// and correctness assertions without treating the default timeout as a benchmark.
 it("maps selections across thousands of formatted blocks without a whole-document diff", () => {
   const source = "## Heading\n\nA **bold** paragraph with *emphasis* and `code`.\n\n".repeat(5_000) + "The unique ending.";
   const { editor, change } = create(source);
@@ -158,7 +160,7 @@ it("maps selections across thousands of formatted blocks without a whole-documen
   expect(editor.editor.state.doc.textBetween(editor.editor.state.selection.from, editor.editor.state.selection.to)).toBe("unique ending");
   expect(editor.source).toBe(source);
   expect(change).not.toHaveBeenCalled();
-});
+}, 15_000);
 
 it("keeps checklist layout stable when undoing and redoing typing in a following bullet list", () => {
   const { editor, change, mount } = create("");

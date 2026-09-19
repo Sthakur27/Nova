@@ -53,3 +53,53 @@ jobs:
           path: src-tauri/target/${{ matrix.target }}/release/bundle/${{ matrix.bundle }}
           if-no-files-found: error
           retention-days: 14
+  release:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: Nova-*-${{ github.sha }}
+          path: installers
+      - name: Prepare downloads
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir release
+          for platform in mac-apple-silicon mac-intel windows-x64; do
+            extension=dmg
+            if [[ "$platform" == windows-x64 ]]; then extension=exe; fi
+            mapfile -t files < <(find "installers/Nova-${platform}-${GITHUB_SHA}" -type f -name "*.${extension}")
+            if [[ ${#files[@]} -ne 1 ]]; then
+              echo "Expected exactly one installer for ${platform}, found ${#files[@]}"
+              exit 1
+            fi
+            cp "${files[0]}" "release/Nova-${platform}.${extension}"
+          done
+          (cd release && sha256sum Nova-* > SHA256SUMS.txt)
+      - name: Publish complete release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="build-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cat > release-notes.md <<'EOF'
+          Download the installer for your computer below. No developer tools or GitHub account are required.
+
+          - **Mac (Apple Silicon):** `Nova-mac-apple-silicon.dmg`
+          - **Mac (Intel):** `Nova-mac-intel.dmg`
+          - **Windows (x64):** `Nova-windows-x64.exe`
+
+          On Mac, open the DMG and drag Nova into Applications. On Windows, run the EXE installer.
+
+          These are early, unsigned builds; macOS or Windows may show security warnings. Voice typing downloads its model on first use.
+          EOF
+          printf '\nBuilt from commit `%s`.\n' "$GITHUB_SHA" >> release-notes.md
+          gh release create "$tag" --target "$GITHUB_SHA" --title "Nova · $(date -u +%Y-%m-%d) · ${GITHUB_SHA:0:7}" --notes-file release-notes.md --draft
+          gh release upload "$tag" release/*
+          gh release edit "$tag" --draft=false --latest

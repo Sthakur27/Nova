@@ -25,6 +25,7 @@ it("preserves multi-digit nested starts and leaves prose and code alone", () => 
   expect(direct).toContain('2. indented code');
 });
 
+// Parsing 13,000 sections can exceed the default five seconds on Windows CI.
 it("reads Markdown beyond the former limit without losing the ending", () => {
   const text = "# Section\n\nA paragraph with **formatting**.\n\n".repeat(13_000) + "Final sentence.";
   expect(text.length).toBeGreaterThan(500_000);
@@ -34,7 +35,7 @@ it("reads Markdown beyond the former limit without losing the ending", () => {
   expect(last).toContain("Final sentence.");
   expect(last).toContain("<strong>formatting</strong>");
   expect(pageForLine(pages, text.split("\n").length)).toBe(pages.length - 1);
-});
+}, 15_000);
 
 it("resolves references across pages and preserves source positions", () => {
   const text = "[link][destination]\n\n" + "A paragraph.\n\n".repeat(2500) + "[destination]: https://example.com\n";

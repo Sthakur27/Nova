@@ -4,25 +4,19 @@ A local-first Mac and Windows notes prototype: ordinary folders, plain text and 
 
 ## Download Nova
 
-**[Find Mac and Windows downloads →](https://github.com/Sthakur27/Nova/actions/workflows/desktop.yml?query=branch%3Amain)**
+Choose your computer to download the latest installer:
 
-Nova automatically builds installers for Mac and Windows whenever an update is pushed. You do **not** need to install developer tools or run any commands to use Nova.
+| Your computer | Download |
+| --- | --- |
+| Mac with an Apple M-series chip | [Download for Mac (Apple Silicon)](https://github.com/Sthakur27/Nova/releases/latest/download/Nova-mac-apple-silicon.dmg) |
+| Mac with an Intel processor | [Download for Mac (Intel)](https://github.com/Sthakur27/Nova/releases/latest/download/Nova-mac-intel.dmg) |
+| Windows PC with an Intel or AMD 64-bit processor | [Download for Windows](https://github.com/Sthakur27/Nova/releases/latest/download/Nova-windows-x64.exe) |
 
-1. Sign in to GitHub and open the download page above.
-2. Open a recent **Desktop installers** run. Scroll down to **Artifacts**—GitHub’s name for the downloadable files produced by that run.
-3. Choose the download for your computer:
-
-   | Your computer | Download name begins with |
-   | --- | --- |
-   | Mac with an Apple M-series chip | `Nova-mac-apple-silicon` |
-   | Mac with an Intel processor | `Nova-mac-intel` |
-   | Windows PC with an Intel or AMD 64-bit processor | `Nova-windows-x64` |
-
-4. Unzip the download. On Mac, open the `.dmg` and drag Nova into Applications. On Windows, run the `.exe` installer and follow its steps.
+On **Mac**, open the `.dmg` and drag Nova into Applications. On **Windows**, run the `.exe` installer and follow its steps. No GitHub account, developer tools, or commands are required.
 
 On a Mac, **Apple menu → About This Mac** shows whether you have an Apple chip or an Intel processor.
 
-**No download listed?** The build may still be running, that platform’s build may have failed, or the download may have expired. Check an earlier run with an available installer for your computer. One platform can succeed even when another fails, so a run with a red failure indicator may still contain Mac or Windows downloads. Downloads expire after **14 days** and require a GitHub account with access to this repository. There is no permanent “latest installer” link or GitHub Releases download yet.
+[All releases and release notes](https://github.com/Sthakur27/Nova/releases/latest). Downloads stay available in GitHub Releases. A new release is published only after tests and builds succeed for all three platforms; until then, these links serve the previous successful release. The links become available after the first successful release build.
 
 These are early, unsigned builds. macOS or Windows may show a security warning when opening them.
 
@@ -131,7 +125,7 @@ Default output locations:
 
 For another architecture on the same OS, install its Rust target with `rustup target add <target>`, then run `npm run package -- --target <target>`. Targeted builds place output under `src-tauri/target/<target>/release/bundle/`. A custom `CARGO_TARGET_DIR` changes the target directory.
 
-The **Desktop installers** GitHub Actions workflow runs on every push and pull request, and can also be started with **Actions → Desktop installers → Run workflow**. It runs tests and generates separate Apple Silicon Mac, Intel Mac, and Windows x64 installers. Follow the [download instructions above](#download-nova) to find available installers under **Artifacts**; filenames on the run include the commit SHA and downloads are retained for 14 days. GitHub requires sign-in to download Actions artifacts. These iteration builds are not published as GitHub Releases.
+The **Desktop installers** GitHub Actions workflow runs on every push and pull request, and can also be started with **Actions → Desktop installers → Run workflow**. It runs tests and generates separate Apple Silicon Mac, Intel Mac, and Windows x64 installers. Successful builds on `main` publish a GitHub Release after all three platforms pass. Each release uses a unique build tag and includes installers with stable filenames plus `SHA256SUMS.txt`; the README links always resolve to the latest complete release. The release is assembled as a draft and published only after all files upload. Pull requests and other branches only upload Actions artifacts, retained for 14 days and requiring GitHub sign-in. Installer binaries are release assets, not files committed to Git history.
 
 Installer generation does not configure developer certificates or notarization. Current iteration builds may require OS security approval to open; public distribution still needs signing setup, including Apple notarization. Existing Tauri signing environment variables and configuration are honored by the script. See [Tauri distribution](https://v2.tauri.app/distribute/). Generated installers stay out of Git.
 
