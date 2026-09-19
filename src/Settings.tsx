@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef } from "react";
+import { normalizeExtension } from "./fileExtensions";
+import { useEffect, useId, useRef, useState } from "react";
 import TextWidthControl, { type TextWidth } from "./TextWidthControl";
 import { Check, Settings2, X } from "lucide-react";
 
@@ -26,10 +27,13 @@ type Props = {
   bookmarks: boolean; onBookmarks: (value: boolean) => void;
   fontSize: string; onFontSize: (value: string) => void;
   textWidth: TextWidth; onTextWidth: (value: TextWidth) => void;
+  defaultExtension: string; onDefaultExtension: (value: string) => void;
   storageError: boolean;
 };
 export default function Settings(props: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const [extension, setExtension] = useState(props.defaultExtension);
+  const [extensionError, setExtensionError] = useState("");
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     const element = dialog.current!;
@@ -68,6 +72,17 @@ export default function Settings(props: Props) {
         <Toggle title="Spellcheck" description="Use your system’s spelling suggestions as you type." checked={props.spellcheck} onChange={props.onSpellcheck} />
       </section>
       <section aria-labelledby="settings-workspace"><h2 id="settings-workspace">Workspace</h2>
+        <div className="settings-row"><div><label htmlFor="settings-extension">Default file extension</label><p id="settings-extension-help">Use any extension for new text files. Default: .txt.</p>
+          {extensionError && <p id="settings-extension-error" role="alert">{extensionError}</p>}</div>
+          <input id="settings-extension" type="text" value={extension} placeholder=".txt" spellCheck={false}
+            aria-invalid={!!extensionError} aria-describedby={extensionError ? "settings-extension-help settings-extension-error" : "settings-extension-help"}
+            onChange={event => {
+              const value = event.target.value;
+              setExtension(value);
+              try { props.onDefaultExtension(normalizeExtension(value)); setExtensionError(""); }
+              catch (error) { setExtensionError((error as Error).message); }
+            }} onBlur={() => { if (!extensionError) setExtension(normalizeExtension(extension)); }} />
+        </div>
         <Toggle title="Bookmarks panel" description="Keep your saved passages alongside your notes." checked={props.bookmarks} onChange={props.onBookmarks} />
       </section>
     </div>

@@ -1,10 +1,10 @@
 # Nova
 
-A local-first Mac and Windows notes prototype: ordinary folders, plain text and Markdown, filename-first search (including bookmark names and excerpts), named bookmarks across your folders, and a customizable writing workspace.
+A local-first Mac and Windows notes prototype: ordinary folders, plain text and Markdown, filename-first search (including bookmark names and excerpts), named bookmarks across your folders, recovery drafts, starred files, and a customizable writing workspace.
 
 ## Run
 
-Requires Node.js 22+, Rust stable, and CMake (for the local speech engine). On macOS 11 or later, install Xcode Command Line Tools. On Windows install Visual Studio C++ Build Tools (Desktop development with C++) and WebView2. See [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
+Requires Node.js 22.22.2+ (or 24.15+ / 26+), Rust stable, and CMake (for the local speech engine). On macOS 11 or later, install Xcode Command Line Tools. On Windows install Visual Studio C++ Build Tools (Desktop development with C++) and WebView2. See [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
 
 ```sh
 npm ci
@@ -17,40 +17,43 @@ For direct `cargo` commands and packaging on a newly configured Mac, run `source
 
 Run `npm run desktop` and leave it running while making changes. This opens the native app with live frontend updates; Rust changes automatically rebuild and restart it. The launcher automatically chooses an available frontend port, so an existing preview server does not block startup. The command finds Rust in the standard Cargo installation directory, so sourcing Cargo's environment is not needed for this command. Stop it with Ctrl-C.
 
-Quit the installed Nova before starting development: both use the same saved folders and bookmarks. Save edits before a reload or native restart. Development does not update `/Applications/Nova.app`; the Dock copy stays at its last installed version. No DMG or drag-to-Applications step is needed to try changes. Use `npm run package` when you need an installer to share.
+Quit the installed Nova before starting development: both use the same saved folders and bookmarks. Unsaved edits are retained as local recovery drafts across reloads and native restarts. Development does not update `/Applications/Nova.app`; the Dock copy stays at its last installed version. No DMG or drag-to-Applications step is needed to try changes. Use `npm run package` when you need an installer to share.
 
 ## Use
 
-- **Add folders**: keep up to 100 ordinary folders open together and browse their `.md`, `.markdown`, `.mdx` (rendered as Markdown, without JSX), and `.txt` files. No vault or changes to folder structure.
+- **Add folders**: keep up to 100 ordinary folders open together and browse Markdown (`.md`, `.markdown`, and `.mdx`, without JSX) and UTF-8 text files, including custom extensions and extensionless files. No vault is required. Custom file types are screened for text content before appearing in the explorer.
 - **Source / Edit / Read**: raw Markdown, styled live editing, and a reading view. Edit supports headings, emphasis, links, lists, task checkboxes, quotes and inline code, plus a formatting toolbar. Complex tables, fenced code and other unsupported structures remain source in Edit; Read renders full supported Markdown. Switching modes does not rewrite the document. One document is mounted at a time. Inactive files are not loaded.
-- Drag a folder handle to reorder roots. Arrow keys on the handle and the folder menu also reorder. Collapse roots independently; remove only removes the explorer entry. Drop folders from Finder/Explorer to add them. Folder order, collapse state, mode and the active note are remembered in app-data `explorer.json`. Unavailable roots remain visible for retry.
+- Drag a folder handle to reorder roots. Arrow keys on the handle and the folder menu also reorder. Collapse roots independently; remove only removes the explorer entry. Drop folders from Finder/Explorer to add them. Folder order, root and nested-directory collapse state, mode, open tabs, and the active note are remembered in app-data `explorer.json`. Unavailable roots remain visible for retry.
 - **Command-K / Ctrl-K**: search filenames, bookmark names and excerpts, and saved file contents. Use All / Files / Bookmarks / Text filters, arrows and Enter to navigate, and Escape to close. Results include their folder; text results open at their line in Source mode. The All filter also includes commands such as **Toggle line numbers**.
+- **Command-F / Ctrl-F**: find within the note in Source or Edit, with match counts and Enter / Shift-Enter navigation. Expand **Search options & replace** for case-sensitive, whole-word, or regex matching, selecting all matches, and replacing one or all matches. Escape closes find.
 - **Search scope**: Everywhere searches all added folders; Current tab searches the focused note, including unsaved edits, and jumps without saving or reloading. The scope is remembered for the session and Current tab is disabled without an open note.
 - **Command-Shift-B / Ctrl-Shift-B**: bookmark a selection or the current line, or use the bookmark button beside the active editor line. Name, rename, remove, preview, and jump from the right rail. Switch between Current tab and All bookmarks to browse passages across added folders. Read-mode selection works when the selected visible text maps directly to Markdown source.
-- **Command-S / Ctrl-S**: save. Switching files and closing the native window also save. Adding, renaming, or deleting a bookmark saves the note and its anchors.
+- **Command-S / Ctrl-S**: save. Switching files, closing tabs, and quitting preserve local recovery drafts without writing edits to the original file. Bookmark edits are retained with the draft until Save.
 - **Command− / Ctrl−** and **Command+ / Ctrl+**: zoom the interface out or in (50–200%). Command= / Ctrl= also zooms in; Command-0 / Ctrl-0 resets to 100%.
-- **New note**: click the new-tab + button or press Command-T / Ctrl-T to create `Untitled.md` in the active folder (or the first available folder). Existing names get a numeric suffix.
-- **Rename**: double-click a filename in the explorer, edit its name, then press Enter or leave the field to apply. Escape cancels. Keep a supported extension; renaming within Nova carries its bookmarks and open tab to the new name.
+- **New note**: click the new-tab + button or press Command-T / Ctrl-T to create `Untitled.txt` in the active folder (or the first available folder). Choose a different default extension in Settings, such as `.md`, `.json`, or a custom extension. Existing names get a numeric suffix. Markdown notes open in Edit; other text files open in Source. Closing an untouched empty untitled note created in the current session removes its empty file; notes with drafts, content, or a new name are retained.
+- **Rename**: use the pencil beside a file, right-click → **Rename…**, or double-click a fixed tab. The dialog separates the file name and extension and previews the destination path. Enter applies; Escape cancels. Renaming within Nova carries bookmarks, stars, drafts, and the open tab to the new name.
+- **File actions**: right-click a file to move it to an existing directory within the same root, reveal it in Finder/Explorer, or permanently delete it after confirmation. Moving carries bookmarks, stars, drafts, and tabs; deleting removes the file and its saved bookmarks.
+- **Starred files**: toggle the star beside a filename, then use the explorer header’s star to show only starred files across added folders. Stars are stored as relative paths in a `.nova` JSON file at each root; this registry is excluded from the note list.
 - **New window**: Command-N / Ctrl-N opens another Nova window.
 - **Refresh folder**: rescan after files are added or removed externally.
 
 Bookmarks live in Tauri's OS app-data directory, under `com.nova.notes.prototype/bookmarks`, keyed by canonical file path. They never add markup or metadata to notes folders. They follow edits using CodeMirror transaction mappings. On reopen, stored excerpts recover moved passages; missing excerpts are flagged. Renaming/moving a file outside Nova does not yet migrate its bookmarks. Deleted-anchor recovery through Undo is not implemented.
 
-Saves compare the disk revision before writing and use a temporary file plus atomic replacement. A detected external change prevents the save and keeps edits open. Copy edits to a safe place before reopening when there is a conflict. CRLF line endings are preserved for CRLF documents; mixed line endings normalize. Atomic replacement may not preserve all extended file attributes. This prototype is not a collaborative editor or a backup system.
+Saves compare the disk revision before writing and use a temporary file plus atomic replacement. A detected external change prevents the save and keeps edits open. Recovery drafts retain their original disk revision, so restoring a draft does not bypass conflict checks. Copy edits to a safe place and reconcile external changes when there is a conflict; reopening restores the draft. CRLF line endings are preserved for CRLF documents; mixed line endings normalize. Atomic replacement may not preserve all extended file attributes. This prototype is not a collaborative editor or a backup system.
 
 ## Workspace and formatting
 
-Open **Settings** from the sidebar or with Command-comma / Ctrl-comma. Preferences save automatically on this device: Galaxy mode (translucent background), energy effects, editor text size, text width, line numbers, line highlight, word wrap, spellcheck, and bookmark-panel visibility. Text width applies to Source, Edit, and Read; text size applies to Source and Edit. The document toolbar also offers quick text-width and line-display controls.
+Open **Settings** from the sidebar or with Command-comma / Ctrl-comma. Preferences save automatically on this device: Galaxy mode (translucent background), energy effects, editor text size, text width, line numbers, line highlight, word wrap, spellcheck, bookmark-panel visibility, and the default extension for new files. Text width applies to Source, Edit, and Read; text size applies to Source and Edit. The document toolbar also offers quick text-width and line-display controls.
 
 Collapse navigation, bookmarks, top bars, or the status bar with the edge controls. Drag a side-panel divider to resize it; double-click to reset. Focused dividers support arrow keys (Shift for larger steps), Home/End, and Enter to reset. Panel widths and visibility are remembered. **Command-G / Ctrl-G** toggles focus mode; the exit control restores the workspace.
 
-The formatting toolbar includes Undo/Redo, headings 1–6, bold, italic, strikethrough, inline code, ordered and unordered lists, tasks, and quotes. In Markdown notes, Command/Ctrl-B and -I apply bold and italic; Command/Ctrl-Shift-X applies strikethrough. Command/Ctrl-Alt-1 through -6 apply headings, and -0 returns to normal text. Command/Ctrl-Shift-7, -8, and -9 apply numbered lists, bullets, and quotes.
+The formatting toolbar includes Undo/Redo, headings 1–6, bold, italic, strikethrough, inline code, ordered and unordered lists, tasks, and quotes. In Markdown notes, Command/Ctrl-B and -I apply bold and italic; Command/Ctrl-Shift-X applies strikethrough. Command/Ctrl-Alt-1 through -6 apply headings, and -0 returns to normal text. Command/Ctrl-Shift-7, -8, and -9 apply numbered lists, bullets, and quotes. Tab / Shift-Tab indent or outdent Markdown by four spaces. Formatting preserves existing indentation, and Read mode recognizes nested numbered lists that start above 1. Selection highlighting covers line breaks and blank lines; energy effects follow the selected passage.
 
 ## Tabs
 
-Single-click a file to open it in the one italic preview tab. Browsing replaces that preview only. Double-click a tab, click its plus button, or edit the note to keep it open as a fixed tab. Double-clicking a filename in the explorer renames it. Clicking an already open file selects its existing tab. Close tabs with their × button. Switching or closing saves first; a save conflict keeps the current note open.
+Double-click an explorer filename to open it, or activate its focused button with the keyboard. When the active tab is an italic preview, opening another file replaces that preview; otherwise explorer files open as fixed tabs. Double-click a preview tab or edit its note to keep it open. Double-clicking a fixed tab opens the rename dialog. Opening an already open file selects its existing tab. Close tabs with their × button. Switching or closing retains unsaved edits as recovery drafts; reopening the file restores them. A recovery-storage failure keeps the note open and reports the problem.
 
-Only the active editor is mounted. Open tabs keep in-memory editor states for cursor position and undo history; these are released when closed or replaced. External file changes invalidate the cached state on reopening. The tab list is session-only; restarting restores the last active note.
+Only the active editor is mounted. Open tabs keep in-memory editor states for cursor position and undo history; these are released when closed or replaced. External file changes invalidate the cached state on reopening. Restarting restores the ordered tab list, active note, editing mode, explorer folders, and collapsed directories. Desktop drafts are written atomically to the app-data `drafts` directory on each edit, independently of the development server port; the status bar confirms when the write finishes. Browser previews use local storage. Drafts are stored per folder and file on this device, including after their tabs close, and follow file renames and moves within Nova. Explicit Save clears a draft after the file and anchors are written. Recovery writes can fail if storage is unavailable or full; failures are reported and normal desktop close/quit is blocked until edits can be preserved or saved.
 
 ## Voice typing
 
@@ -111,6 +114,6 @@ cargo test --manifest-path src-tauri/Cargo.toml
 npm run tauri build
 ```
 
-Tests cover bookmark tracking and search, formatting, current-tab search, tabs, folder preferences, zoom shortcuts, large-document pagination, note creation and renaming, file scope, symlink escapes on Unix, stale-save rejection, and CRLF preservation. Windows has not been tested locally.
+Tests cover bookmark tracking and search, formatting, current-tab search, tabs, folder and session preferences, recovery drafts, find/replace matching, zoom shortcuts, large-document pagination and nested lists, custom extensions, note creation and renaming, empty-note cleanup, starred-file registries, move destinations, file scope, symlink escapes on Unix, stale-save rejection, and CRLF preservation. Windows has not been tested locally.
 
 Architecture: React/TypeScript → Tauri IPC → Rust file operations. CodeMirror owns the live text buffer. Markdown rendering is lazy-loaded. Full-text search runs off the UI thread and does not retain all note bodies in memory.

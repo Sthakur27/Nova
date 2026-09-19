@@ -1,10 +1,12 @@
+import type { NoteTab } from "./tabs";
 import type { Workspace } from "./model";
-export type FolderPreference = Pick<Workspace, "root" | "name" | "collapsed">;
+export type FolderPreference = Pick<Workspace, "root" | "name" | "collapsed" | "closedDirectories">;
 export type EditorMode = "source" | "edit" | "read";
 export type ExplorerPreferences = {
   folders: FolderPreference[];
   active: { root: string; path: string } | null;
   mode: EditorMode;
+  tabs?: NoteTab[];
 };
 export function addFolders(
   current: Workspace[],
@@ -41,7 +43,7 @@ export function parsePreferences(value: unknown): ExplorerPreferences | null {
       (f): f is FolderPreference =>
         !!f && typeof f.root === "string" && typeof f.name === "string",
     )
-    .map((f) => ({ root: f.root, name: f.name, collapsed: !!f.collapsed }));
+    .map((f) => ({ root: f.root, name: f.name, collapsed: f.collapsed !== false, ...(Array.isArray(f.closedDirectories) ? { closedDirectories: f.closedDirectories.filter(p => typeof p === "string") } : {}) }));
   const unique = folders.filter(
     (f, i) => folders.findIndex((other) => other.root === f.root) === i,
   );
@@ -54,6 +56,21 @@ export function parsePreferences(value: unknown): ExplorerPreferences | null {
   return {
     folders: unique,
     active,
+    ...(Array.isArray(v.tabs) ? { tabs: v.tabs.filter((t): t is NoteTab =>
+      !!t && typeof t.root === "string" && typeof t.path === "string" && unique.some(f => f.root === t.root))
+      .map(t => ({ root: t.root, path: t.path, pinned: !!t.pinned }))
+      .filter((t, i, all) => all.findIndex(other => other.root === t.root && other.path === t.path) === i) } : {}),
     mode: v.mode === "source" || v.mode === "read" ? v.mode : "edit",
   };
+}
+
+export function closedDirectories(folder: Workspace): string[] {
+  if (folder.closedDirectories) return folder.closedDirectories;
+  const directories = new Set<string>();
+  for (const { path } of folder.files) {
+    for (let slash = path.indexOf("/"); slash >= 0; slash = path.indexOf("/", slash + 1)) {
+      directories.add(path.slice(0, slash));
+    }
+  }
+  return [...directories];
 }

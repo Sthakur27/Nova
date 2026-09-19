@@ -1,8 +1,11 @@
+import { editorSearch } from "./editorSearch";
 import { GFM } from "@lezer/markdown";
+import { tags } from "@lezer/highlight";
 import {
   richMarkdown,
   formatTransaction,
   formattingKeymap,
+  indentationKeymap,
   paragraphStyle,
   type FormatAction,
 } from "./richMarkdown";
@@ -19,6 +22,7 @@ import {
   keymap,
   lineNumbers,
   highlightActiveLine,
+  drawSelection,
   gutter,
   GutterMarker,
   type DecorationSet,
@@ -29,6 +33,8 @@ import { markdown } from "@codemirror/lang-markdown";
 import {
   syntaxHighlighting,
   defaultHighlightStyle,
+  HighlightStyle,
+  indentUnit,
 } from "@codemirror/language";
 import type { Bookmark } from "./model";
 import {
@@ -37,6 +43,10 @@ import {
   transcriptTransaction,
 } from "./dictation";
 const setMarks = StateEffect.define<Bookmark[]>();
+const sourceHighlightStyle = HighlightStyle.define([
+  ...defaultHighlightStyle.specs,
+  { tag: tags.processingInstruction, color: "#c8afe8" },
+]);
 
 class BookmarkEntry extends GutterMarker {
   constructor(private readonly onBookmark: () => void) {
@@ -209,6 +219,8 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
     const bookmarkEntry = new BookmarkEntry(() => latest.current.onBookmark());
     const extensions = [
       history(),
+      // Fill selected line breaks and blank lines without native selection gaps.
+      drawSelection({ drawRangeCursor: true }),
       numbering.current.of(p.showLineNumbers ? lineNumbers() : []),
       gutter({
         class: "cm-bookmark-entry",
@@ -229,12 +241,15 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
               richMarkdown,
               EditorView.editorAttributes.of({ class: "live-edit" }),
             ]
-          : [syntaxHighlighting(defaultHighlightStyle)],
+          : [syntaxHighlighting(sourceHighlightStyle)],
       ),
       highlighting.current.of(p.showLineHighlight ? highlightActiveLine() : []),
+      editorSearch,
       highlightSelectionMatches(),
       wrapping.current.of(p.wordWrap ? EditorView.lineWrapping : []),
       p.isMarkdown ? markdown({ extensions: GFM }) : [],
+      // Four spaces nest both bullet and numbered items in Markdown.
+      indentUnit.of("    "),
       bookmarkField,
       dictationAnchor,
       decorations,
@@ -254,6 +269,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
           },
         },
         ...formattingKeymap(() => latest.current.isMarkdown),
+        ...indentationKeymap(() => latest.current.isMarkdown),
         ...defaultKeymap,
         ...historyKeymap,
         ...searchKeymap,
@@ -297,14 +313,8 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
           ".cm-activeLineGutter": { backgroundColor: "#ffffff05" },
           ".cm-activeLine": { backgroundColor: "#ffffff03" },
           "&.cm-focused .cm-cursor": { borderLeftColor: "#b8a0ed" },
-          "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
+          "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground": {
             backgroundColor: "#a98be43b",
-          },
-          ".cm-panels": { background: "#232329", color: "#ddd" },
-          ".cm-search input": {
-            color: "#eee",
-            background: "#18191c",
-            border: "1px solid #555",
           },
         },
         { dark: true },
@@ -341,7 +351,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
               richMarkdown,
               EditorView.editorAttributes.of({ class: "live-edit" }),
             ]
-          : [syntaxHighlighting(defaultHighlightStyle)],
+          : [syntaxHighlighting(sourceHighlightStyle)],
       ),
     });
   }, [props.visual]);

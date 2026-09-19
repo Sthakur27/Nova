@@ -182,20 +182,64 @@ export default function PlasmaEffects({ active, dirty, lineHighlight }: { active
           radius: parseFloat(getComputedStyle(element).borderTopLeftRadius) || 0 });
       }
       const selected = selectedLine.current;
-      if (lineHighlight && selected && visible(selected.element)) {
+      if (lineHighlight && selected && visible(selected.element.closest(".read-pane") ?? selected.element)) {
         const pane = selected.element.closest(".read-pane, .cm-scroller")?.getBoundingClientRect();
         let line: { left: number; right: number; top: number; bottom: number } | undefined;
         if (selected.kind === "reader") {
           const row = rows(selected.element)[selected.row];
           const block = selected.element.getBoundingClientRect();
           if (row) line = { ...row, left: block.left, right: block.right };
+          const selection = window.getSelection();
+          const reader = selected.element.closest(".read-pane");
+          if (selection && !selection.isCollapsed && selection.rangeCount &&
+              reader?.contains(selection.anchorNode) && reader.contains(selection.focusNode)) {
+            const range = selection.getRangeAt(0);
+            const rects = Array.from(range.getClientRects()).filter((rect) => rect.height > 0);
+            if (rects.length) {
+              const start = range.startContainer.parentElement?.closest("[data-line]")?.getBoundingClientRect();
+              const end = range.endContainer.parentElement?.closest("[data-line]")?.getBoundingClientRect();
+              line = rects.reduce((bounds, rect) => ({
+                left: Math.min(bounds.left, rect.left),
+                right: Math.max(bounds.right, rect.right),
+                top: Math.min(bounds.top, rect.top),
+                bottom: Math.max(bounds.bottom, rect.bottom),
+              }), {
+                left: Math.min(block.left, start?.left ?? block.left, end?.left ?? block.left),
+                right: Math.max(block.right, start?.right ?? block.right, end?.right ?? block.right),
+                top: Infinity,
+                bottom: -Infinity,
+              });
+            }
+          }
         } else {
           const view = EditorView.findFromDOM(selected.element);
-          const caret = view?.coordsAtPos(view.state.selection.main.head);
-          const block = selected.element.querySelector(".cm-activeLine")?.getBoundingClientRect();
-          if (caret && block) line = { top: caret.top, bottom: caret.bottom, left: block.left, right: block.right };
+          if (view) {
+            const { from, to, empty } = view.state.selection.main;
+            // A selection ending at the next line's start excludes that line.
+            const end = !empty && view.state.doc.lineAt(to).from === to ? to - 1 : to;
+            const startCoords = view.coordsAtPos(from, 1);
+            const endCoords = view.coordsAtPos(end, empty ? 1 : -1);
+            const block = selected.element.getBoundingClientRect();
+            const style = getComputedStyle(selected.element);
+            line = {
+              top: startCoords?.top ?? view.documentTop + view.lineBlockAt(from).top,
+              bottom: endCoords?.bottom ?? view.documentTop + view.lineBlockAt(end).bottom,
+              left: block.left + parseFloat(style.paddingLeft),
+              right: block.right - parseFloat(style.paddingRight),
+            };
+            if (!empty) {
+              // Follow the drawn selection, including line spacing and blank lines.
+              for (const segment of view.dom.querySelectorAll(".cm-selectionBackground")) {
+                const rect = segment.getBoundingClientRect();
+                line.left = Math.min(line.left, rect.left);
+                line.right = Math.max(line.right, rect.right);
+                line.top = Math.min(line.top, rect.top);
+                line.bottom = Math.max(line.bottom, rect.bottom);
+              }
+            }
+          }
         }
-        if (line && pane && line.top >= pane.top && line.bottom <= pane.bottom) {
+        if (line && pane && line.bottom > pane.top && line.top < pane.bottom) {
           const left = Math.max(pane.left + 1, line.left - 6);
           const right = Math.min(pane.right - 7, line.right + 6);
           const top = Math.max(pane.top + 1, line.top - 3);
@@ -222,6 +266,18 @@ export default function PlasmaEffects({ active, dirty, lineHighlight }: { active
       refresh();
     };
     const blurred = () => { focus = null; refresh(); };
+    const selectionChanged = () => {
+      const selection = window.getSelection();
+      const anchor = selection?.anchorNode;
+      const element = anchor instanceof Element ? anchor : anchor?.parentElement;
+      const content = element?.closest<HTMLElement>(".cm-content");
+      if (content) selectedLine.current = { kind: "editor", element: content };
+      else if (selection && !selection.isCollapsed) {
+        const block = element?.closest(".read-pane [data-line]");
+        if (block) selectedLine.current = { kind: "reader", element: block, row: 0 };
+      }
+      refresh();
+    };
     const click = (event: MouseEvent) => {
       if (!(event.target instanceof Element) || event.target.closest("a, button, input")) return;
       const content = event.target.closest<HTMLElement>(".cm-content");
@@ -250,7 +306,7 @@ export default function PlasmaEffects({ active, dirty, lineHighlight }: { active
     document.addEventListener("scroll", refresh, true);
     document.addEventListener("input", refresh);
     document.addEventListener("keyup", refresh);
-    document.addEventListener("selectionchange", refresh);
+    document.addEventListener("selectionchange", selectionChanged);
     window.addEventListener("resize", resize);
     motion.addEventListener("change", refresh);
     return () => {
@@ -264,7 +320,7 @@ export default function PlasmaEffects({ active, dirty, lineHighlight }: { active
       document.removeEventListener("scroll", refresh, true);
       document.removeEventListener("input", refresh);
       document.removeEventListener("keyup", refresh);
-      document.removeEventListener("selectionchange", refresh);
+      document.removeEventListener("selectionchange", selectionChanged);
       window.removeEventListener("resize", resize);
       motion.removeEventListener("change", refresh);
     };

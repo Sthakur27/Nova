@@ -1,4 +1,5 @@
 import { syntaxTree } from "@codemirror/language";
+import { indentMore, indentLess } from "@codemirror/commands";
 import { EditorState, type Range } from "@codemirror/state";
 import {
   Decoration,
@@ -253,16 +254,31 @@ export function formatTransaction(state: EditorState, action: FormatAction) {
   const changes = [];
   for (let n = first.number; n <= last.number; n++) {
     const line = state.doc.line(n);
+    const indent = /^[ \t]*/.exec(line.text)![0].length;
     const old =
-      /^(?:#{1,6}\s+|[-+*]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+|>\s?)/.exec(line.text)?.[0] ??
+      /^(?:#{1,6}\s+|[-+*]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+|>\s?)/.exec(line.text.slice(indent))?.[0] ??
       "";
     changes.push({
-      from: line.from,
-      to: line.from + old.length,
+      from: line.from + indent,
+      to: line.from + indent + old.length,
       insert: action === "numbered" ? `${n - first.number + 1}. ` : prefix,
     });
   }
-  return state.update({ changes, userEvent: "input" });
+  const changeSet = state.changes(changes);
+  return state.update({
+    changes: changeSet,
+    // A cursor at the start of a line belongs after its new block marker.
+    selection: state.selection.map(changeSet, 1),
+    userEvent: "input",
+  });
+}
+
+export function indentationKeymap(enabled: () => boolean): KeyBinding[] {
+  return [{
+    key: "Tab",
+    run: view => enabled() && indentMore(view),
+    shift: view => enabled() && indentLess(view),
+  }];
 }
 
 export function paragraphStyle(state: EditorState): FormatAction {

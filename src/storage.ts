@@ -1,3 +1,4 @@
+import { normalizeExtension, isUntitled } from "./fileExtensions";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { demoFiles } from "./demo";
@@ -21,6 +22,7 @@ function demoPaths(): string[] {
 export const demoWorkspace: Workspace = {
   name: "My notes",
   root: "demo",
+  starred: [],
   files: demoPaths().map((path) => ({
     path,
     name: path.split("/").at(-1)!,
@@ -29,8 +31,21 @@ export const demoWorkspace: Workspace = {
 const textFor = (path: string) =>
   localStorage.getItem(prefix + path) ?? demoFiles[path] ?? "";
 export async function openWorkspace(root: string): Promise<Workspace> {
-  if (root === "demo") return demoWorkspace;
+  if (root === "demo") {
+    demoWorkspace.starred = JSON.parse(localStorage.getItem("nova-demo-stars-v1") ?? "[]");
+    return { ...demoWorkspace };
+  }
   return invoke<Workspace>("open_workspace", { root });
+}
+export async function setFileStar(root: string, path: string, starred: boolean): Promise<string[]> {
+  if (root !== "demo") return invoke("set_file_star", { root, path, starred });
+  const stars = new Set<string>(JSON.parse(localStorage.getItem("nova-demo-stars-v1") ?? "[]"));
+  if (starred) stars.add(path);
+  else stars.delete(path);
+  const result = [...stars].sort();
+  localStorage.setItem("nova-demo-stars-v1", JSON.stringify(result));
+  demoWorkspace.starred = result;
+  return result;
 }
 export async function chooseWorkspaces(): Promise<Workspace[]> {
   if (!desktop) throw new Error("Add local folders in the Nova desktop app.");
@@ -48,7 +63,7 @@ export async function chooseWorkspaces(): Promise<Workspace[]> {
   );
 }
 export async function loadFolders(
-  folders: { root: string; name: string; collapsed?: boolean }[],
+  folders: { root: string; name: string; collapsed?: boolean; closedDirectories?: string[] }[],
 ): Promise<Workspace[]> {
   const results: Workspace[] = [];
   for (const folder of folders) {
@@ -56,6 +71,7 @@ export async function loadFolders(
       results.push({
         ...(await openWorkspace(folder.root)),
         collapsed: folder.collapsed,
+        closedDirectories: folder.closedDirectories,
       });
     } catch (error) {
       results.push({ ...folder, files: [], error: String(error) });
@@ -64,15 +80,16 @@ export async function loadFolders(
   return results;
 }
 export async function loadExplorer(): Promise<ExplorerPreferences | null> {
-  return parsePreferences(
-    desktop
-      ? await invoke("load_explorer")
-      : JSON.parse(localStorage.getItem("nova-explorer-v1") ?? "null"),
-  );
+  if (desktop) return parsePreferences(await invoke("load_explorer"));
+  return parsePreferences(JSON.parse(localStorage.getItem("nova-explorer-v1") ?? "null"));
 }
+
 let preferenceQueue = Promise.resolve();
 export function saveExplorer(preferences: ExplorerPreferences): Promise<void> {
   const payload = JSON.parse(JSON.stringify(preferences));
+  // Synchronous recovery survives reload/quit before native writes complete.
+  try { localStorage.setItem("nova-explorer-v1", JSON.stringify(payload)); }
+  catch (error) { if (!desktop) return Promise.reject(error); }
   const pending = preferenceQueue
     .catch(() => {})
     .then(async () => {
@@ -193,24 +210,31 @@ export async function searchNotes(
 function persistDemoFiles() {
   localStorage.setItem("nova-demo-files-v1", JSON.stringify(demoWorkspace.files.map(f => f.path)));
 }
-export async function createNote(root: string): Promise<string> {
-  if (root !== "demo") return invoke("create_note", { root });
+export async function createNote(root: string, extension = ".txt"): Promise<string> {
+  extension = normalizeExtension(extension);
+  if (root !== "demo") return invoke("create_note", { root, extension });
   let number = 1;
-  let path = "Untitled.md";
-  while (demoWorkspace.files.some(f => f.path === path)) path = `Untitled ${++number}.md`;
+  let path = `Untitled${extension}`;
+  while (demoWorkspace.files.some(f => f.path === path)) path = `Untitled ${++number}${extension}`;
   localStorage.setItem(prefix + path, "");
   demoWorkspace.files = [...demoWorkspace.files, { path, name: path }];
   persistDemoFiles();
   return path;
 }
 export async function renameNote(root: string, path: string, name: string): Promise<string> {
-  if (!name.trim() || /[/\\:]/.test(name) || !/\.(md|markdown|mdx|txt)$/i.test(name))
-    throw new Error("Enter a filename ending in .md, .markdown, .mdx, or .txt.");
+  if (!name.trim() || /[/\\:*?"<>|\x00-\x1f\x7f]/.test(name) || name === "." || name === ".." || name === ".nova")
+    throw new Error("Enter a valid filename without filename separators.");
   if (root !== "demo") return invoke("rename_note", { root, path, name });
   const next = path.slice(0, path.lastIndexOf("/") + 1) + name;
   if (next === path) return path;
   if (demoWorkspace.files.some(f => f.path === next)) throw new Error("A file with that name already exists.");
   const note = await readNote(root, path);
+  const stars: string[] = JSON.parse(localStorage.getItem("nova-demo-stars-v1") ?? "[]");
+  if (stars.includes(path)) {
+    const renamed = stars.map(star => star === path ? next : star);
+    localStorage.setItem("nova-demo-stars-v1", JSON.stringify(renamed));
+    demoWorkspace.starred = renamed;
+  }
   localStorage.setItem(prefix + next, note.text);
   localStorage.setItem(prefix + next + ":bookmarks", JSON.stringify(note.bookmarks));
   demoWorkspace.files = demoWorkspace.files.map(f => f.path === path ? { path: next, name } : f);
@@ -218,4 +242,43 @@ export async function renameNote(root: string, path: string, name: string): Prom
   localStorage.removeItem(prefix + path);
   localStorage.removeItem(prefix + path + ":bookmarks");
   return next;
+}
+
+export async function moveNote(root: string, path: string, directory: string): Promise<string> {
+  if (root !== "demo") return invoke("move_note", { root, path, directory });
+  const dir = directory.replace(/^\.\//, "").replace(/\/$/, "");
+  if (dir && (dir.startsWith("/") || dir.split("/").includes("..") || !demoWorkspace.files.some(f => f.path.startsWith(dir + "/")))) throw new Error("Choose an existing folder inside this workspace.");
+  const name = path.split("/").at(-1)!;
+  const next = dir ? dir + "/" + name : name;
+  if (next === path) return path;
+  if (demoWorkspace.files.some(f => f.path === next)) throw new Error("A file with that name already exists.");
+  const note = await readNote(root, path);
+  localStorage.setItem(prefix + next, note.text);
+  localStorage.setItem(prefix + next + ":bookmarks", JSON.stringify(note.bookmarks));
+  const stars: string[] = JSON.parse(localStorage.getItem("nova-demo-stars-v1") ?? "[]");
+  demoWorkspace.starred = stars.map(p => p === path ? next : p);
+  localStorage.setItem("nova-demo-stars-v1", JSON.stringify(demoWorkspace.starred));
+  demoWorkspace.files = demoWorkspace.files.map(f => f.path === path ? { path: next, name } : f);
+  persistDemoFiles();
+  localStorage.removeItem(prefix + path);
+  localStorage.removeItem(prefix + path + ":bookmarks");
+  return next;
+}
+export async function discardEmptyUntitled(root: string, path: string): Promise<boolean> {
+  if (root !== "demo") return invoke("delete_note", { root, path, onlyEmptyUntitled: true });
+  if (!isUntitled(path) ||
+      !demoWorkspace.files.some(file => file.path === path) || textFor(path).length !== 0) return false;
+  await deleteNote(root, path);
+  return true;
+}
+export async function deleteNote(root: string, path: string): Promise<void> {
+  if (root !== "demo") return invoke("delete_note", { root, path });
+  await setFileStar(root, path, false);
+  demoWorkspace.files = demoWorkspace.files.filter(f => f.path !== path);
+  persistDemoFiles();
+  localStorage.removeItem(prefix + path);
+  localStorage.removeItem(prefix + path + ":bookmarks");
+}
+export async function revealNote(root: string, path: string): Promise<void> {
+  return invoke("reveal_note", { root, path });
 }

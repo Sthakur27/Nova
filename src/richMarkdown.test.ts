@@ -1,8 +1,53 @@
 import { it, expect } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { history, undo } from "@codemirror/commands";
-import { formatTransaction, paragraphStyle, formattingKeymap } from "./richMarkdown";
+import { formatTransaction, paragraphStyle, formattingKeymap, indentationKeymap } from "./richMarkdown";
+import { indentUnit, syntaxTree } from "@codemirror/language";
+import { markdown, insertNewlineContinueMarkup } from "@codemirror/lang-markdown";
 import { dictationAnchor, setDictationAnchor } from "./dictation";
+
+it.each(["bullet", "numbered", "task"] as const)("places typing after a new %s marker", action => {
+  let state = formatTransaction(EditorState.create(), action).state;
+  const prefix = state.doc.toString();
+  expect(state.selection.main.head).toBe(prefix.length);
+  state = state.update(state.replaceSelection("hello")).state;
+  expect(state.doc.toString()).toBe(prefix + "hello");
+});
+
+it("keeps the caret and reversed selection on the original list contents", () => {
+  const cursor = formatTransaction(EditorState.create({ doc: "hello", selection: { anchor: 2 } }), "numbered").state;
+  expect(cursor.selection.main.head).toBe(5);
+  const selected = formatTransaction(EditorState.create({ doc: "hello", selection: { anchor: 5, head: 0 } }), "bullet").state;
+  expect(selected.selection.main.anchor).toBe(7);
+  expect(selected.selection.main.head).toBe(2);
+  expect(selected.sliceDoc(selected.selection.main.from, selected.selection.main.to)).toBe("hello");
+});
+
+it("preserves nested indentation when converting list styles", () => {
+  const state = EditorState.create({ doc: "- parent\n    - [x] child", selection: { anchor: 18 } });
+  const numbered = formatTransaction(state, "numbered").state;
+  expect(numbered.doc.toString()).toBe("- parent\n    1. child");
+  expect(formatTransaction(numbered, "bullet").state.doc.toString()).toBe("- parent\n    - child");
+});
+
+it.each(["- ", "1. "])("indents, continues, and outdents %s lists", marker => {
+  const doc = `${marker}parent\n${marker}child`;
+  let state = EditorState.create({ doc, selection: { anchor: doc.length }, extensions: [markdown(), indentUnit.of("    "), history()] });
+  const view = { get state() { return state; }, dispatch: (tr: import("@codemirror/state").Transaction) => { state = tr.state; } } as import("@codemirror/view").EditorView;
+  const tab = indentationKeymap(() => true)[0];
+  expect(tab.run!(view)).toBe(true);
+  expect(state.doc.toString()).toBe(`${marker}parent\n    ${marker}child`);
+  expect(state.selection.main.head).toBe(state.doc.length);
+  const listName = marker === "- " ? "BulletList" : "OrderedList";
+  const tree = syntaxTree(state).toString();
+  expect(tree.split(listName).length - 1).toBe(2);
+  expect(tab.shift!(view)).toBe(true);
+  expect(state.doc.toString()).toBe(doc);
+  tab.run!(view);
+  expect(insertNewlineContinueMarkup(view)).toBe(true);
+  expect(state.doc.toString()).toBe(`${marker}parent\n    ${marker}child\n    ${marker === "- " ? "- " : "2. "}`);
+  expect(indentationKeymap(() => false)[0].run!(view)).toBe(false);
+});
 it("adds and removes bold without rewriting surrounding Markdown", () => {
   let s = EditorState.create({
     doc: "before hello [link](https://example.com)\n",

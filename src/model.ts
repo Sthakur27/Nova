@@ -12,7 +12,10 @@ export type Workspace = {
   name: string;
   root: string;
   files: NoteFile[];
+  starred?: string[];
+  starsError?: string;
   collapsed?: boolean;
+  closedDirectories?: string[];
   error?: string;
 };
 export type DocumentData = {

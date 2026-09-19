@@ -1,4 +1,5 @@
-import { useRef, useState, type PointerEvent } from "react";
+import { createPortal } from "react-dom";
+import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -9,49 +10,42 @@ import {
   FolderOpen,
   GripVertical,
   Plus,
+  Pencil,
   RefreshCw,
   X,
 } from "lucide-react";
 import type { Workspace } from "./model";
-import { reorderFolders } from "./folders";
+import { closedDirectories, reorderFolders } from "./folders";
+function NovaStar({ size }: { size: number }) {
+  return (
+    <svg className="nova-star" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2 14.7 9.3 22 12 14.7 14.7 12 22 9.3 14.7 2 12 9.3 9.3Z" />
+    </svg>
+  );
+}
 function FileTree({
   paths,
   active,
   onOpen,
   onRename,
+  onContextMenu,
+  starred,
+  onStar,
   prefix = "",
+  closed,
+  onToggle,
 }: {
   paths: string[];
   active: string;
-  onOpen: (path: string, pinned?: boolean) => void;
-  onRename: (path: string, name: string) => Promise<void>;
+  onOpen: (path: string) => void;
+  onRename: (path: string) => void;
+  onContextMenu: (event: MouseEvent, path: string) => void;
+  starred: Set<string>;
+  onStar: (path: string, starred: boolean) => void;
   prefix?: string;
+  closed: Set<string>;
+  onToggle: (path: string) => void;
 }) {
-  const [renaming, setRenaming] = useState<string | null>(null);
-  const [draft, setDraft] = useState("");
-  const [renameError, setRenameError] = useState("");
-  const [renameBusy, setRenameBusy] = useState(false);
-  const renamePath = useRef<string | null>(null);
-  const saveRename = async (path: string) => {
-    if (renamePath.current !== path) return;
-    renamePath.current = null;
-    if (draft === path.slice(prefix.length)) {
-      setRenaming(null);
-      return;
-    }
-    setRenameBusy(true);
-    setRenameError("");
-    try {
-      await onRename(path, draft);
-      setRenaming(null);
-    } catch (error) {
-      renamePath.current = path;
-      setRenameError(String(error));
-    } finally {
-      setRenameBusy(false);
-    }
-  };
-  const [closed, setClosed] = useState<Set<string>>(new Set());
   const groups = new Map<string, string[]>(),
     files: string[] = [];
   for (const path of paths) {
@@ -72,17 +66,10 @@ function FileTree({
           <div key={name}>
             <button
               className="tree-row folder-row"
-              aria-expanded={!closed.has(name)}
-              onClick={() =>
-                setClosed((old) => {
-                  const next = new Set(old);
-                  if (next.has(name)) next.delete(name);
-                  else next.add(name);
-                  return next;
-                })
-              }
+              aria-expanded={!closed.has(prefix + name)}
+              onClick={() => onToggle(prefix + name)}
             >
-              {closed.has(name) ? (
+              {closed.has(prefix + name) ? (
                 <ChevronRight size={13} />
               ) : (
                 <ChevronDown size={13} />
@@ -90,45 +77,54 @@ function FileTree({
               <Folder size={14} />
               <span>{name}</span>
             </button>
-            {!closed.has(name) && (
+            {!closed.has(prefix + name) && (
               <div className="tree-children">
                 <FileTree
+                  closed={closed}
+                  onToggle={onToggle}
                   paths={children}
                   active={active}
                   onOpen={onOpen}
                   onRename={onRename}
+                  onContextMenu={onContextMenu}
+                  starred={starred}
+                  onStar={onStar}
                   prefix={prefix + name + "/"}
                 />
               </div>
             )}
           </div>
         ))}
-      {files.sort().map((path) => renaming === path ? (
-        <form key={path} className={"tree-row file-row file-rename " + (path === active ? "active" : "")} onSubmit={(event) => {
-          event.preventDefault();
-          void saveRename(path);
-        }}>
-          <FileText size={14} />
-          <input autoFocus aria-label={`Rename ${path}`} value={draft} readOnly={renameBusy}
-            onFocus={event => event.currentTarget.setSelectionRange(0, Math.max(0, draft.lastIndexOf(".")) || draft.length)}
-            onChange={event => setDraft(event.target.value)}
-            onBlur={() => { void saveRename(path); }}
-            onKeyDown={event => { if (event.key === "Escape" && !renameBusy) { event.preventDefault(); renamePath.current = null; setRenaming(null); } }} />
-          {path === active && <span className="active-dot" />}
-          {renameError && <small role="alert">{renameError}</small>}
-        </form>
-      ) : (
-        <button
-          key={path}
-          title={path}
-          className={"tree-row file-row " + (path === active ? "active" : "")}
-          onClick={() => onOpen(path)}
-          onDoubleClick={() => { if (renameBusy) return; renamePath.current = path; setRenaming(path); setDraft(path.slice(prefix.length)); setRenameError(""); }}
-        >
-          <FileText size={14} />
-          <span>{path.slice(prefix.length)}</span>
-          {path === active && <span className="active-dot" />}
-        </button>
+      {files.sort().map((path) => (
+        <div key={path} onContextMenu={event => onContextMenu(event, path)} className={"tree-row file-row " + (path === active ? "active" : "")}>
+          <button
+            className="file-open"
+            title={path}
+            onClick={event => { if (event.detail === 0) onOpen(path); }}
+            onDoubleClick={() => onOpen(path)}
+          >
+            <FileText size={14} />
+            <span>{path.slice(prefix.length)}</span>
+            {path === active && <span className="active-dot" />}
+          </button>
+          <button
+            className="icon-button file-star"
+            aria-label={`${starred.has(path) ? "Unstar" : "Star"} ${path}`}
+            title={starred.has(path) ? "Unstar file" : "Star file"}
+            aria-pressed={starred.has(path)}
+            onClick={() => onStar(path, !starred.has(path))}
+          >
+            <NovaStar size={15} />
+          </button>
+          <button
+            className="icon-button file-edit"
+            aria-label={`Rename ${path}`}
+            title="Rename file"
+            onClick={() => onRename(path)}
+          >
+            <Pencil size={14} />
+          </button>
+        </div>
       ))}
     </>
   );
@@ -137,8 +133,10 @@ type Props = {
   folders: Workspace[];
   activeRoot: string;
   activePath: string;
-  onOpen: (folder: Workspace, path: string, pinned?: boolean) => void;
-  onRename: (folder: Workspace, path: string, name: string) => Promise<void>;
+  onOpen: (folder: Workspace, path: string) => void;
+  onRename: (folder: Workspace, path: string) => void;
+  onStar: (folder: Workspace, path: string, starred: boolean) => void;
+  onFileAction: (folder: Workspace, path: string, action: "move" | "delete" | "reveal") => void;
   onChange: (folders: Workspace[]) => void;
   onRemove: (root: string) => void;
   onRefresh: (root: string) => void;
@@ -151,12 +149,28 @@ export default function Explorer({
   activePath,
   onOpen,
   onRename,
+  onStar,
   onChange,
+  onFileAction,
   onRemove,
   onRefresh,
   onAdd,
   externalDrag,
 }: Props) {
+  const [menu, setMenu] = useState<{ folder: Workspace; path: string; x: number; y: number; trigger: HTMLElement } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menu) return;
+    menuRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    const close = () => setMenu(null);
+    const outside = (event: globalThis.PointerEvent) => { if (!menuRef.current?.contains(event.target as Node)) close(); };
+    window.addEventListener("pointerdown", outside);
+    window.addEventListener("resize", close);
+    window.addEventListener("blur", close);
+    window.addEventListener("scroll", close, true);
+    return () => { window.removeEventListener("pointerdown", outside); window.removeEventListener("resize", close); window.removeEventListener("blur", close); window.removeEventListener("scroll", close, true); };
+  }, [menu]);
+  const [starredOnly, setStarredOnly] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null),
     [target, setTarget] = useState<string | null>(null),
     [announcement, setAnnouncement] = useState("");
@@ -198,6 +212,16 @@ export default function Explorer({
         <span>
           EXPLORER <span className="explorer-count">{folders.length}</span>
         </span>
+        <div className="explorer-actions">
+        <button
+          className="icon-button stars-toggle"
+          onClick={() => setStarredOnly(value => !value)}
+          title={starredOnly ? "Show all files" : "Show starred files only"}
+          aria-label="Show starred files only"
+          aria-pressed={starredOnly}
+        >
+          <NovaStar size={17} />
+        </button>
         <button
           className="icon-button"
           onClick={onAdd}
@@ -206,6 +230,7 @@ export default function Explorer({
         >
           <Plus size={16} />
         </button>
+        </div>
       </div>
       <nav
         className={
@@ -213,7 +238,12 @@ export default function Explorer({
         }
         aria-label="Folders and files"
       >
-        {folders.map((folder, index) => (
+        {folders.map((folder, index) => {
+          const starred = new Set(folder.starred ?? []);
+          const collapsed = folder.collapsed ?? true;
+          const closed = closedDirectories(folder);
+          const files = folder.files.filter(file => !starredOnly || starred.has(file.path));
+          return (
           <section
             key={folder.root}
             data-folder-root={folder.root}
@@ -253,18 +283,18 @@ export default function Explorer({
                 className="root-title"
                 title={folder.root === "demo" ? "Sample notes" : folder.root}
                 aria-label={`${folder.name} folder`}
-                aria-expanded={!folder.collapsed}
+                aria-expanded={!collapsed}
                 onClick={() =>
                   onChange(
                     folders.map((f) =>
                       f.root === folder.root
-                        ? { ...f, collapsed: !f.collapsed }
+                        ? { ...f, collapsed: !(f.collapsed ?? true) }
                         : f,
                     ),
                   )
                 }
               >
-                {folder.collapsed ? (
+                {collapsed ? (
                   <ChevronRight size={13} />
                 ) : (
                   <ChevronDown size={13} />
@@ -305,8 +335,9 @@ export default function Explorer({
                 </div>
               </details>
             </div>
-            {!folder.collapsed && (
+            {!collapsed && (
               <div className="root-files">
+                {folder.starsError && <p className="folder-error">{folder.starsError}</p>}
                 {folder.error ? (
                   <div className="folder-error">
                     <span>Folder unavailable</span>
@@ -314,20 +345,29 @@ export default function Explorer({
                       Retry
                     </button>
                   </div>
-                ) : folder.files.length ? (
+                ) : files.length ? (
                   <FileTree
-                    paths={folder.files.map((f) => f.path)}
+                    closed={new Set(closed)}
+                    onToggle={path => onChange(folders.map(f => f.root !== folder.root ? f : {
+                      ...f, closedDirectories: closed.includes(path)
+                        ? closed.filter(p => p !== path)
+                        : [...closed, path],
+                    }))}
+                    paths={files.map((f) => f.path)}
                     active={folder.root === activeRoot ? activePath : ""}
-                    onOpen={(path, pinned) => onOpen(folder, path, pinned)}
-                    onRename={(path, name) => onRename(folder, path, name)}
+                    onOpen={(path) => onOpen(folder, path)}
+                    onRename={(path) => onRename(folder, path)}
+                    onContextMenu={(event, path) => { event.preventDefault(); const trigger = event.currentTarget.querySelector<HTMLElement>(".file-open")!; const rect = trigger.getBoundingClientRect(); setMenu({ folder, path, trigger, x: Math.max(8, Math.min(event.clientX || rect.left, window.innerWidth - 228)), y: Math.max(8, Math.min(event.clientY || rect.bottom, window.innerHeight - 170)) }); }}
+                    starred={starred}
+                    onStar={(path, value) => onStar(folder, path, value)}
                   />
                 ) : (
-                  <p className="folder-empty">No text or Markdown files.</p>
+                  <p className="folder-empty">{starredOnly ? "No starred files in this folder." : "No text or Markdown files."}</p>
                 )}
               </div>
             )}
           </section>
-        ))}
+        );})}
         {!folders.length && (
           <div className="explorer-empty">
             <FolderOpen size={24} />
@@ -339,6 +379,18 @@ export default function Explorer({
           <div className="folder-drop-message">Drop folders to add them</div>
         )}
       </nav>
+      {menu && createPortal(<div ref={menuRef} className="file-context-menu" role="menu" aria-label={`Actions for ${menu.path}`} style={{ left: menu.x, top: menu.y }} onKeyDown={event => {
+        event.stopPropagation();
+        const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
+        const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+        if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) { event.preventDefault(); buttons[event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length]?.focus(); }
+        if (event.key === "Escape" || event.key === "Tab") { event.preventDefault(); menu.trigger.focus(); setMenu(null); }
+      }}>
+        <button role="menuitem" onClick={() => { menu.trigger.focus(); setMenu(null); onRename(menu.folder, menu.path); }}>Rename…</button>
+        <button role="menuitem" onClick={() => { menu.trigger.focus(); setMenu(null); onFileAction(menu.folder, menu.path, "move"); }}>Move…</button>
+        <button role="menuitem" disabled={menu.folder.root === "demo"} title={menu.folder.root === "demo" ? "Sample notes have no file location" : undefined} onClick={() => { menu.trigger.focus(); setMenu(null); onFileAction(menu.folder, menu.path, "reveal"); }}>Open in File Location</button>
+        <button role="menuitem" className="danger" onClick={() => { menu.trigger.focus(); setMenu(null); onFileAction(menu.folder, menu.path, "delete"); }}>Delete…</button>
+      </div>, document.body)}
       <span role="status" className="sr-only">
         {announcement}
       </span>

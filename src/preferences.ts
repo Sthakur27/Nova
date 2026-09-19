@@ -7,7 +7,7 @@ export function usePreference<T extends string | boolean>(key: string, fallback:
       const stored = localStorage.getItem(`nova:${key}:v1`);
       if (typeof fallback === "boolean")
         return (stored === "on" ? true : stored === "off" ? false : fallback) as T;
-      return stored !== null && allowed?.includes(stored as T) ? stored as T : fallback;
+      return stored !== null && (!allowed || allowed.includes(stored as T)) ? stored as T : fallback;
     } catch { return fallback; }
   });
   const [error, setError] = useState(false);

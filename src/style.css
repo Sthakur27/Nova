@@ -302,6 +302,9 @@ kbd {
 .tab-bar-space {
   flex: 1;
 }
+.new-tab-button {
+  margin-left: 12px;
+}
 .dirty-dot {
   height: 6px;
   width: 6px;
@@ -1447,16 +1450,14 @@ kbd {
 .preview-tab > [role="tab"] > span {
   font-style: italic;
 }
-.note-tab .tab-close,
-.note-tab .tab-pin {
+.note-tab .tab-close {
   padding: 5px;
   display: flex;
   align-items: center;
   border-radius: 4px;
   margin-right: 4px;
 }
-.note-tab .tab-close:hover,
-.note-tab .tab-pin:hover {
+.note-tab .tab-close:hover {
   background: #ffffff15;
 }
 .note-tab button:focus-visible {
@@ -1657,8 +1658,8 @@ kbd {
 .settings-switch > span { display: grid; place-items: center; width: 14px; height: 14px; border-radius: 50%; background: #d9d5e2; color: #604b80; transition: transform .15s; }
 .settings-switch[aria-checked="true"] { background: #ad8dd4; }
 .settings-switch[aria-checked="true"] > span { transform: translateX(14px); background: #fff; }
-.settings-row select { font: inherit; font-size: 12px; color: #dedbe5; background: #292831; border: 1px solid #ffffff16; border-radius: 6px; padding: 7px 9px; }
-.settings-row select:focus-visible { outline: 2px solid #bda0ed; outline-offset: 3px; }
+.settings-row select, .settings-row input { font: inherit; font-size: 12px; color: #dedbe5; background: #292831; border: 1px solid #ffffff16; border-radius: 6px; padding: 7px 9px; }
+.settings-row select:focus-visible, .settings-row input:focus-visible { outline: 2px solid #bda0ed; outline-offset: 3px; }
 .settings-footer { display: flex; align-items: center; gap: 16px; justify-content: space-between; padding: 17px 28px; border-top: 1px solid #ffffff0a; color: #92909e; font-size: 10px; }
 .settings-footer button { background: #b598da20; border: 1px solid #b598da25; border-radius: 6px; padding: 7px 18px; color: #d7c1f1; font-size: 12px; }
 .app-shell[data-editor-size="small"] { --editor-font-size: 12px; --editor-visual-size: 13px; }
@@ -1732,9 +1733,6 @@ kbd {
   height: 36px;
 }
 
-.file-rename { flex-wrap: wrap; }
-.file-rename input { min-width: 0; flex: 1; width: 80px; color: inherit; background: var(--bg); border: 0; outline: 1px solid currentColor; border-radius: 2px; padding: 0; font: inherit; }
-.file-rename small { width: 100%; color: #f99; }
 
 .panel-toggle-bottom {
   top: -8px;
@@ -1880,3 +1878,80 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
   .panel-resizer::after { transition: none; }
 }
+
+.rename-dialog {
+  width: min(480px, calc(100vw - 40px)); max-height: calc(100dvh - 48px);
+  padding: 28px; border: 1px solid #b69bd52c; border-radius: 16px;
+  background: #1d1d23; color: #dedbe5; box-shadow: 0 28px 100px #0009;
+}
+.rename-dialog::backdrop { background: #09090c99; backdrop-filter: blur(5px); }
+.rename-dialog h2 { margin: 12px 0 24px; font-size: 21px; font-weight: 550; letter-spacing: -.5px; }
+.rename-fields { display: grid; grid-template-columns: minmax(0, 1fr) 100px; gap: 12px; }
+.rename-fields label { display: flex; flex-direction: column; gap: 9px; font-size: 12px; color: #b5aebf; min-width: 0; }
+.rename-fields input { width: 100%; min-width: 0; padding: 11px 12px; border: 1px solid #ffffff20; border-radius: 7px; background: #15151b; color: #dedbe5; font: inherit; font-size: 13px; }
+.rename-fields input:focus { outline: 2px solid #b598da; outline-offset: 2px; }
+.rename-path { margin: 20px 0 26px; font-size: 11px; color: #92909e; }
+.rename-path > span { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
+.rename-path p { margin: 7px 0 0; line-height: 1.6; overflow-wrap: anywhere; }
+.rename-error { color: #f99; font-size: 12px; line-height: 1.5; }
+.rename-dialog button:disabled { opacity: .5; cursor: default; }
+
+.explorer-actions { display: flex; gap: 3px; }
+.file-row { padding-top: 0; padding-bottom: 0; gap: 3px; }
+.file-open { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; min-height: 34px; text-align: left; color: inherit; }
+.file-open > svg { flex-shrink: 0; color: #686a78; }
+.file-open span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-star, .file-edit { opacity: 0; }
+.file-row:hover .file-star, .file-row:focus-within .file-star, .file-row:hover .file-edit, .file-row:focus-within .file-edit, .file-star[aria-pressed="true"] { opacity: 1; }
+.file-star, .stars-toggle { color: #9582ae; }
+.nova-star { fill: transparent; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: miter; }
+.file-star:hover, .stars-toggle:hover { color: #dfcaff; background: #b58aff12; }
+.file-star[aria-pressed="true"], .stars-toggle[aria-pressed="true"] { color: #cfacff; }
+.file-star[aria-pressed="true"] .nova-star,
+.stars-toggle[aria-pressed="true"] .nova-star {
+  fill: #b580ff30;
+  filter: drop-shadow(0 0 3px #b580ff99);
+}
+.stars-toggle[aria-pressed="true"] {
+  background: radial-gradient(ellipse at center, #b580ff25, #b580ff08);
+  box-shadow: inset 0 0 0 1px #c39aff30, 0 0 10px #a36aff12;
+}
+.file-star:focus-visible, .stars-toggle:focus-visible { outline: 1px solid #cfacff; outline-offset: 2px; }
+@media (hover: none) { .file-star, .file-edit { opacity: 1; } }
+
+.file-context-menu { position: fixed; z-index: 150; width: 220px; padding: 5px; border: 1px solid #ffffff20; border-radius: 8px; background: #242329; box-shadow: 0 8px 28px #0008; }
+.file-context-menu button { display: block; width: 100%; padding: 8px 10px; border: 0; border-radius: 4px; text-align: left; background: transparent; color: #ded7e9; font: inherit; font-size: 12px; }
+.file-context-menu button:hover, .file-context-menu button:focus-visible { background: #ffffff12; outline: none; }
+.file-context-menu button:disabled { opacity: .4; }
+.file-context-menu .danger { color: #f0a0a0; }
+
+.file-move-fields { grid-template-columns: minmax(0, 1fr); margin-top: 20px; }
+
+.settings-row input { width: 110px; flex-shrink: 0; }
+
+/* In-note find uses the same quiet surfaces and lavender accents as the toolbar. */
+.cm-editor .cm-panels { background: #18191c; color: #d7d6dc; }
+.cm-editor .cm-panels-top { border-bottom: 1px solid #ffffff0d; }
+.nova-find { padding: 12px 18px 10px; font: 12px "DM Sans", sans-serif; }
+.nova-find-row { display: flex; align-items: center; gap: 4px; }
+.nova-find-field { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; padding: 0 10px; height: 34px; background: #ffffff04; border: 1px solid #ffffff12; border-radius: 7px; }
+.nova-find-field:focus-within { border-color: #bda0ed70; box-shadow: 0 0 0 2px #bda0ed0a; }
+.nova-find svg { display: block; width: 16px; height: 16px; }
+.nova-find-field > span:first-child { color: #91879e; }
+.nova-find input { min-width: 0; color: #e0dbe7; background: transparent; border: 0; font: inherit; }
+.nova-find-field input { flex: 1; width: 100%; height: 100%; outline: none; }
+.nova-find input::placeholder { color: #77727f; }
+.nova-find-count { flex-shrink: 0; color: #a99db8; font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.nova-find button { border: 1px solid transparent; border-radius: 6px; font: inherit; color: #a59bac; }
+.nova-find-row > button { display: grid; place-items: center; width: 30px; height: 30px; flex-shrink: 0; }
+.nova-find button:hover:not(:disabled) { color: #e5d6f7; background: #bda0ed12; }
+.nova-find-details { margin-top: 8px; }
+.nova-find-details summary { width: fit-content; color: #8c8397; cursor: pointer; font-size: 11px; border-radius: 3px; }
+.nova-find-details summary:hover { color: #c9bbda; }
+.nova-find-details summary:focus-visible { outline: 2px solid #bda0ed; outline-offset: 3px; }
+.nova-find-options, .nova-find-replace { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+.nova-find-options button, .nova-find-replace button { padding: 5px 9px; }
+.nova-find-options button[aria-pressed="true"] { background: #b497dc18; border-color: #b497dc38; color: #d7c2f2; }
+.nova-find-replace input { flex: 1; height: 32px; padding: 0 10px; border: 1px solid #ffffff12; border-radius: 6px; }
+.cm-editor .cm-searchMatch { background: #bda0ed24; outline: 1px solid #bda0ed35; }
+.cm-editor .cm-searchMatch-selected { background: #bda0ed55; outline: 1px solid #cfb3f5; }

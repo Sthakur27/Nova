@@ -3,6 +3,28 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { buildReadPages, pageForLine } from "./readPages";
 import Markdown from "./Markdown";
 
+it("renders indented numbered items on separate lines in both read paths", () => {
+  const text = "- test\n- test\n- test\n    - test\n1. test\n    2. **two**\n    3. test\n    4. test";
+  const direct = renderToStaticMarkup(<Markdown text={text} />);
+  const paged = renderToStaticMarkup(<Markdown tree={buildReadPages(text, true)[0].tree} />);
+  expect(direct).toBe(paged);
+  expect(direct.match(/<li /g)).toHaveLength(8);
+  expect(direct).toContain('<ol start="2">');
+  expect(direct).toContain('<li data-line="6"><strong>two</strong></li>');
+  expect(direct).toContain('<li data-line="8">test</li>');
+});
+
+it("preserves multi-digit nested starts and leaves prose and code alone", () => {
+  const text = "1. parent\n    12. child\n    13. next\n\nProse\n2026. a year\n\n```\n1. parent\n    2. code\n```\n\n1. `inline\n    2. code`\n\n1. parent\n\n       2. indented code";
+  const direct = renderToStaticMarkup(<Markdown text={text} />);
+  expect(direct).toBe(renderToStaticMarkup(<Markdown tree={buildReadPages(text, true)[0].tree} />));
+  expect(direct).toContain('<ol start="12">');
+  expect(direct).toContain('Prose\n2026. a year');
+  expect(direct).toContain('1. parent\n    2. code');
+  expect(direct).toContain('<code>inline  2. code</code>');
+  expect(direct).toContain('2. indented code');
+});
+
 it("reads Markdown beyond the former limit without losing the ending", () => {
   const text = "# Section\n\nA paragraph with **formatting**.\n\n".repeat(13_000) + "Final sentence.";
   expect(text.length).toBeGreaterThan(500_000);

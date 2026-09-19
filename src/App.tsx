@@ -1,3 +1,4 @@
+import { loadDraft, storeDraft, clearDraft, moveDraft } from "./drafts";
 import Settings from "./Settings";
 import SidePanelControls from "./SidePanelControls";
 import TextWidthControl, { textWidths, type TextWidth } from "./TextWidthControl";
@@ -42,6 +43,8 @@ import { listen } from "@tauri-apps/api/event";
 import Editor, { type EditorHandle, type EditorSnapshot } from "./Editor";
 import Palette from "./Palette";
 import Explorer from "./Explorer";
+import FileActionDialog from "./FileActionDialog";
+import RenameDialog from "./RenameDialog";
 import FormatToolbar from "./FormatToolbar";
 import type { FormatAction } from "./richMarkdown";
 import { addFolders, type EditorMode } from "./folders";
@@ -52,6 +55,11 @@ import {
   chooseWorkspaces,
   createNote,
   renameNote,
+  moveNote,
+  deleteNote,
+  discardEmptyUntitled,
+  revealNote,
+  setFileStar,
   loadFolders,
   loadExplorer,
   saveExplorer,
@@ -82,8 +90,19 @@ function BlackHoleIcon() {
   );
 }
 
+async function readRecoverableNote(root: string, path: string) {
+  const draft = await loadDraft(root, path);
+  // Retain the original revision so Save still detects external changes.
+  return { note: draft ?? await readNote(root, path), recovered: !!draft };
+}
+
 export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [defaultExtension, setDefaultExtension, extensionError] = usePreference<string>("default-extension", ".txt");
+  const starQueue = useRef(Promise.resolve());
+  const createdNotes = useRef(new Map<string, { root: string; path: string }>());
+  const [fileAction, setFileAction] = useState<{ folder: Workspace; path: string; action: "move" | "delete" } | null>(null);
+  const [renameTarget, setRenameTarget] = useState<{ folder: Workspace; path: string } | null>(null);
   const [readControls, setReadControls] = useState<HTMLDivElement | null>(null);
   const [galaxyMode, setGalaxyMode, galaxyError] = usePreference<boolean>("galaxy", true);
   const [plasmaEnabled, setPlasmaEnabled, plasmaError] = usePreference<boolean>("plasma", true);
@@ -123,8 +142,11 @@ export default function App() {
       if (!next.some((t) => tabId(t) === key)) snapshots.current.delete(key);
   }, []);
   const pin = useCallback(
-    (root: string, path: string) =>
-      updateTabs(pinTab(tabsRef.current, tabId({ root, path }))),
+    (root: string, path: string) => {
+      const id = tabId({ root, path });
+      if (tabsRef.current.some(t => tabId(t) === id && !t.pinned))
+        updateTabs(pinTab(tabsRef.current, id));
+    },
     [updateTabs],
   );
   const [folders, setFolders] = useState<Workspace[]>([demoWorkspace]);
@@ -137,6 +159,9 @@ export default function App() {
   const marksRef = useRef<Bookmark[]>([]);
   const [dirty, setDirty] = useState(false);
   const dirtyRef = useRef(false);
+  const [draftStatus, setDraftStatus] = useState<"saving" | "saved" | "error">("saved");
+  const draftWrite = useRef(0);
+  const draftFailed = useRef(false);
   const [mode, setMode] = useState<EditorMode>("edit");
   const [preview, setPreview] = useState("");
   const [searchScope,setSearchScope]=useState<SearchScope>("everywhere");
@@ -228,10 +253,34 @@ export default function App() {
     marksRef.current = marks;
     setBookmarks(marks);
   }, []);
+  const preserveDraft = useCallback(async (): Promise<boolean> => {
+    const c = current.current;
+    if (!c.hasDocument || !editor.current || !dirtyRef.current) return true;
+    const write = ++draftWrite.current;
+    setDraftStatus("saving");
+    try {
+      await storeDraft(c.workspace.root, c.path, {
+        text: editor.current.text(), revision: revision.current, bookmarks: marksRef.current,
+      });
+      if (write === draftWrite.current) {
+        draftFailed.current = false;
+        setDraftStatus("saved");
+      }
+      return true;
+    } catch (error) {
+      if (write === draftWrite.current) {
+        draftFailed.current = true;
+        setDraftStatus("error");
+      }
+      setNotice(`Unable to preserve your draft. Save before closing: ${String(error)}`);
+      return false;
+    }
+  }, []);
   const changed = useCallback(() => {
     pin(current.current.workspace.root, current.current.path);
     dirtyRef.current = true;
     setDirty(true);
+    // The editor immediately supplies the updated anchors via onBookmarks.
   }, [pin]);
   useEffect(() => {
     let cancelled = false;
@@ -245,25 +294,33 @@ export default function App() {
         setFolders(restored);
         const mode = prefs?.mode ?? "edit";
         setMode(mode);
+        const restoredTabs = prefs?.tabs ?? [];
+        updateTabs(restoredTabs);
         const candidates: { folder: Workspace; path: string }[] = [];
         const active = restored.find(
           (f) => f.root === prefs?.active?.root && !f.error,
         );
         if (active && prefs?.active)
           candidates.push({ folder: active, path: prefs.active.path });
-        for (const folder of restored)
+        for (const tab of restoredTabs) {
+          const folder = restored.find(f => f.root === tab.root);
+          if (folder) candidates.push({ folder, path: tab.path });
+        }
+        for (const folder of prefs?.tabs ? [] : restored)
           if (!folder.error && folder.files.length)
             candidates.push({ folder, path: folder.files[0].path });
         let opened = false;
         for (const candidate of candidates) {
           try {
-            const note = await readNote(candidate.folder.root, candidate.path);
+            const { note, recovered } = await readRecoverableNote(candidate.folder.root, candidate.path);
+            dirtyRef.current = recovered;
+            setDirty(recovered);
             if (cancelled) return;
             revision.current = note.revision;
             setWorkspace(candidate.folder);
             setPath(candidate.path);
             setData(note);
-            updateTabs([
+            updateTabs(restoredTabs.length ? restoredTabs : [
               {
                 root: candidate.folder.root,
                 path: candidate.path,
@@ -306,15 +363,17 @@ export default function App() {
   useEffect(() => {
     if (!foldersReady) return;
     void saveExplorer({
-      folders: folders.map(({ root, name, collapsed }) => ({
+      folders: folders.map(({ root, name, collapsed, closedDirectories }) => ({
         root,
         name,
         collapsed,
+        closedDirectories,
       })),
       active: data ? { root: workspace.root, path } : null,
       mode,
+      tabs,
     }).catch((error) => setNotice(String(error)));
-  }, [foldersReady, folders, workspace.root, path, mode, !!data]);
+  }, [foldersReady, folders, workspace.root, path, mode, !!data, tabs]);
   const save = useCallback(async (): Promise<boolean> => {
     if (saveInFlight.current) return saveInFlight.current;
     const run = async () => {
@@ -322,15 +381,17 @@ export default function App() {
         try {
           const c = current.current;
           await saveExplorer({
-            folders: c.folders.map(({ root, name, collapsed }) => ({
+            folders: c.folders.map(({ root, name, collapsed, closedDirectories }) => ({
               root,
               name,
               collapsed,
+              closedDirectories,
             })),
             active: c.hasDocument
               ? { root: c.workspace.root, path: c.path }
               : null,
             mode: c.mode,
+            tabs: tabsRef.current,
           });
         } catch (error) {
           setNotice(String(error));
@@ -352,9 +413,13 @@ export default function App() {
           );
         await saveBookmarks(ws.root, file, marks);
         if (editor.current?.text() === text) {
-          dirtyRef.current = false;
-          setDirty(false);
-        }
+          await clearDraft(ws.root, file);
+          if (editor.current?.text() === text && marksRef.current === marks) {
+            dirtyRef.current = false;
+            draftFailed.current = false;
+            setDirty(false);
+          } else { await preserveDraft(); }
+        } else { await preserveDraft(); }
         return true;
       } catch (e) {
         setNotice(String(e));
@@ -369,7 +434,7 @@ export default function App() {
     } finally {
       saveInFlight.current = null;
     }
-  }, []);
+  }, [preserveDraft]);
   const jump = useCallback((from: number, to = from) => {
     editor.current?.jump(from, to);
     const text = editor.current?.text() ?? "";
@@ -418,19 +483,13 @@ export default function App() {
         setNotice("Finish or cancel voice typing before switching files.");
         return false;
       }
-      if (operation.current) return false;
+      if (operation.current || saveInFlight.current) return false;
       operation.current = true;
       try {
-        if (!(await save())) return false;
-        if (dirtyRef.current) {
-          setNotice(
-            "The note changed while saving. Save again before switching files.",
-          );
-          return false;
-        }
+        if (!(await preserveDraft())) return false;
         setLoading(true);
         const ws = nextWorkspace ?? current.current.workspace;
-        const note = await readNote(ws.root, nextPath);
+        const { note, recovered } = await readRecoverableNote(ws.root, nextPath);
         const old = current.current;
         if (editor.current && old.hasDocument)
           snapshots.current.set(
@@ -456,6 +515,8 @@ export default function App() {
           }),
         );
         pendingPins.current.delete(id);
+        dirtyRef.current = recovered;
+        setDirty(recovered);
         revision.current = note.revision;
         setWorkspace(ws);
         setPath(nextPath);
@@ -496,7 +557,7 @@ export default function App() {
         operation.current = false;
       }
     },
-    [applyMarks, jump, save, pin, updateTabs],
+    [applyMarks, jump, preserveDraft, pin, updateTabs],
   );
   const newTab = useCallback(async () => {
     if (!current.current.foldersReady || operation.current || voiceBusy.current) return;
@@ -504,27 +565,34 @@ export default function App() {
     let nextPath: string | undefined;
     let folder: Workspace | undefined;
     try {
-      if (!(await save()) || dirtyRef.current) return;
+      if (!(await preserveDraft())) return;
       folder = current.current.folders.find(f => f.root === current.current.workspace.root && !f.error)
         ?? current.current.folders.find(f => !f.error);
       if (!folder) throw new Error("Add a folder before creating a note.");
-      nextPath = await createNote(folder.root);
+      nextPath = await createNote(folder.root, defaultExtension);
+      const created = { root: folder.root, path: nextPath };
+      createdNotes.current.set(tabId(created), created);
       folder = { ...folder, ...(await openWorkspace(folder.root)), collapsed: false };
       setFolders(old => old.map(f => f.root === folder!.root ? folder! : f));
     } catch (error) { setNotice(String(error)); }
     finally { operation.current = false; }
     if (nextPath && folder) {
-      if (await openNote(nextPath, undefined, folder, undefined, true)) setMode("edit");
+      if (await openNote(nextPath, undefined, folder, undefined, true))
+        setMode(/\.(md|markdown|mdx)$/i.test(nextPath) ? "edit" : "source");
     }
-  }, [save, openNote]);
-  const renameFile = async (folder: Workspace, oldPath: string, name: string) => {
-    if (operation.current || voiceBusy.current) throw new Error("Finish the current operation before renaming.");
+  }, [preserveDraft, openNote, defaultExtension]);
+  const renameFile = async (folder: Workspace, oldPath: string, name: string, moving = false) => {
+    if (operation.current || saveInFlight.current || voiceBusy.current) throw new Error("Finish the current operation before renaming.");
     operation.current = true;
     try {
-      if (!(await save()) || dirtyRef.current) throw new Error("Save your changes before renaming.");
-      const nextPath = await renameNote(folder.root, oldPath, name);
-      const updated = { ...folder, files: folder.files.map(f => f.path === oldPath ? { path: nextPath, name } : f) };
-      setFolders(old => old.map(f => f.root === folder.root ? { ...f, files: updated.files } : f));
+      if (!(await preserveDraft())) throw new Error("Could not preserve your draft before renaming.");
+      await starQueue.current;
+      const nextPath = await (moving ? moveNote(folder.root, oldPath, name) : renameNote(folder.root, oldPath, name));
+      await moveDraft(folder.root, oldPath, nextPath);
+      if (nextPath !== oldPath) createdNotes.current.delete(tabId({ root: folder.root, path: oldPath }));
+      name = nextPath.split("/").at(-1)!;
+      const updated = { ...folder, starred: (folder.starred ?? []).map(p => p === oldPath ? nextPath : p), files: folder.files.map(f => f.path === oldPath ? { path: nextPath, name } : f) };
+      setFolders(old => old.map(f => f.root === folder.root ? { ...f, files: updated.files, starred: (f.starred ?? []).map(p => p === oldPath ? nextPath : p) } : f));
       const oldId = tabId({ root: folder.root, path: oldPath });
       const cached = snapshots.current.get(oldId);
       if (cached) snapshots.current.set(tabId({ root: folder.root, path: nextPath }), cached);
@@ -539,7 +607,22 @@ export default function App() {
       }
     } finally { operation.current = false; }
   };
+  const discardCreatedNote = useCallback(async (note: { root: string; path: string }) => {
+    const id = tabId(note);
+    if (!createdNotes.current.has(id) || await loadDraft(note.root, note.path)) return;
+    await starQueue.current;
+    if (await discardEmptyUntitled(note.root, note.path)) {
+      const withoutNote = (folder: Workspace): Workspace => folder.root === note.root
+        ? { ...folder, files: folder.files.filter(file => file.path !== note.path), starred: folder.starred?.filter(path => path !== note.path) }
+        : folder;
+      setFolders(folders => folders.map(withoutNote));
+      setWorkspace(withoutNote);
+      snapshots.current.delete(id);
+    }
+    createdNotes.current.delete(id);
+  }, []);
   const closeTab = async (tab: NoteTab) => {
+    if (saveInFlight.current) return;
     if (voiceBusy.current || operation.current) {
       setNotice("Finish the current operation before closing a tab.");
       return;
@@ -568,7 +651,7 @@ export default function App() {
         if (!folder || !(await openNote(neighbor.path, undefined, folder)))
           return;
       } else {
-        if (!(await save()) || dirtyRef.current) return;
+        if (!(await preserveDraft())) return;
         setData(null);
         setPath("");
         applyMarks([]);
@@ -576,6 +659,10 @@ export default function App() {
       }
     }
     updateTabs(next);
+    operation.current = true;
+    try { await discardCreatedNote(tab); }
+    catch (error) { setNotice(`Could not clean up empty note: ${String(error)}`); }
+    finally { operation.current = false; }
   };
   const changeFolders = (next: Workspace[]) => {
     if (current.current.foldersReady) setFolders(next);
@@ -604,12 +691,22 @@ export default function App() {
       setNotice(String(error));
     }
   };
+  const starFile = (folder: Workspace, path: string, starred: boolean) => {
+    if (operation.current || saveInFlight.current) return;
+    starQueue.current = starQueue.current.catch(() => {}).then(async () => {
+      try {
+        const stars = await setFileStar(folder.root, path, starred);
+        setFolders(old => old.map(f => f.root === folder.root ? { ...f, starred: stars, starsError: undefined } : f));
+      } catch (error) { setNotice(`Could not update starred files: ${String(error)}`); }
+    });
+  };
   const refreshFolder = async (root: string) => {
     try {
+      await starQueue.current;
       const refreshed = await openWorkspace(root);
       setFolders((old) =>
         old.map((f) =>
-          f.root === root ? { ...refreshed, collapsed: f.collapsed } : f,
+          f.root === root ? { ...refreshed, collapsed: f.collapsed, closedDirectories: f.closedDirectories } : f,
         ),
       );
     } catch (error) {
@@ -633,7 +730,7 @@ export default function App() {
       if (first) {
         if (!(await openNote(first.files[0].path, undefined, first))) return;
       } else {
-        if (!(await save()) || dirtyRef.current) return;
+        if (!(await preserveDraft())) return;
         setData(null);
         setPath("");
         applyMarks([]);
@@ -729,19 +826,20 @@ export default function App() {
   }, [mode]);
   const persistMarks = async (marks: Bookmark[]) => {
     applyMarks(marks);
-    // Flush note text with its updated anchors so they remain a consistent pair.
-    await save();
+    dirtyRef.current = true;
+    setDirty(true);
+    preserveDraft();
   };
   useEffect(() => {
     const toggleFocus = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "g" || event.isComposing) return;
       event.preventDefault();
       event.stopPropagation();
-      if (!event.repeat && !settingsOpen && !palette && !bookmarkDraft) setFocusMode(!focusMode);
+      if (!event.repeat && !settingsOpen && !palette && !bookmarkDraft && !renameTarget && !fileAction) setFocusMode(!focusMode);
     };
     window.addEventListener("keydown", toggleFocus, { capture: true });
     return () => window.removeEventListener("keydown", toggleFocus, { capture: true });
-  }, [focusMode, setFocusMode, settingsOpen, palette, bookmarkDraft]);
+  }, [focusMode, setFocusMode, settingsOpen, palette, bookmarkDraft, renameTarget, fileAction]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
@@ -751,7 +849,7 @@ export default function App() {
         if (e.key.toLowerCase() === "n") {
           if (desktop) void invoke("new_window").catch(error => setNotice(String(error)));
           else window.open(window.location.href, "_blank", "noopener");
-        } else if (!settingsOpen && !palette && !bookmarkDraft) void newTab();
+        } else if (!settingsOpen && !palette && !bookmarkDraft && !renameTarget && !fileAction) void newTab();
         return;
       }
       if (e.key === ",") {
@@ -759,7 +857,7 @@ export default function App() {
         if (!palette && !bookmarkDraft) setSettingsOpen(true);
         return;
       }
-      if (settingsOpen) return;
+      if (settingsOpen || renameTarget || fileAction) return;
       if (e.key.toLowerCase() === "k") {
         e.preventDefault();
         setPalette((p) => !p);
@@ -775,13 +873,25 @@ export default function App() {
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [save, beginBookmark, settingsOpen, palette, bookmarkDraft, newTab]);
+  }, [save, beginBookmark, settingsOpen, palette, bookmarkDraft, renameTarget, fileAction, newTab]);
   useEffect(() => {
+    const preserveSession = async () => {
+      const c = current.current;
+      if (!c.foldersReady) return;
+      await saveExplorer({
+        folders: c.folders.map(({ root, name, collapsed, closedDirectories }) => ({ root, name, collapsed, closedDirectories })),
+        active: c.hasDocument ? { root: c.workspace.root, path: c.path } : null,
+        tabs: tabsRef.current, mode: c.mode,
+      });
+    };
+    const preserve = async () => {
+      try { await preserveSession(); return await preserveDraft(); }
+      catch (error) { setNotice(`Unable to preserve your session: ${String(error)}`); return false; }
+    };
     const beforeUnload = (e: BeforeUnloadEvent) => {
-      if (dirtyRef.current || voiceBusy.current) {
-        e.preventDefault();
-        e.returnValue = "";
-      }
+      // Native close/quit awaits the durable writes below. Browser recovery is synchronous.
+      if (voiceBusy.current || draftFailed.current) { e.preventDefault(); e.returnValue = ""; }
+      void preserveDraft();
     };
     window.addEventListener("beforeunload", beforeUnload);
     let disposed = false,
@@ -791,12 +901,16 @@ export default function App() {
       void getCurrentWindow()
         .onCloseRequested(async (e) => {
           e.preventDefault();
+          if (operation.current || saveInFlight.current) return;
           if (voiceBusy.current) {
             setNotice("Finish or cancel voice typing before closing Nova.");
             return;
           }
-          if ((await save()) && !dirtyRef.current)
-            await getCurrentWindow().destroy();
+          if (await preserve()) {
+            try {
+              await getCurrentWindow().destroy();
+            } catch (error) { setNotice(String(error)); }
+          }
         })
         .then((fn) => {
           if (disposed) fn();
@@ -808,7 +922,12 @@ export default function App() {
           setNotice("Finish or cancel voice typing before quitting Nova.");
           return;
         }
-        if ((await save()) && !dirtyRef.current) await invoke("quit_app");
+        if (operation.current || saveInFlight.current) return;
+        if (await preserve()) {
+          try {
+            await invoke("quit_app");
+          } catch (error) { setNotice(String(error)); }
+        }
       }).then((fn) => {
         if (disposed) fn();
         else unlistenQuit = fn;
@@ -819,7 +938,7 @@ export default function App() {
       unlistenQuit?.();
       window.removeEventListener("beforeunload", beforeUnload);
     };
-  }, [save]);
+  }, [preserveDraft]);
   const switchMode = (next: EditorMode) => {
     if (next === "read") setPreview(editor.current?.text() ?? data?.text ?? "");
     setMode(next);
@@ -883,10 +1002,18 @@ export default function App() {
           folders={folders}
           activeRoot={workspace.root}
           activePath={path}
-          onOpen={(folder, path, pinned) =>
-            void openNote(path, undefined, folder, undefined, pinned)
-          }
-          onRename={renameFile}
+          onOpen={(folder, path) => {
+            const active = current.current;
+            const focusedFlex = active.hasDocument && tabsRef.current.some(tab =>
+              !tab.pinned && tab.root === active.workspace.root && tab.path === active.path);
+            void openNote(path, undefined, folder, undefined, !focusedFlex);
+          }}
+          onFileAction={(folder, path, action) => {
+            if (action === "reveal") void revealNote(folder.root, path).catch(error => setNotice(String(error)));
+            else setFileAction({ folder, path, action });
+          }}
+          onStar={starFile}
+          onRename={(folder, path) => setRenameTarget({ folder, path })}
           onChange={changeFolders}
           onRemove={(root) => void removeFolder(root)}
           onRefresh={(root) => void refreshFolder(root)}
@@ -952,9 +1079,13 @@ export default function App() {
                       tab.path +
                       (!tab.pinned
                         ? " · Preview — double-click to keep open"
-                        : "")
+                        : " · Double-click to rename")
                     }
-                    onDoubleClick={() => pin(tab.root, tab.path)}
+                    onDoubleClick={() => {
+                      if (!tab.pinned) { pin(tab.root, tab.path); return; }
+                      const folder = folders.find(f => f.root === tab.root);
+                      if (folder) setRenameTarget({ folder, path: tab.path });
+                    }}
                     onClick={() => {
                       const folder = folders.find((f) => f.root === tab.root);
                       if (folder) void openNote(tab.path, undefined, folder);
@@ -964,16 +1095,6 @@ export default function App() {
                     <span>{name}</span>
                     {active && dirty && <span className="dirty-dot" />}
                   </button>
-                  {!tab.pinned && (
-                    <button
-                      className="tab-pin"
-                      title="Keep tab open"
-                      aria-label={`Keep ${name} open`}
-                      onClick={() => pin(tab.root, tab.path)}
-                    >
-                      <Plus size={12} />
-                    </button>
-                  )}
                   <button
                     className="tab-close"
                     aria-label={`Close ${name}`}
@@ -985,7 +1106,7 @@ export default function App() {
               );
             })}
           </div>
-          <button className="icon-button" onClick={() => void newTab()} aria-label="New tab" title="New tab (Ctrl T)"><Plus size={16} /></button>
+          <button className="icon-button new-tab-button" onClick={() => void newTab()} aria-label="New tab" title="New tab (Ctrl T)"><Plus size={16} /></button>
           <div className="tab-bar-space" />
           <button
             className="icon-button"
@@ -1114,7 +1235,7 @@ export default function App() {
                 snapshot={editorSnapshot}
                 bookmarks={bookmarks}
                 onChange={changed}
-                onBookmarks={applyMarks}
+                onBookmarks={(marks) => { applyMarks(marks); preserveDraft(); }}
                 onParagraphStyle={setParagraphStyle}
                 onCursor={(line, col) => setCursor([line, col])}
                 onBookmark={beginBookmark}
@@ -1180,7 +1301,7 @@ export default function App() {
             {saving
               ? "Saving…"
               : dirty
-                ? "Unsaved changes"
+                ? draftStatus === "saving" ? "Saving draft…" : draftStatus === "error" ? "Draft not saved" : "Draft saved · Unsaved to file"
                 : "All changes saved"}
           </span>
           <span>
@@ -1339,14 +1460,44 @@ export default function App() {
           }}
         />
       )}
+      {fileAction && <FileActionDialog {...fileAction} onClose={() => setFileAction(null)} onSubmit={async destination => {
+        const { folder, path: targetPath, action } = fileAction;
+        if (action === "move") { await renameFile(folder, targetPath, destination, true); return; }
+        if (operation.current || saveInFlight.current || voiceBusy.current) throw new Error("Finish the current operation before deleting.");
+        operation.current = true;
+        try {
+          if (!(await preserveDraft())) throw new Error("Could not preserve your draft before deleting.");
+          await starQueue.current;
+          await deleteNote(folder.root, targetPath);
+          createdNotes.current.delete(tabId({ root: folder.root, path: targetPath }));
+          const updated = { ...folder, files: folder.files.filter(f => f.path !== targetPath), starred: (folder.starred ?? []).filter(p => p !== targetPath) };
+          setFolders(old => old.map(f => f.root === folder.root ? { ...f, files: updated.files, starred: (f.starred ?? []).filter(p => p !== targetPath) } : f));
+          const id = tabId({ root: folder.root, path: targetPath });
+          snapshots.current.delete(id);
+          updateTabs(tabsRef.current.filter(t => tabId(t) !== id));
+          if (current.current.workspace.root === folder.root) {
+            setWorkspace(updated);
+            if (current.current.path === targetPath) { setData(null); setPath(""); applyMarks([]); setEditorSnapshot(undefined); current.current = { ...current.current, workspace: updated, path: "", hasDocument: false }; }
+          }
+        } finally { operation.current = false; }
+      }} />}
+      {renameTarget && (
+        <RenameDialog
+          path={renameTarget.path}
+          root={renameTarget.folder.root === "demo" ? renameTarget.folder.name : renameTarget.folder.root}
+          onRename={name => renameFile(renameTarget.folder, renameTarget.path, name)}
+          onClose={() => setRenameTarget(null)}
+        />
+      )}
       {settingsOpen && <Settings onClose={() => setSettingsOpen(false)}
         galaxy={galaxyMode} onGalaxy={setGalaxyMode} plasma={plasmaEnabled} onPlasma={setPlasmaEnabled}
         lineHighlight={showLineHighlight} onLineHighlight={setShowLineHighlight}
         lineNumbers={showLineNumbers} onLineNumbers={setShowLineNumbers} wordWrap={wordWrap} onWordWrap={setWordWrap}
         spellcheck={spellcheck} onSpellcheck={setSpellcheck} bookmarks={rail} onBookmarks={setRail}
+        defaultExtension={defaultExtension} onDefaultExtension={setDefaultExtension}
         fontSize={fontSize} onFontSize={setFontSize}
         textWidth={textWidth} onTextWidth={setTextWidth}
-        storageError={widthError || galaxyError || plasmaError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
+        storageError={extensionError || widthError || galaxyError || plasmaError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
       {bookmarkDraft && (
         <div
           className="overlay"

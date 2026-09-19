@@ -1,5 +1,6 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkNestedNumbers from "./remarkNestedNumbers";
 import { memo, useMemo, type ComponentProps } from "react";
 import type { Root } from "hast";
 const tags = [
@@ -31,7 +32,7 @@ export default memo(function Markdown({ text = "", tree }: { text?: string; tree
   const plugins = useMemo(() => tree ? [() => () => structuredClone(tree)] : [], [tree]);
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
+      remarkPlugins={[remarkGfm, remarkNestedNumbers]}
       rehypePlugins={plugins}
       components={{
         ...components,

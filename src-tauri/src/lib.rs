@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
     fs,
-    io::{BufRead, BufReader, Write},
+    io::{BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
@@ -32,6 +32,9 @@ struct Workspace {
     root: String,
     name: String,
     files: Vec<NoteFile>,
+    starred: Vec<String>,
+    #[serde(rename = "starsError", skip_serializing_if = "Option::is_none")]
+    stars_error: Option<String>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct Bookmark {
@@ -69,10 +72,31 @@ fn revision(bytes: &[u8]) -> String {
     blake3::hash(bytes).to_hex().to_string()
 }
 fn supported(path: &Path) -> bool {
-    path.extension()
-        .and_then(|s| s.to_str())
-        .map(|s| matches!(s.to_lowercase().as_str(), "md" | "markdown" | "txt" | "mdx"))
-        .unwrap_or(false)
+    // Nova's workspace metadata is never an editable note.
+    if path.file_name().and_then(|name| name.to_str()) == Some(".nova") { return false; }
+    if path.extension().and_then(|s| s.to_str())
+        .is_some_and(|s| matches!(s.to_lowercase().as_str(), "md" | "markdown" | "txt" | "mdx")) {
+        return true;
+    }
+    // Custom extensions are text files too. Sniff a bounded prefix rather than
+    // loading every file in a folder; read_note validates the entire UTF-8 file.
+    let Ok(mut file) = fs::File::open(path) else { return false; };
+    let mut buffer = [0; 8192];
+    let Ok(length) = file.read(&mut buffer) else { return false; };
+    let bytes = &buffer[..length];
+    !bytes.contains(&0) && match std::str::from_utf8(bytes) {
+        Ok(_) => true,
+        Err(error) => error.error_len().is_none() && length == buffer.len(),
+    }
+}
+fn normalize_extension(value: &str) -> Result<String, String> {
+    let extension = value.trim().strip_prefix('.').unwrap_or(value.trim());
+    if extension.is_empty() || extension.chars().count() > 64
+        || extension.chars().any(|c| c.is_whitespace() || c.is_control() || "/\\:*?\"<>|".contains(c))
+        || extension.split('.').any(|part| part.is_empty()) {
+        return Err("Enter an extension such as .txt, .md, or .json without spaces or filename separators.".into());
+    }
+    Ok(format!(".{extension}"))
 }
 fn root_path(access: &Access, root: &str) -> Result<PathBuf, String> {
     let path = fs::canonicalize(root).map_err(err)?;
@@ -170,6 +194,51 @@ fn save_checked(path: &Path, text: &str, expected: &str) -> Result<String, Strin
     atomic_write(path, output.as_bytes())?;
     Ok(revision(output.as_bytes()))
 }
+// Keep unrelated settings in the root registry intact.
+fn read_registry(root: &Path) -> Result<serde_json::Value, String> {
+    let path = root.join(".nova");
+    match fs::symlink_metadata(&path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(serde_json::json!({})),
+        Err(error) => return Err(err(error)),
+        Ok(meta) if !meta.is_file() || meta.len() > 4 * 1024 * 1024 =>
+            return Err(".nova must be a regular JSON file under 4 MiB.".into()),
+        Ok(_) => {}
+    }
+    let value: serde_json::Value = serde_json::from_slice(&fs::read(path).map_err(err)?)
+        .map_err(|error| format!("Could not read .nova: {error}"))?;
+    if !value.is_object() { return Err(".nova must contain a JSON object.".into()); }
+    registry_stars(&value)?;
+    Ok(value)
+}
+fn registry_stars(value: &serde_json::Value) -> Result<Vec<String>, String> {
+    match value.get("starred") {
+        None => Ok(Vec::new()),
+        Some(stars) => serde_json::from_value(stars.clone())
+            .map_err(|_| ".nova starred must be an array of file paths.".into()),
+    }
+}
+fn write_registry(root: &Path, mut registry: serde_json::Value, stars: &[String]) -> Result<(), String> {
+    registry["starred"] = serde_json::json!(stars);
+    let bytes = serde_json::to_vec_pretty(&registry).map_err(err)?;
+    if bytes.len() > 4 * 1024 * 1024 { return Err(".nova registry is too large.".into()); }
+    atomic_write(&root.join(".nova"), &bytes)
+}
+fn update_star(root: &Path, path: &str, starred: bool) -> Result<Vec<String>, String> {
+    scoped_path(root, path)?;
+    let registry = read_registry(root)?;
+    let mut stars = registry_stars(&registry)?;
+    stars.retain(|star| star != path);
+    if starred { stars.push(path.to_owned()); }
+    stars.sort();
+    stars.dedup();
+    write_registry(root, registry, &stars)?;
+    Ok(stars)
+}
+#[tauri::command]
+fn set_file_star(root: String, path: String, starred: bool, access: State<'_, Access>) -> Result<Vec<String>, String> {
+    let _guard = access.writes.lock().map_err(err)?;
+    update_star(&root_path(&access, &root)?, &path, starred)
+}
 #[tauri::command]
 async fn open_workspace(root: String, access: State<'_, Access>) -> Result<Workspace, String> {
     let path = fs::canonicalize(&root).map_err(err)?;
@@ -181,7 +250,13 @@ async fn open_workspace(root: String, access: State<'_, Access>) -> Result<Works
         .await
         .map_err(err)??;
     access.roots.lock().map_err(err)?.insert(path.clone());
+    let (starred, stars_error) = match read_registry(&path).and_then(|value| registry_stars(&value)) {
+        Ok(stars) => (stars, None),
+        Err(error) => (Vec::new(), Some(error)),
+    };
     Ok(Workspace {
+        starred,
+        stars_error,
         root: path.to_string_lossy().into_owned(),
         name: path
             .file_name()
@@ -449,9 +524,38 @@ async fn save_explorer(
     .await
     .map_err(err)?
 }
-fn create_untitled(root: &Path) -> Result<String, String> {
+// Recovery paths are derived from identity, never from caller-provided paths.
+fn draft_path(directory: &Path, root: &str, path: &str) -> PathBuf {
+    let identity = serde_json::to_vec(&(root, path)).expect("string identity");
+    directory.join(format!("{}.json", revision(&identity)))
+}
+#[tauri::command]
+async fn load_draft(app: tauri::AppHandle, root: String, path: String) -> Result<serde_json::Value, String> {
+    let directory = app.path().app_data_dir().map_err(err)?.join("drafts");
+    tauri::async_runtime::spawn_blocking(move || {
+        let file = draft_path(&directory, &root, &path);
+        match fs::read(file) {
+            Ok(bytes) => serde_json::from_slice(&bytes).map_err(err),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(serde_json::Value::Null),
+            Err(error) => Err(err(error)),
+        }
+    }).await.map_err(err)?
+}
+#[tauri::command]
+async fn save_draft(app: tauri::AppHandle, root: String, path: String, draft: serde_json::Value) -> Result<(), String> {
+    let directory = app.path().app_data_dir().map_err(err)?.join("drafts");
+    tauri::async_runtime::spawn_blocking(move || {
+        let access = app.state::<Access>();
+        let _guard = access.writes.lock().map_err(err)?;
+        fs::create_dir_all(&directory).map_err(err)?;
+        atomic_write(&draft_path(&directory, &root, &path), &serde_json::to_vec(&draft).map_err(err)?)
+    }).await.map_err(err)?
+}
+
+fn create_untitled(root: &Path, extension: &str) -> Result<String, String> {
+    let extension = normalize_extension(extension)?;
     for number in 1..10_000 {
-        let name = if number == 1 { "Untitled.md".into() } else { format!("Untitled {number}.md") };
+        let name = if number == 1 { format!("Untitled{extension}") } else { format!("Untitled {number}{extension}") };
         match fs::OpenOptions::new().write(true).create_new(true).open(root.join(&name)) {
             Ok(_) => return Ok(name),
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
@@ -461,13 +565,14 @@ fn create_untitled(root: &Path) -> Result<String, String> {
     Err("Too many untitled notes in this folder.".into())
 }
 #[tauri::command]
-fn create_note(root: String, access: State<'_, Access>) -> Result<String, String> {
+fn create_note(root: String, extension: Option<String>, access: State<'_, Access>) -> Result<String, String> {
     let _guard = access.writes.lock().map_err(err)?;
-    create_untitled(&root_path(&access, &root)?)
+    create_untitled(&root_path(&access, &root)?, extension.as_deref().unwrap_or(".txt"))
 }
 fn rename_file(source: &Path, name: &str) -> Result<PathBuf, String> {
-    if name.trim().is_empty() || name.contains(['/', '\\', ':']) || !supported(Path::new(name)) {
-        return Err("Enter a filename ending in .md, .markdown, .mdx, or .txt.".into());
+    if name.trim().is_empty() || name == "." || name == ".." || name == ".nova"
+        || name.chars().any(|c| c.is_control() || "/\\:*?\"<>|".contains(c)) {
+        return Err("Enter a valid filename without filename separators.".into());
     }
     let target = source.with_file_name(name);
     if target == source { return Ok(target); }
@@ -479,21 +584,120 @@ fn rename_file(source: &Path, name: &str) -> Result<PathBuf, String> {
     }
     Ok(target)
 }
+fn rename_starred_file(root: &Path, source: &Path, name: &str) -> Result<PathBuf, String> {
+    let registry = read_registry(root)?;
+    let mut stars = registry_stars(&registry)?;
+    let old = source.strip_prefix(root).map_err(err)?.to_string_lossy().replace('\\', "/");
+    let target = rename_file(source, name)?;
+    if target == source { return Ok(target); }
+    if stars.iter().any(|star| star == &old) {
+        let next = target.strip_prefix(root).map_err(err)?.to_string_lossy().replace('\\', "/");
+        for star in &mut stars { if star == &old { *star = next.clone(); } }
+        if let Err(error) = write_registry(root, registry, &stars) {
+            fs::rename(&target, source).map_err(err)?;
+            return Err(error);
+        }
+    }
+    Ok(target)
+}
 #[tauri::command]
 fn rename_note(root: String, path: String, name: String, access: State<'_, Access>, app: tauri::AppHandle) -> Result<String, String> {
     let _guard = access.writes.lock().map_err(err)?;
     let root = root_path(&access, &root)?;
     let source = scoped_path(&root, &path)?;
     let old_metadata = metadata_path(&app, &source)?;
-    let target = rename_file(&source, &name)?;
+    let target = rename_starred_file(&root, &source, &name)?;
     if target != source && old_metadata.exists() {
         let result = metadata_path(&app, &target).and_then(|new_metadata| fs::rename(&old_metadata, new_metadata).map_err(err));
         if let Err(error) = result {
-            let _ = fs::rename(&target, &source);
+            let _ = rename_starred_file(&root, &target, source.file_name().unwrap().to_str().ok_or("Invalid filename")?);
             return Err(error);
         }
     }
     Ok(target.strip_prefix(root).map_err(err)?.to_string_lossy().replace('\\', "/"))
+}
+fn move_target(root: &Path, source: &Path, directory: &str) -> Result<PathBuf, String> {
+    let relative = Path::new(directory);
+    if relative.is_absolute() || relative.components().any(|c| !matches!(c, std::path::Component::Normal(_) | std::path::Component::CurDir)) {
+        return Err("Choose a folder inside this workspace.".into());
+    }
+    let parent = fs::canonicalize(root.join(relative)).map_err(err)?;
+    if !parent.starts_with(root) || !parent.is_dir() { return Err("Choose an existing folder inside this workspace.".into()); }
+    Ok(parent.join(source.file_name().ok_or("Invalid filename")?))
+}
+#[tauri::command]
+fn move_note(root: String, path: String, directory: String, access: State<'_, Access>, app: tauri::AppHandle) -> Result<String, String> {
+    let _guard = access.writes.lock().map_err(err)?;
+    let root = root_path(&access, &root)?;
+    let source = scoped_path(&root, &path)?;
+    let target = move_target(&root, &source, &directory)?;
+    let next = target.strip_prefix(&root).map_err(err)?.to_string_lossy().replace('\\', "/");
+    if target == source { return Ok(next); }
+    let registry = read_registry(&root)?;
+    let stars = registry_stars(&registry)?;
+    let updated: Vec<String> = stars.iter().map(|p| if p == &path { next.clone() } else { p.clone() }).collect();
+    let old_meta = metadata_path(&app, &source)?;
+    let new_meta = metadata_path(&app, &target)?;
+    fs::hard_link(&source, &target).map_err(err)?;
+    let result = (|| {
+        if old_meta.exists() { atomic_write(&new_meta, &fs::read(&old_meta).map_err(err)?)?; }
+        write_registry(&root, registry.clone(), &updated)?;
+        fs::remove_file(&source).map_err(err)
+    })();
+    if let Err(error) = result {
+        let _ = fs::remove_file(&target);
+        let _ = fs::remove_file(&new_meta);
+        let _ = write_registry(&root, registry, &stars);
+        return Err(error);
+    }
+    let _ = fs::remove_file(old_meta);
+    Ok(next)
+}
+// Check while holding Access::writes, immediately before deleting the file.
+fn is_empty_untitled(path: &Path) -> Result<bool, String> {
+    let name = path.file_name().and_then(|name| name.to_str()).unwrap_or("");
+    let stem = name.split_once('.').map(|(stem, _)| stem).unwrap_or("");
+    let generated = stem == "Untitled" || stem.strip_prefix("Untitled ")
+        .and_then(|number| number.parse::<u32>().ok())
+        .is_some_and(|number| (2..10_000).contains(&number));
+    if !generated { return Ok(false); }
+    match fs::symlink_metadata(path) {
+        Ok(metadata) => Ok(metadata.is_file() && metadata.len() == 0),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(err(error)),
+    }
+}
+#[tauri::command]
+fn delete_note(root: String, path: String, only_empty_untitled: Option<bool>, access: State<'_, Access>, app: tauri::AppHandle) -> Result<bool, String> {
+    let _guard = access.writes.lock().map_err(err)?;
+    let root = root_path(&access, &root)?;
+    let source = scoped_path(&root, &path)?;
+    if only_empty_untitled.unwrap_or(false) && !is_empty_untitled(&source)? {
+        return Ok(false);
+    }
+    let metadata = metadata_path(&app, &source)?;
+    let registry = read_registry(&root)?;
+    let stars = registry_stars(&registry)?;
+    let updated: Vec<String> = stars.iter().filter(|p| *p != &path).cloned().collect();
+    write_registry(&root, registry.clone(), &updated)?;
+    if let Err(error) = fs::remove_file(source) {
+        let _ = write_registry(&root, registry, &stars);
+        return Err(err(error));
+    }
+    let _ = fs::remove_file(metadata);
+    Ok(true)
+}
+#[tauri::command]
+fn reveal_note(root: String, path: String, access: State<'_, Access>) -> Result<(), String> {
+    let source = scoped_path(&root_path(&access, &root)?, &path)?;
+    #[cfg(target_os = "macos")]
+    let status = std::process::Command::new("open").arg("-R").arg(&source).status().map_err(err)?;
+    #[cfg(target_os = "windows")]
+    let status = std::process::Command::new("explorer.exe").arg(format!("/select,{}", source.display())).status().map_err(err)?;
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let status = std::process::Command::new("xdg-open").arg(source.parent().ok_or("Missing parent")?).status().map_err(err)?;
+    if !status.success() { return Err("Could not open the file location.".into()); }
+    Ok(())
 }
 #[tauri::command]
 fn new_window(app: tauri::AppHandle) -> Result<(), String> {
@@ -557,16 +761,22 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             open_workspace,
+            set_file_star,
             read_note,
             save_note,
             save_bookmarks,
             search_notes,
+            load_draft,
+            save_draft,
             load_explorer,
             save_explorer,
             quit_app,
             new_window,
             create_note,
             rename_note,
+            move_note,
+            delete_note,
+            reveal_note,
             speech::speech_status,
             speech::speech_download,
             speech::speech_start,
@@ -588,14 +798,127 @@ pub fn run() {
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn recovery_survives_reopening_and_has_stable_scoped_identity() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = super::draft_path(directory.path(), "/notes", "draft.md");
+        let draft = serde_json::json!({"text": "unsaved edits", "revision": "original", "bookmarks": []});
+        super::atomic_write(&path, &serde_json::to_vec(&draft).unwrap()).unwrap();
+        // Simulate a fresh process deriving the same recovery path, without a web origin.
+        let reopened = super::draft_path(directory.path(), "/notes", "draft.md");
+        let restored: serde_json::Value = serde_json::from_slice(&std::fs::read(reopened).unwrap()).unwrap();
+        assert_eq!(restored, draft);
+        assert_ne!(path, super::draft_path(directory.path(), "/other", "draft.md"));
+        assert_eq!(super::draft_path(directory.path(), "../../outside", "../draft.md").parent().unwrap(), directory.path());
+        super::atomic_write(&path, b"null").unwrap();
+        assert_eq!(std::fs::read(path).unwrap(), b"null");
+    }
     use super::*;
+    #[test]
+    fn stars_persist_per_root_and_follow_renames() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(dir.path()).unwrap();
+        let other = tempfile::tempdir().unwrap();
+        fs::create_dir(root.join("nested")).unwrap();
+        fs::write(root.join("nested/note.md"), "hello").unwrap();
+        fs::write(root.join(".nova"), r#"{"theme":"dark"}"#).unwrap();
+        assert_eq!(update_star(&root, "nested/note.md", true).unwrap(), vec!["nested/note.md"]);
+        assert_eq!(update_star(&root, "nested/note.md", true).unwrap().len(), 1);
+        assert!(registry_stars(&read_registry(other.path()).unwrap()).unwrap().is_empty());
+        let target = rename_starred_file(&root, &root.join("nested/note.md"), "renamed.md").unwrap();
+        let registry = read_registry(&root).unwrap();
+        assert_eq!(registry["theme"], "dark");
+        assert_eq!(registry_stars(&registry).unwrap(), vec!["nested/renamed.md"]);
+        assert_eq!(fs::read_to_string(target).unwrap(), "hello");
+        assert_eq!(files_in(&root).unwrap().len(), 1);
+        assert!(update_star(&root, "nested/renamed.md", false).unwrap().is_empty());
+        assert!(update_star(&root, "../outside.md", true).is_err());
+    }
+    #[test]
+    fn invalid_registry_is_not_overwritten() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("note.md"), "hello").unwrap();
+        for content in ["invalid", "[]", r#"{"starred":42}"#] {
+            fs::write(dir.path().join(".nova"), content).unwrap();
+            assert!(update_star(dir.path(), "note.md", true).is_err());
+            assert_eq!(fs::read_to_string(dir.path().join(".nova")).unwrap(), content);
+        }
+    }
+    #[cfg(unix)]
+    #[test]
+    fn registry_symlinks_are_rejected() {
+        let dir = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        fs::write(outside.path().join("registry"), "{}").unwrap();
+        std::os::unix::fs::symlink(outside.path().join("registry"), dir.path().join(".nova")).unwrap();
+        assert!(read_registry(dir.path()).is_err());
+    }
+
+    #[test]
+    fn empty_untitled_cleanup_preserves_named_files_and_any_content() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in ["Untitled.md", "Untitled 2.txt", "Untitled 12.custom", "Untitled 3.d.ts"] {
+            let path = dir.path().join(name);
+            fs::write(&path, "").unwrap();
+            assert!(is_empty_untitled(&path).unwrap());
+            for content in ["keep me", " ", "\n"] {
+                fs::write(&path, content).unwrap();
+                assert!(!is_empty_untitled(&path).unwrap());
+            }
+        }
+        for name in ["Notes.md", "Untitled draft.md", "Untitled 1.md"] {
+            let path = dir.path().join(name);
+            fs::write(&path, "").unwrap();
+            assert!(!is_empty_untitled(&path).unwrap());
+        }
+        assert!(!is_empty_untitled(&dir.path().join("Untitled 3.md")).unwrap());
+    }
+    #[test]
+    fn custom_extensions_survive_the_file_lifecycle() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(dir.path()).unwrap();
+        for extension in ["txt", ".json", ".custom", ".d.ts"] {
+            let suffix = normalize_extension(extension).unwrap();
+            let first = create_untitled(&root, extension).unwrap();
+            assert_eq!(first, format!("Untitled{suffix}"));
+            assert_eq!(create_untitled(&root, extension).unwrap(), format!("Untitled 2{suffix}"));
+            let path = scoped_path(&root, &first).unwrap();
+            assert!(is_empty_untitled(&path).unwrap());
+            fs::write(&path, "keep custom content").unwrap();
+            assert!(!is_empty_untitled(&path).unwrap());
+            let renamed = format!("Saved{suffix}");
+            rename_file(&path, &renamed).unwrap();
+            assert!(scoped_path(&root, &renamed).is_ok());
+            assert!(files_in(&root).unwrap().iter().any(|file| file.path == renamed));
+        }
+        for extension in ["", ".", "../bad", "a/b", "a\\b", "a:b", "two words", "foo..bar"] {
+            assert!(create_untitled(&root, extension).is_err());
+        }
+    }
     #[test]
     fn untitled_creation_preserves_existing_notes() {
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("Untitled.md"), "keep me").unwrap();
-        assert_eq!(create_untitled(dir.path()).unwrap(), "Untitled 2.md");
-        assert_eq!(create_untitled(dir.path()).unwrap(), "Untitled 3.md");
+        assert_eq!(create_untitled(dir.path(), ".md").unwrap(), "Untitled 2.md");
+        assert_eq!(create_untitled(dir.path(), ".md").unwrap(), "Untitled 3.md");
         assert_eq!(fs::read_to_string(dir.path().join("Untitled.md")).unwrap(), "keep me");
+    }
+    #[test]
+    fn move_destination_is_existing_and_scoped() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(temp.path()).unwrap();
+        fs::create_dir(root.join("nested")).unwrap();
+        fs::write(root.join("note.md"), "hello").unwrap();
+        let source = root.join("note.md");
+        assert_eq!(move_target(&root, &source, "nested").unwrap(), root.join("nested/note.md"));
+        assert!(move_target(&root, &source, "../outside").is_err());
+        assert!(move_target(&root, &source, "/tmp").is_err());
+        assert!(move_target(&root, &source, "missing").is_err());
+        #[cfg(unix)] {
+            let outside = tempfile::tempdir().unwrap();
+            std::os::unix::fs::symlink(outside.path(), root.join("escape")).unwrap();
+            assert!(move_target(&root, &source, "escape").is_err());
+        }
     }
     #[test]
     fn rename_preserves_contents_and_rejects_collisions_and_paths() {
@@ -603,7 +926,7 @@ mod tests {
         let source = dir.path().join("before.md");
         fs::write(&source, "original").unwrap();
         fs::write(dir.path().join("taken.md"), "existing").unwrap();
-        for name in ["taken.md", "../escape.md", "nested/file.md", "bad.exe", ""] {
+        for name in ["taken.md", "../escape.md", "nested/file.md", "bad:name", ".nova", ""] {
             assert!(rename_file(&source, name).is_err());
             assert_eq!(fs::read_to_string(&source).unwrap(), "original");
         }
@@ -695,7 +1018,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let root = fs::canonicalize(dir.path()).unwrap();
         fs::write(root.join("note.md"), "a").unwrap();
-        fs::write(root.join("image.png"), "b").unwrap();
+        fs::write(root.join("image.png"), b"\x89PNG\r\n\x1a\n\0").unwrap();
         fs::create_dir(root.join("node_modules")).unwrap();
         fs::write(root.join("node_modules/hidden.md"), "c").unwrap();
         assert_eq!(files_in(&root).unwrap().len(), 1);
