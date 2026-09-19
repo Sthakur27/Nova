@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
+import { panelSnapDistance, usePanelDrag } from "./usePanelDrag";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { defaultPanelWidths, editorMinimum, fitPanelWidths, panelMaximum, panelMinimums, type PanelSide, type PanelWidths } from "./panelWidths";
 
@@ -15,7 +16,8 @@ function readWidths(): Partial<PanelWidths> {
   } catch { return {}; }
 }
 
-export default function SidePanelControls({ navigation, bookmarks, hoveredEdge, onNavigation, onBookmarks, onStorageError }: {
+export default function SidePanelControls({ navigation, bookmarks, hoveredEdge, topBars, onTopBars, onNavigation, onBookmarks, onStorageError }: {
+  topBars: boolean; onTopBars: () => void;
   navigation: boolean; bookmarks: boolean; hoveredEdge: PanelSide | null;
   onNavigation: () => void; onBookmarks: () => void; onStorageError: () => void;
 }) {
@@ -24,6 +26,8 @@ export default function SidePanelControls({ navigation, bookmarks, hoveredEdge, 
   const [saved, setSaved] = useState(readWidths);
   const [draft, setDraft] = useState<PanelWidths | null>(null);
   const drag = useRef<{ side: PanelSide; x: number; start: PanelWidths; latest: PanelWidths } | null>(null);
+  const initiallyExpanded = useRef(true);
+  const topDrag = useRef({ latest: 0, original: "" });
   const defaults = defaultPanelWidths(available);
   const widths = fitPanelWidths(draft ?? { ...defaults, ...saved }, available, navigation, bookmarks);
 
@@ -39,6 +43,11 @@ export default function SidePanelControls({ navigation, bookmarks, hoveredEdge, 
     shell?.style.setProperty("--navigation-width", `${widths.left}px`);
     shell?.style.setProperty("--bookmarks-width", `${widths.right}px`);
     shell?.toggleAttribute("data-panel-resizing", draft !== null);
+    if (shell) {
+      if (draft?.left === 0) shell.dataset.snapPanel = "left";
+      else if (draft?.right === 0) shell.dataset.snapPanel = "right";
+      else delete shell.dataset.snapPanel;
+    }
   }, [widths.left, widths.right, draft]);
 
   function persist(side: PanelSide, width: number) {
@@ -54,13 +63,59 @@ export default function SidePanelControls({ navigation, bookmarks, hoveredEdge, 
   function clamp(side: PanelSide, value: number) {
     return Math.max(panelMinimums[side], Math.min(maximum(side), value));
   }
-  function finish(commit: boolean) {
-    const active = drag.current;
-    if (!active) return;
-    drag.current = null;
-    if (commit) persist(active.side, active.latest[active.side]);
-    setDraft(null);
-  }
+  usePanelDrag({
+    shell: () => anchor.current?.closest<HTMLElement>(".app-shell"),
+    onStart: (panel) => {
+      initiallyExpanded.current = panel === "top" ? topBars : panel === "left" ? navigation : bookmarks;
+      if (panel === "top") {
+        const top = document.getElementById("top-bars")!;
+        topDrag.current = { latest: topBars ? top.getBoundingClientRect().height : 0, original: top.style.height };
+        return topDrag.current.latest;
+      }
+      drag.current = { side: panel, x: 0, start: widths, latest: widths };
+      return (panel === "left" ? navigation : bookmarks) ? widths[panel] : 0;
+    },
+    onMove: (panel, size) => {
+      if (panel === "top") {
+        const top = document.getElementById("top-bars")!;
+        topDrag.current.latest = size;
+        if (!topBars && size > panelSnapDistance) onTopBars();
+        const minimum = Array.from(top.children).reduce((height, child) => height + (child as HTMLElement).offsetHeight, 0);
+        top.style.height = `${Math.max(minimum, Math.min(window.innerHeight * .45, size))}px`;
+        top.dataset.snapCollapse = String(size <= panelSnapDistance);
+        return;
+      }
+      const active = drag.current;
+      if (!active) return;
+      active.latest = { ...active.start, [panel]: size <= panelSnapDistance ? 0 : clamp(panel, size) };
+      if (!(panel === "left" ? navigation : bookmarks) && size > panelSnapDistance)
+        (panel === "left" ? onNavigation : onBookmarks)();
+      setDraft(active.latest);
+    },
+    onFinish: (panel, commit) => {
+      const expanded = panel === "top" ? topBars : panel === "left" ? navigation : bookmarks;
+      if (!commit && initiallyExpanded.current !== expanded)
+        (panel === "top" ? onTopBars : panel === "left" ? onNavigation : onBookmarks)();
+      if (panel === "top") {
+        const top = document.getElementById("top-bars")!;
+        delete top.dataset.snapCollapse;
+        if (!commit) top.style.height = topDrag.current.original;
+        else if (topDrag.current.latest <= panelSnapDistance && topBars) {
+          top.style.height = topDrag.current.original;
+          onTopBars();
+        }
+        return;
+      }
+      const active = drag.current;
+      drag.current = null;
+      if (commit && active) {
+        if (active.latest[panel] === 0) {
+          if (panel === "left" ? navigation : bookmarks) (panel === "left" ? onNavigation : onBookmarks)();
+        } else persist(panel, active.latest[panel]);
+      }
+      setDraft(null);
+    },
+  });
 
   return <div ref={anchor} className="side-panel-controls">
     {(["left", "right"] as const).map((side) => {
@@ -68,46 +123,29 @@ export default function SidePanelControls({ navigation, bookmarks, hoveredEdge, 
       const label = side === "left" ? "navigation" : "bookmarks";
       const controls = side === "left" ? "global-navigation" : "bookmarks-panel";
       return <div key={side} className={`panel-toggle-zone panel-toggle-${side}`} data-expanded={expanded} data-edge-hover={hoveredEdge === side}>
-        {expanded && <div className="panel-resizer" role="separator" tabIndex={0}
+        <div data-panel-drag={side} className="panel-resizer" role="separator" tabIndex={0}
           aria-label={`Resize ${label}`} aria-orientation="vertical" aria-controls={controls}
-          aria-valuemin={panelMinimums[side]} aria-valuemax={Math.round(maximum(side))}
-          aria-valuenow={Math.round(widths[side])} aria-valuetext={`${Math.round(widths[side])} pixels`}
+          aria-valuemin={0} aria-valuemax={Math.round(maximum(side))}
+          aria-valuenow={expanded ? Math.round(widths[side]) : 0} aria-valuetext={`${Math.round(widths[side])} pixels`}
           title="Drag to resize. Double-click to reset."
-          onPointerDown={(event) => {
-            if (event.button !== 0 || drag.current) return;
-            event.preventDefault();
-            event.currentTarget.focus();
-            event.currentTarget.setPointerCapture(event.pointerId);
-            drag.current = { side, x: event.clientX, start: widths, latest: widths };
-            setDraft(widths);
-          }}
-          onPointerMove={(event) => {
-            const active = drag.current;
-            if (!active || active.side !== side) return;
-            const delta = (event.clientX - active.x) * (side === "left" ? 1 : -1);
-            active.latest = { ...active.start, [side]: clamp(side, active.start[side] + delta) };
-            setDraft(active.latest);
-          }}
-          onPointerUp={() => finish(true)} onPointerCancel={() => finish(false)}
-          onLostPointerCapture={() => finish(false)}
           onDoubleClick={() => persist(side, clamp(side, defaults[side]))}
           onKeyDown={(event) => {
-            if (event.key === "Escape" && drag.current) { event.preventDefault(); finish(false); return; }
             if (drag.current) return;
             let next: number;
-            if (event.key === "Home") next = panelMinimums[side];
+            if (event.key === "Home") { event.preventDefault(); if (expanded) (side === "left" ? onNavigation : onBookmarks)(); return; }
             else if (event.key === "End") next = maximum(side);
             else if (event.key === "Enter") next = defaults[side];
             else if (event.key === "ArrowLeft" || event.key === "ArrowRight")
               next = widths[side] + (event.key === "ArrowRight" ? 1 : -1) * (side === "left" ? 1 : -1) * (event.shiftKey ? 40 : 10);
             else return;
             event.preventDefault();
+            if (!expanded) (side === "left" ? onNavigation : onBookmarks)();
             persist(side, clamp(side, next));
-          }} />}
+          }} />
         <button className="panel-toggle" aria-label={`${expanded ? "Collapse" : "Expand"} ${label}`}
           title={`${expanded ? "Collapse" : "Expand"} ${label}`} aria-expanded={expanded} aria-controls={controls}
           onClick={side === "left" ? onNavigation : onBookmarks}>
-          {(side === "left" ? expanded : !expanded) ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+          {(side === "left" ? expanded : !expanded) ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
         </button>
       </div>;
     })}

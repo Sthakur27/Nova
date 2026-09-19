@@ -1004,7 +1004,7 @@ export default function App() {
         setHoveredEdge(x <= edgeWidth ? "left" : x >= bounds.width - edgeWidth ? "right" : null);
       }}
       onPointerLeave={() => setHoveredEdge(null)}>
-      <SidePanelControls navigation={navigation} bookmarks={rail} hoveredEdge={hoveredEdge}
+      <SidePanelControls topBars={topBars} onTopBars={() => setTopBars(!topBars)} navigation={navigation} bookmarks={rail} hoveredEdge={hoveredEdge}
         onNavigation={() => setNavigation(!navigation)} onBookmarks={() => setRail(!rail)}
         onStorageError={() => setNotice("Panel widths changed, but could not be saved on this device.")} />
       {focusMode && (
@@ -1270,6 +1270,7 @@ export default function App() {
         )}
         </div>
         <div className="panel-toggle-zone panel-toggle-top" data-expanded={topBars} data-edge-hover={hoveredTop}>
+          <div className="top-panel-resizer" data-panel-drag="top" aria-hidden="true" title="Drag to resize or collapse top bars" />
           <button className="panel-toggle" aria-label={topBars ? "Collapse top bars" : "Expand top bars"}
             title={topBars ? "Collapse top bars" : "Expand top bars"} aria-expanded={topBars} aria-controls="top-bars"
             onClick={() => setTopBars(!topBars)}>

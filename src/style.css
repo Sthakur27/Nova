@@ -2061,3 +2061,30 @@ kbd {
 .app-shell[data-line-spacing="compact"] { --editor-line-height: 1.4; }
 .app-shell[data-line-spacing="relaxed"] { --editor-line-height: 2.2; }
 .app-shell[data-line-spacing="spacious"] { --editor-line-height: 2.6; }
+
+/* Generous controls and draggable panel backgrounds. */
+.panel-toggle { width: 44px; height: 44px; opacity: .8; pointer-events: auto; }
+.panel-toggle:focus-visible { outline: 2px solid #c6a4ef; outline-offset: 3px; }
+.panel-toggle-zone[data-expanded="false"] { width: 48px; }
+.panel-toggle-left { left: calc(var(--navigation-width) - 12px); }
+.panel-toggle-right { right: calc(var(--bookmarks-width) - 12px); }
+.panel-toggle-left, .panel-toggle-right { width: 24px; }
+.panel-resizer { inset: 0; }
+.panel-toggle-top, .panel-toggle-bottom { pointer-events: none; }
+.panel-toggle-top .panel-toggle, .panel-toggle-bottom .panel-toggle { position: relative; z-index: 1; }
+.panel-toggle-top[data-expanded="false"], .panel-toggle-bottom[data-expanded="false"] { width: auto; height: 48px; }
+.top-panel-resizer { position: absolute; inset: 0; pointer-events: auto; cursor: row-resize; touch-action: none; }
+.sidebar, .bookmark-rail { cursor: col-resize; }
+.top-bars { cursor: row-resize; }
+:is(.sidebar, .bookmark-rail, .top-bars) :is(button, a, input, select, textarea, [role="tab"]) { cursor: revert; }
+.app-shell[data-panel-dragging], .app-shell[data-panel-dragging] * { user-select: none !important; -webkit-user-select: none !important; cursor: col-resize !important; }
+.app-shell[data-panel-dragging="top"], .app-shell[data-panel-dragging="top"] * { cursor: row-resize !important; }
+.top-bars[data-snap-collapse="true"] { opacity: .3; }
+.app-shell[data-snap-panel="left"] .sidebar, .app-shell[data-snap-panel="right"] .bookmark-rail { opacity: .3; }
+.top-bars { min-height: min-content; }
+/* Keep collapsed drag strips at the edge, clear of note text. */
+.panel-toggle-left[data-expanded="false"] .panel-resizer { right: auto; width: 12px; }
+.panel-toggle-right[data-expanded="false"] .panel-resizer { left: auto; width: 12px; }
+.panel-toggle-top[data-expanded="true"] { bottom: 0; height: 44px; }
+.panel-toggle-top[data-expanded="true"] .top-panel-resizer { top: auto; bottom: -6px; height: 12px; }
+.panel-toggle-top[data-expanded="false"] .top-panel-resizer { height: 12px; }
