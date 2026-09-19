@@ -745,10 +745,9 @@ pub fn run() {
                             &PredefinedMenuItem::separator(app)?,
                             &PredefinedMenuItem::cut(app, None)?,
                             &PredefinedMenuItem::copy(app, None)?,
-                            #[cfg(not(target_os = "macos"))]
                             &PredefinedMenuItem::paste(app, None)?,
                             #[cfg(target_os = "macos")]
-                            &MenuItem::with_id(app, "nova-dictate", "Dictate", true, Some("Cmd+V"))?,
+                            &MenuItem::with_id(app, "nova-dictate", "Dictate", true, Some("Cmd+Shift+D"))?,
                             &MenuItem::with_id(app, "nova-select-all", "Select All", true, Some("CmdOrCtrl+A"))?,
                         ],
                     )?,

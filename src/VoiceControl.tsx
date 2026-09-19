@@ -107,8 +107,8 @@ export default function VoiceControl(props: Props) {
   useEffect(() => {
     // Capture before focused editors, inputs, or terminals consume the key.
     const key = (event: KeyboardEvent) => {
-      if (!event.metaKey || event.ctrlKey || event.shiftKey || event.altKey ||
-          event.isComposing || event.key.toLowerCase() !== "v") return;
+      if (!event.metaKey || event.ctrlKey || !event.shiftKey || event.altKey ||
+          event.isComposing || event.key.toLowerCase() !== "d") return;
       event.preventDefault();
       event.stopPropagation();
       if (!event.repeat) dictateButton.current?.click();
@@ -169,7 +169,7 @@ export default function VoiceControl(props: Props) {
     <div className="voice-control">
       <button
         ref={dictateButton}
-        aria-keyshortcuts="Meta+V"
+        aria-keyshortcuts="Meta+Shift+D"
         className={"voice-button toolbar-icon focus-toggle " + (active ? "voice-active" : "")}
         disabled={
           props.disabled ||
@@ -193,7 +193,7 @@ export default function VoiceControl(props: Props) {
         )}
         <span className="focus-tooltip" id="dictation-tooltip" role="tooltip">
           <span>{description}</span>
-          <span className="focus-tooltip-keys"><kbd>⌘</kbd><kbd>V</kbd></span>
+          <span className="focus-tooltip-keys"><kbd>⌘</kbd><kbd>⇧</kbd><kbd>D</kbd></span>
         </span>
       </button>
       {!active && (

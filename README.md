@@ -82,14 +82,14 @@ Use **⌘ + arrow keys** on Mac or **Ctrl + arrow keys** on Windows to toggle pa
 | Create a note | ⌘ T | Ctrl T |
 | Bookmark a passage | ⌘ Shift B | Ctrl Shift B |
 | Save | ⌘ S | Ctrl S |
-| Start / stop dictation | ⌘ V | Click Dictate |
+| Start / stop dictation | ⌘ Shift D | Click Dictate |
 | Enter or leave focus mode | ⌘ G | Ctrl G |
 | Open Settings | ⌘ , | Ctrl , |
 | Zoom in / out | ⌘ + / − | Ctrl + / − |
 
 ### Prefer to say it?
 
-Click **Dictate**, the microphone above your note. On first use, Nova asks you to download its English speech model (about 78 MB). Place your cursor and start recording: words appear with a short processing delay and may be revised as you speak. Stop to finalize them. Recordings can be up to two minutes long. On Mac, **⌘ V** starts or stops dictation; this replaces the usual Paste shortcut in Nova.
+Click **Dictate**, the microphone above your note. On first use, Nova asks you to download its English speech model (about 78 MB). Place your cursor and start recording: words appear with a short processing delay and may be revised as you speak. Stop to finalize them. Recordings can be up to two minutes long. On Mac, **⌘ Shift D** starts or stops dictation.
 
 Your audio stays on your computer and isn't uploaded. Voice typing requires the desktop app and microphone access. See the [voice typing guide](docs/user-guide.md#voice-typing) for details.
 

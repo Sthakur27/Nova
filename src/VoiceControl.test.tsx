@@ -28,17 +28,19 @@ it("toggles dictation from a focused input and the native menu, respects busy st
   const root = createRoot(host);
   const props = { disabled: false, onBegin: vi.fn(), onText: vi.fn(), onPartial: vi.fn(), onCancel: vi.fn(), onBusy: vi.fn(), onError: vi.fn() };
   const press = async (extra: KeyboardEventInit = {}) => {
-    const event = new KeyboardEvent("keydown", { key: "v", metaKey: true, bubbles: true, cancelable: true, ...extra });
+    const event = new KeyboardEvent("keydown", { key: "D", metaKey: true, shiftKey: true, bubbles: true, cancelable: true, ...extra });
     await act(async () => { input.dispatchEvent(event); });
     return event;
   };
   try {
     await act(async () => root.render(<VoiceControl {...props} />));
     input.focus();
-    expect(host.querySelector('[aria-label="Dictate"]')?.getAttribute("aria-keyshortcuts")).toBe("Meta+V");
-    expect(host.querySelector('[role="tooltip"]')?.textContent).toContain("⌘V");
-    expect((await press({ shiftKey: true })).defaultPrevented).toBe(false);
+    expect(host.querySelector('[aria-label="Dictate"]')?.getAttribute("aria-keyshortcuts")).toBe("Meta+Shift+D");
+    expect(host.querySelector('[role="tooltip"]')?.textContent).toContain("⌘⇧D");
+    expect((await press({ shiftKey: false })).defaultPrevented).toBe(false);
     expect((await press({ metaKey: false, ctrlKey: true })).defaultPrevented).toBe(false);
+    expect((await press({ key: "v", shiftKey: false })).defaultPrevented).toBe(false);
+    expect((await press({ key: "V" })).defaultPrevented).toBe(false);
     await press({ repeat: true });
     expect(props.onBegin).not.toHaveBeenCalled();
     expect((await press()).defaultPrevented).toBe(true);
@@ -64,7 +66,7 @@ it("toggles dictation from a focused input and the native menu, respects busy st
     input.remove();
   }
   expect(mocks.handlers.has("nova:dictate")).toBe(false);
-  const event = new KeyboardEvent("keydown", { key: "v", metaKey: true, cancelable: true });
+  const event = new KeyboardEvent("keydown", { key: "D", metaKey: true, shiftKey: true, cancelable: true });
   window.dispatchEvent(event);
   expect(event.defaultPrevented).toBe(false);
 });
