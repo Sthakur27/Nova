@@ -1,4 +1,4 @@
 [env]
-# Use the crate's shipped bindings and a portable CPU build for distribution.
-WHISPER_DONT_GENERATE_BINDINGS = "1"
+# Generate bindings for the host ABI: the crate's shipped Linux bindings are
+# incompatible with Windows MSVC. Keep the CPU build portable for distribution.
 GGML_NATIVE = "OFF"

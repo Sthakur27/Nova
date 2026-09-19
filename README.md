@@ -22,7 +22,7 @@ These are early, unsigned builds. macOS or Windows may show a security warning w
 
 ## Run from source (developers)
 
-Requires Node.js 22.22.2+ (or 24.15+ / 26+), Rust stable, and CMake (for the local speech engine). On macOS 11 or later, install Xcode Command Line Tools. On Windows install Visual Studio C++ Build Tools (Desktop development with C++) and WebView2. See [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
+Requires Node.js 22.22.2+ (or 24.15+ / 26+), Rust stable, CMake, and libclang (for the local speech engine's platform-specific bindings). On macOS 11 or later, install Xcode Command Line Tools. On Windows install Visual Studio C++ Build Tools (Desktop development with C++), LLVM, and WebView2. If libclang is not discovered automatically, set `LIBCLANG_PATH` to LLVM's `bin` directory. See [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
 
 ```sh
 npm ci
