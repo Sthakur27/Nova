@@ -1,0 +1,10 @@
+{
+  "identifier": "default",
+  "description": "Local note editing window",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-destroy",
+    "dialog:allow-open"
+  ]
+}
