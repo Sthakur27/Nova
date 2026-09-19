@@ -1,16 +1,62 @@
+import {
+  searchCurrentNote,
+  type CurrentNote,
+  type SearchScope,
+} from "./currentSearch";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bookmark as BookmarkIcon, FileText, Search, TextSearch, X } from "lucide-react";
+import {
+  Bookmark as BookmarkIcon,
+  FileText,
+  Search,
+  TextSearch,
+  X,
+} from "lucide-react";
 import { filenameMatches, type Workspace } from "./model";
-import { searchNotes, type FolderSearchHit, type BookmarkSearchHit } from "./storage";
+import {
+  searchNotes,
+  type FolderSearchHit,
+  type BookmarkSearchHit,
+} from "./storage";
 export default function Palette({
   folders,
+  activeNote,
+  scope,
+  onScopeChange,
+  onNavigateCurrent,
   onClose,
   onOpen,
 }: {
   folders: Workspace[];
+  activeNote: CurrentNote | null;
+  scope: SearchScope;
+  onScopeChange: (scope: SearchScope) => void;
+  onNavigateCurrent: (from?: number, to?: number) => void;
   onClose: () => void;
-  onOpen: (root: string, path: string, line?: number, bookmarkId?: string) => void;
+  onOpen: (
+    root: string,
+    path: string,
+    line?: number,
+    bookmarkId?: string,
+  ) => void;
 }) {
+  const currentOnly = scope === "current" && !!activeNote;
+  const searchFolders = useMemo(
+    () =>
+      currentOnly && activeNote
+        ? folders
+            .filter((f) => f.root === activeNote.root)
+            .map((f) => ({
+              ...f,
+              files: [
+                {
+                  path: activeNote.path,
+                  name: activeNote.path.split("/").at(-1)!,
+                },
+              ],
+            }))
+        : folders,
+    [folders, currentOnly, activeNote],
+  );
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("All");
   const [hits, setHits] = useState<FolderSearchHit[]>([]);
@@ -22,10 +68,10 @@ export default function Palette({
   const input = useRef<HTMLInputElement>(null);
   const files = useMemo(
     () =>
-      (filter === "Text" || filter === "Bookmarks")
+      filter === "Text" || filter === "Bookmarks"
         ? []
         : filenameMatches(
-            folders.flatMap((folder) =>
+            searchFolders.flatMap((folder) =>
               folder.files.map((file) => ({
                 ...file,
                 root: folder.root,
@@ -34,10 +80,43 @@ export default function Palette({
             ),
             query,
           ),
-    [folders, query, filter],
+    [searchFolders, query, filter],
   );
-  const textHits = filter === "Files" || filter === "Bookmarks" ? [] : hits;
-  const bookmarkHits = filter === "Files" || filter === "Text" ? [] : bookmarks;
+  const localHits = useMemo(
+    () =>
+      activeNote && currentOnly ? searchCurrentNote(activeNote, query) : [],
+    [activeNote, currentOnly, query],
+  );
+  const localBookmarks = useMemo(
+    () =>
+      activeNote && currentOnly && query.trim()
+        ? activeNote.bookmarks
+            .filter(
+              (b) =>
+                b.name.toLowerCase().includes(query.trim().toLowerCase()) ||
+                b.quote.toLowerCase().includes(query.trim().toLowerCase()),
+            )
+            .slice(0, 80)
+            .map((bookmark) => ({
+              root: activeNote.root,
+              path: activeNote.path,
+              bookmark,
+            }))
+        : [],
+    [activeNote, currentOnly, query],
+  );
+  const textHits =
+    filter === "Files" || filter === "Bookmarks"
+      ? []
+      : currentOnly
+        ? localHits
+        : hits;
+  const bookmarkHits =
+    filter === "Files" || filter === "Text"
+      ? []
+      : currentOnly
+        ? localBookmarks
+        : bookmarks;
   const rows = [
     ...files.map((f) => ({
       root: f.root,
@@ -45,7 +124,12 @@ export default function Palette({
       line: undefined as number | undefined,
       bookmarkId: undefined as string | undefined,
     })),
-    ...bookmarkHits.map((hit) => ({ root: hit.root, path: hit.path, line: undefined, bookmarkId: hit.bookmark.id })),
+    ...bookmarkHits.map((hit) => ({
+      root: hit.root,
+      path: hit.path,
+      line: undefined,
+      bookmarkId: hit.bookmark.id,
+    })),
     ...textHits.map((hit) => ({ ...hit, bookmarkId: undefined })),
   ];
   useEffect(() => {
@@ -54,7 +138,7 @@ export default function Palette({
     setBookmarks([]);
     setError("");
     setIndex(0);
-    if (!query.trim() || filter === "Files") {
+    if (currentOnly || !query.trim() || filter === "Files") {
       setBusy(false);
       return;
     }
@@ -79,15 +163,34 @@ export default function Palette({
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query, filter, folders]);
+  }, [query, filter, folders, currentOnly]);
   useEffect(() => {
     panel.current
       ?.querySelector('[aria-selected="true"]')
       ?.scrollIntoView({ block: "nearest" });
   }, [index]);
-  const select = (root: string, path: string, line?: number, bookmarkId?: string) => {
-    onOpen(root, path, line, bookmarkId);
-    onClose();
+  const select = (
+    root: string,
+    path: string,
+    line?: number,
+    bookmarkId?: string,
+    from?: number,
+    to?: number,
+  ) => {
+    if (currentOnly && activeNote) {
+      const mark = bookmarkId
+        ? activeNote.bookmarks.find((b) => b.id === bookmarkId)
+        : undefined;
+      const hit = line ? localHits.find((h) => h.line === line) : undefined;
+      onClose();
+      onNavigateCurrent(
+        from ?? (mark && !mark.unresolved ? mark.from : hit?.from),
+        to ?? (mark && !mark.unresolved ? mark.to : hit?.to),
+      );
+    } else {
+      onOpen(root, path, line, bookmarkId);
+      onClose();
+    }
   };
   return (
     <div
@@ -100,7 +203,9 @@ export default function Palette({
         className="palette"
         role="dialog"
         aria-modal="true"
-        aria-label="Find across your folders"
+        aria-label={
+          currentOnly ? "Find in current tab" : "Find across your folders"
+        }
         ref={panel}
         onKeyDown={(e) => {
           if (e.key === "Escape") {
@@ -118,7 +223,15 @@ export default function Palette({
           }
           if (e.key === "Enter" && e.target === input.current && rows[index]) {
             e.preventDefault();
-            select(rows[index].root, rows[index].path, rows[index].line, rows[index].bookmarkId);
+            const row = rows[index];
+            select(
+              row.root,
+              row.path,
+              row.line,
+              row.bookmarkId,
+              "from" in row ? (row.from as number) : undefined,
+              "to" in row ? (row.to as number) : undefined,
+            );
           }
           if (e.key === "Tab") {
             const controls = Array.from(
@@ -135,6 +248,36 @@ export default function Palette({
           }
         }}
       >
+        <div className="search-scope" role="group" aria-label="Search scope">
+          <button
+            aria-pressed={!currentOnly}
+            className={!currentOnly ? "selected" : ""}
+            onClick={() => {
+              setIndex(0);
+              onScopeChange("everywhere");
+              input.current?.focus();
+            }}
+          >
+            Everywhere
+          </button>
+          <button
+            aria-pressed={currentOnly}
+            disabled={!activeNote}
+            className={currentOnly ? "selected" : ""}
+            onClick={() => {
+              setIndex(0);
+              onScopeChange("current");
+              input.current?.focus();
+            }}
+          >
+            Current tab
+          </button>
+          <span title={currentOnly ? activeNote?.path : undefined}>
+            {currentOnly
+              ? activeNote?.path.split("/").at(-1)
+              : "All added folders"}
+          </span>
+        </div>
         <div className="palette-input">
           <Search size={22} />
           <input
@@ -144,7 +287,11 @@ export default function Palette({
             autoFocus
             ref={input}
             aria-label="Search files, bookmarks, and text"
-            placeholder="A filename, a bookmark, a phrase…"
+            placeholder={
+              currentOnly
+                ? "Find in this note…"
+                : "A filename, a bookmark, a phrase…"
+            }
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -170,8 +317,9 @@ export default function Palette({
             </button>
           ))}
           <span>
-            Searching {folders.length}{" "}
-            {folders.length === 1 ? "folder" : "folders"}
+            {currentOnly
+              ? "Searching current text"
+              : `Searching ${folders.length} ${folders.length === 1 ? "folder" : "folders"}`}
           </span>
         </div>
         <div
@@ -241,8 +389,17 @@ export default function Palette({
               role="option"
               aria-selected={files.length + bookmarkHits.length + i === index}
               className="search-result"
-              key={hit.root + ":" + hit.path + ":" + hit.line}
-              onClick={() => select(hit.root, hit.path, hit.line)}
+              key={hit.root + ":" + hit.path + ":" + hit.line + ":" + i}
+              onClick={() =>
+                select(
+                  hit.root,
+                  hit.path,
+                  hit.line,
+                  undefined,
+                  "from" in hit ? (hit.from as number) : undefined,
+                  "to" in hit ? (hit.to as number) : undefined,
+                )
+              }
             >
               <TextSearch size={17} />
               <span>
@@ -256,9 +413,13 @@ export default function Palette({
               </span>
             </button>
           ))}
-          {busy && <p className="search-message">Looking inside your files…</p>}
-          {error && <p className="search-message error">{error}</p>}
-          {!busy && !error && !rows.length && (
+          {!currentOnly && busy && (
+            <p className="search-message">Looking inside your files…</p>
+          )}
+          {!currentOnly && error && (
+            <p className="search-message error">{error}</p>
+          )}
+          {(currentOnly || (!busy && !error)) && !rows.length && (
             <p className="search-message">No matches. Try another word.</p>
           )}
         </div>
@@ -270,7 +431,11 @@ export default function Palette({
           <span>
             <kbd>↵</kbd> to open
           </span>
-          <span>Text search uses saved files</span>
+          <span>
+            {currentOnly
+              ? "Includes unsaved edits"
+              : "Text search uses saved files"}
+          </span>
         </div>
       </div>
     </div>

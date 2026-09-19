@@ -1,4 +1,5 @@
-import {openTab,pinTab,tabId,type NoteTab} from "./tabs";
+import type {SearchScope} from "./currentSearch";
+import { openTab, pinTab, tabId, type NoteTab } from "./tabs";
 import {
   lazy,
   Suspense,
@@ -67,6 +68,7 @@ export default function App() {
   const dirtyRef = useRef(false);
   const [mode, setMode] = useState<EditorMode>("edit");
   const [preview, setPreview] = useState("");
+  const [searchScope,setSearchScope]=useState<SearchScope>("everywhere");
   const [palette, setPalette] = useState(false);
   const [rail, setRail] = useState(true);
   const [cursor, setCursor] = useState([1, 1]);
@@ -886,6 +888,10 @@ export default function App() {
       {palette && (
         <Palette
           folders={folders}
+          scope={searchScope}
+          onScopeChange={setSearchScope}
+          activeNote={data?{root:workspace.root,path,text:editor.current?.text()??data.text,bookmarks:marksRef.current}:null}
+          onNavigateCurrent={(from,to)=>{if(from!==undefined){setMode('source');requestAnimationFrame(()=>jump(from,to));}else editor.current?.jump(editor.current.selection().from);}}
           onClose={() => {
             setPalette(false);
             if (mode !== "read")
