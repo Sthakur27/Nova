@@ -1,10 +1,11 @@
 {
   "identifier": "default",
   "description": "Local note editing window",
-  "windows": ["main"],
+  "windows": ["main", "nova-*"],
   "permissions": [
     "core:default",
     "core:window:allow-destroy",
+    "core:webview:allow-set-webview-zoom",
     "dialog:allow-open"
   ]
 }

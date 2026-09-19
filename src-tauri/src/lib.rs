@@ -284,9 +284,8 @@ fn scan_search(
         warnings: Vec::new(),
     };
     let query = query.trim().to_lowercase();
-    if query.is_empty() {
-        return response;
-    }
+    // An empty query lists all bookmark metadata without reading note text.
+    let listing = query.is_empty();
     for root in roots {
         if generation.load(Ordering::Relaxed) != ticket {
             break;
@@ -319,7 +318,7 @@ fn scan_search(
                 "{}.json",
                 revision(canonical.to_string_lossy().as_bytes())
             ));
-            if metadata.exists() && response.bookmarks.len() < 80 {
+            if metadata.exists() && (listing || response.bookmarks.len() < 80) {
                 match fs::read(&metadata)
                     .map_err(err)
                     .and_then(|bytes| serde_json::from_slice::<Vec<Bookmark>>(&bytes).map_err(err))
@@ -334,7 +333,7 @@ fn scan_search(
                                     path: note.path.clone(),
                                     bookmark,
                                 });
-                                if response.bookmarks.len() == 80 {
+                                if !listing && response.bookmarks.len() == 80 {
                                     break;
                                 }
                             }
@@ -346,7 +345,7 @@ fn scan_search(
                     )),
                 }
             }
-            if response.hits.len() == 80 {
+            if listing || response.hits.len() == 80 {
                 continue;
             }
             let file = match fs::File::open(&path) {
@@ -397,7 +396,11 @@ async fn search_notes(
             Err(error) => warnings.push(format!("{root}: {error}")),
         }
     }
-    let generation = access.search_generation.clone();
+    let generation = if query.trim().is_empty() {
+        Arc::new(AtomicU64::new(0))
+    } else {
+        access.search_generation.clone()
+    };
     let ticket = generation.fetch_add(1, Ordering::Relaxed) + 1;
     let metadata_dir = app.path().app_data_dir().map_err(err)?.join("bookmarks");
     let mut response = tauri::async_runtime::spawn_blocking(move || {
@@ -445,6 +448,60 @@ async fn save_explorer(
     })
     .await
     .map_err(err)?
+}
+fn create_untitled(root: &Path) -> Result<String, String> {
+    for number in 1..10_000 {
+        let name = if number == 1 { "Untitled.md".into() } else { format!("Untitled {number}.md") };
+        match fs::OpenOptions::new().write(true).create_new(true).open(root.join(&name)) {
+            Ok(_) => return Ok(name),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(err(error)),
+        }
+    }
+    Err("Too many untitled notes in this folder.".into())
+}
+#[tauri::command]
+fn create_note(root: String, access: State<'_, Access>) -> Result<String, String> {
+    let _guard = access.writes.lock().map_err(err)?;
+    create_untitled(&root_path(&access, &root)?)
+}
+fn rename_file(source: &Path, name: &str) -> Result<PathBuf, String> {
+    if name.trim().is_empty() || name.contains(['/', '\\', ':']) || !supported(Path::new(name)) {
+        return Err("Enter a filename ending in .md, .markdown, .mdx, or .txt.".into());
+    }
+    let target = source.with_file_name(name);
+    if target == source { return Ok(target); }
+    // Creating a link fails if the destination exists, so an existing note is never overwritten.
+    fs::hard_link(source, &target).map_err(err)?;
+    if let Err(error) = fs::remove_file(source) {
+        let _ = fs::remove_file(&target);
+        return Err(err(error));
+    }
+    Ok(target)
+}
+#[tauri::command]
+fn rename_note(root: String, path: String, name: String, access: State<'_, Access>, app: tauri::AppHandle) -> Result<String, String> {
+    let _guard = access.writes.lock().map_err(err)?;
+    let root = root_path(&access, &root)?;
+    let source = scoped_path(&root, &path)?;
+    let old_metadata = metadata_path(&app, &source)?;
+    let target = rename_file(&source, &name)?;
+    if target != source && old_metadata.exists() {
+        let result = metadata_path(&app, &target).and_then(|new_metadata| fs::rename(&old_metadata, new_metadata).map_err(err));
+        if let Err(error) = result {
+            let _ = fs::rename(&target, &source);
+            return Err(error);
+        }
+    }
+    Ok(target.strip_prefix(root).map_err(err)?.to_string_lossy().replace('\\', "/"))
+}
+#[tauri::command]
+fn new_window(app: tauri::AppHandle) -> Result<(), String> {
+    static WINDOW_ID: AtomicU64 = AtomicU64::new(1);
+    let mut config = app.config().app.windows[0].clone();
+    config.label = format!("nova-{}", WINDOW_ID.fetch_add(1, Ordering::Relaxed));
+    tauri::WebviewWindowBuilder::from_config(&app, &config).map_err(err)?.build().map_err(err)?;
+    Ok(())
 }
 #[tauri::command]
 fn quit_app(app: tauri::AppHandle, access: State<'_, Access>) {
@@ -507,6 +564,9 @@ pub fn run() {
             load_explorer,
             save_explorer,
             quit_app,
+            new_window,
+            create_note,
+            rename_note,
             speech::speech_status,
             speech::speech_download,
             speech::speech_start,
@@ -529,6 +589,29 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn untitled_creation_preserves_existing_notes() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join("Untitled.md"), "keep me").unwrap();
+        assert_eq!(create_untitled(dir.path()).unwrap(), "Untitled 2.md");
+        assert_eq!(create_untitled(dir.path()).unwrap(), "Untitled 3.md");
+        assert_eq!(fs::read_to_string(dir.path().join("Untitled.md")).unwrap(), "keep me");
+    }
+    #[test]
+    fn rename_preserves_contents_and_rejects_collisions_and_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("before.md");
+        fs::write(&source, "original").unwrap();
+        fs::write(dir.path().join("taken.md"), "existing").unwrap();
+        for name in ["taken.md", "../escape.md", "nested/file.md", "bad.exe", ""] {
+            assert!(rename_file(&source, name).is_err());
+            assert_eq!(fs::read_to_string(&source).unwrap(), "original");
+        }
+        let renamed = rename_file(&source, "after.md").unwrap();
+        assert!(!source.exists());
+        assert_eq!(fs::read_to_string(renamed).unwrap(), "original");
+        assert_eq!(fs::read_to_string(dir.path().join("taken.md")).unwrap(), "existing");
+    }
     #[test]
     fn search_identifies_same_named_files_in_distinct_roots() {
         let a = tempfile::tempdir().unwrap();
@@ -567,7 +650,7 @@ mod tests {
             revision(file.to_string_lossy().as_bytes())
         ));
         fs::write(&target, serde_json::to_vec(&vec![mark]).unwrap()).unwrap();
-        for query in ["needle", "PASSAGE"] {
+        for query in ["needle", "PASSAGE", ""] {
             let result = scan_search(
                 vec![root.clone()],
                 query.into(),
@@ -578,6 +661,9 @@ mod tests {
             assert_eq!(result.bookmarks.len(), 1);
             assert_eq!(result.bookmarks[0].bookmark.id, "user-created");
             assert_eq!(result.bookmarks[0].path, "z.md");
+            if query.is_empty() {
+                assert!(result.hits.is_empty());
+            }
             if query == "needle" {
                 assert_eq!(result.hits.len(), 80);
             }

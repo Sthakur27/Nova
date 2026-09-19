@@ -1,3 +1,8 @@
+import Settings from "./Settings";
+import SidePanelControls from "./SidePanelControls";
+import TextWidthControl, { textWidths, type TextWidth } from "./TextWidthControl";
+import { usePreference } from "./preferences";
+import ScopeToggle from "./ScopeToggle";
 import type {SearchScope} from "./currentSearch";
 import { openTab, pinTab, tabId, type NoteTab } from "./tabs";
 import {
@@ -12,9 +17,13 @@ import {
   Bookmark as BookmarkIcon,
   BookOpen,
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   FileText,
   FolderOpen,
   Code2,
+  ListOrdered,
+  ScanLine,
   Plus,
   Search,
   PanelRight,
@@ -23,18 +32,26 @@ import {
   X,
   Check,
   Save,
+  Settings as SettingsIcon,
 } from "lucide-react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
+import { installZoomShortcuts } from "./zoom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import Editor, { type EditorHandle, type EditorSnapshot } from "./Editor";
 import Palette from "./Palette";
 import Explorer from "./Explorer";
 import FormatToolbar from "./FormatToolbar";
+import type { FormatAction } from "./richMarkdown";
 import { addFolders, type EditorMode } from "./folders";
 import VoiceControl from "./VoiceControl";
+import NovaMark from "./NovaMark";
+import PlasmaEffects from "./PlasmaEffects";
 import {
   chooseWorkspaces,
+  createNote,
+  renameNote,
   loadFolders,
   loadExplorer,
   saveExplorer,
@@ -43,19 +60,73 @@ import {
   desktop,
   readNote,
   saveBookmarks,
+  searchNotes,
+  type BookmarkSearchHit,
   saveNote,
 } from "./storage";
 import type { Bookmark, DocumentData, Workspace } from "./model";
+import type { LargeReadHandle } from "./LargeRead";
+const LargeRead = lazy(() => import("./LargeRead"));
 const Markdown = lazy(() => import("./Markdown"));
 const mod = navigator.platform.toLowerCase().includes("mac") ? "⌘" : "Ctrl";
+function BlackHoleIcon() {
+  return (
+    <svg className="black-hole-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <g transform="rotate(-28 12 12)">
+        <ellipse cx="12" cy="12" rx="10" ry="4" stroke="currentColor" strokeWidth="1.2" opacity=".45" />
+        <circle cx="12" cy="12" r="5" fill="#111017" stroke="currentColor" strokeWidth="1.3" />
+        <path d="M2 12c0 2.2 4.5 4 10 4s10-1.8 10-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M7.8 9.4a5 5 0 0 1 7.5-1.2" stroke="#e7d6ff" strokeWidth="1.2" strokeLinecap="round" />
+      </g>
+    </svg>
+  );
+}
+
 export default function App() {
-  const [tabs,setTabs]=useState<NoteTab[]>([]);
-  const pendingPins=useRef(new Set<string>());
-  const tabsRef=useRef<NoteTab[]>([]);
-  const snapshots=useRef(new Map<string,EditorSnapshot>());
-  const [editorSnapshot,setEditorSnapshot]=useState<EditorSnapshot|undefined>();
-  const updateTabs=useCallback((next:NoteTab[])=>{tabsRef.current=next;setTabs(next);for(const key of snapshots.current.keys())if(!next.some(t=>tabId(t)===key))snapshots.current.delete(key);},[]);
-  const pin=useCallback((root:string,path:string)=>updateTabs(pinTab(tabsRef.current,tabId({root,path}))),[updateTabs]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [readControls, setReadControls] = useState<HTMLDivElement | null>(null);
+  const [galaxyMode, setGalaxyMode, galaxyError] = usePreference<boolean>("galaxy", true);
+  const [plasmaEnabled, setPlasmaEnabled, plasmaError] = usePreference<boolean>("plasma", true);
+  const [showLineNumbers, setShowLineNumbers, numbersError] = usePreference<boolean>("line-numbers", true);
+  const [showLineHighlight, setShowLineHighlight, highlightError] = usePreference<boolean>("line-highlight", true);
+  const [wordWrap, setWordWrap, wrapError] = usePreference<boolean>("word-wrap", true);
+  const [spellcheck, setSpellcheck, spellingError] = usePreference<boolean>("spellcheck", true);
+  const [fontSize, setFontSize, fontError] = usePreference<string>("editor-size", "default", ["small", "default", "large", "extra-large"]);
+  const [textWidth, setTextWidth, widthError] = usePreference<TextWidth>("text-width", "default", textWidths);
+  const toggleGalaxy = () => setGalaxyMode(!galaxyMode);
+  const togglePlasma = () => setPlasmaEnabled(!plasmaEnabled);
+  const toggleLineNumbers = () => setShowLineNumbers(!showLineNumbers);
+  const [windowFocused, setWindowFocused] = useState(() => document.hasFocus());
+  useEffect(() => {
+    const syncFocus = () =>
+      setWindowFocused(document.hasFocus() && !document.hidden);
+    window.addEventListener("focus", syncFocus);
+    window.addEventListener("blur", syncFocus);
+    document.addEventListener("visibilitychange", syncFocus);
+    return () => {
+      window.removeEventListener("focus", syncFocus);
+      window.removeEventListener("blur", syncFocus);
+      document.removeEventListener("visibilitychange", syncFocus);
+    };
+  }, []);
+  const [tabs, setTabs] = useState<NoteTab[]>([]);
+  const pendingPins = useRef(new Set<string>());
+  const tabsRef = useRef<NoteTab[]>([]);
+  const snapshots = useRef(new Map<string, EditorSnapshot>());
+  const [editorSnapshot, setEditorSnapshot] = useState<
+    EditorSnapshot | undefined
+  >();
+  const updateTabs = useCallback((next: NoteTab[]) => {
+    tabsRef.current = next;
+    setTabs(next);
+    for (const key of snapshots.current.keys())
+      if (!next.some((t) => tabId(t) === key)) snapshots.current.delete(key);
+  }, []);
+  const pin = useCallback(
+    (root: string, path: string) =>
+      updateTabs(pinTab(tabsRef.current, tabId({ root, path }))),
+    [updateTabs],
+  );
   const [folders, setFolders] = useState<Workspace[]>([demoWorkspace]);
   const [foldersReady, setFoldersReady] = useState(false);
   const [externalDrag, setExternalDrag] = useState(false);
@@ -70,9 +141,56 @@ export default function App() {
   const [preview, setPreview] = useState("");
   const [searchScope,setSearchScope]=useState<SearchScope>("everywhere");
   const [palette, setPalette] = useState(false);
-  const [rail, setRail] = useState(true);
+  const [rail, setRail, railError] = usePreference<boolean>("bookmarks-panel", true);
+  const [navigation, setNavigation, navigationError] = usePreference<boolean>("navigation-panel", true);
+  const [topBars, setTopBars, topBarsError] = usePreference<boolean>("top-bars", true);
+  const [statusBar, setStatusBar, statusBarError] = usePreference<boolean>("status-bar", true);
+  const [focusMode, setFocusMode, focusModeError] = usePreference<boolean>("focus-mode", false);
+  const [hoveredBottom, setHoveredBottom] = useState(false);
+  const [hoveredTop, setHoveredTop] = useState(false);
+  const [hoveredEdge, setHoveredEdge] = useState<"left" | "right" | null>(null);
+  const [bookmarkScope, setBookmarkScope] = useState<SearchScope>("current");
+  const [allBookmarks, setAllBookmarks] = useState<BookmarkSearchHit[]>([]);
+  const [bookmarksBusy, setBookmarksBusy] = useState(false);
+  const [bookmarksError, setBookmarksError] = useState("");
+  useEffect(() => {
+    if (!rail || bookmarkScope !== "everywhere") {
+      setBookmarksBusy(false);
+      return;
+    }
+    let cancelled = false;
+    setBookmarksBusy(true);
+    setBookmarksError("");
+    searchNotes(folders, "").then((result) => {
+      if (cancelled) return;
+      setAllBookmarks(result.bookmarks);
+      setBookmarksError(result.warnings.join(" · "));
+    }).catch((error) => {
+      if (!cancelled) setBookmarksError(String(error));
+    }).finally(() => {
+      if (!cancelled) setBookmarksBusy(false);
+    });
+    return () => { cancelled = true; };
+  }, [rail, bookmarkScope, folders, path, workspace.root]);
+  const currentBookmarks = data ? bookmarks.map((bookmark) => ({ root: workspace.root, path, bookmark })) : [];
+  const visibleBookmarks = bookmarkScope === "current" ? currentBookmarks : [
+    ...currentBookmarks,
+    ...allBookmarks.filter((hit) =>
+      folders.some((folder) => folder.root === hit.root) &&
+      !(hit.root === workspace.root && hit.path === path)),
+  ];
+  const [paragraphStyle, setParagraphStyle] = useState<FormatAction>("paragraph");
   const [cursor, setCursor] = useState([1, 1]);
   const [notice, setNotice] = useState("");
+  useEffect(() => {
+    // Browser previews already provide their own page zoom shortcuts.
+    if (!desktop) return;
+    return installZoomShortcuts(
+      window,
+      (factor) => getCurrentWebview().setZoom(factor),
+      (error) => setNotice(`Unable to change zoom: ${String(error)}`),
+    );
+  }, []);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeMark, setActiveMark] = useState<string | null>(null);
@@ -85,6 +203,7 @@ export default function App() {
   } | null>(null);
   const editor = useRef<EditorHandle>(null);
   const previewElement = useRef<HTMLDivElement>(null);
+  const largeRead = useRef<LargeReadHandle>(null);
   const revision = useRef("");
   const operation = useRef(false);
   const voiceBusy = useRef(false);
@@ -110,7 +229,7 @@ export default function App() {
     setBookmarks(marks);
   }, []);
   const changed = useCallback(() => {
-    pin(current.current.workspace.root,current.current.path);
+    pin(current.current.workspace.root, current.current.path);
     dirtyRef.current = true;
     setDirty(true);
   }, [pin]);
@@ -144,7 +263,13 @@ export default function App() {
             setWorkspace(candidate.folder);
             setPath(candidate.path);
             setData(note);
-            updateTabs([{root:candidate.folder.root,path:candidate.path,pinned:false}]);
+            updateTabs([
+              {
+                root: candidate.folder.root,
+                path: candidate.path,
+                pinned: false,
+              },
+            ]);
             setPreview(note.text);
             applyMarks(note.bookmarks);
             opened = true;
@@ -250,6 +375,10 @@ export default function App() {
     const text = editor.current?.text() ?? "";
     const line = text.slice(0, from).split("\n").length;
     requestAnimationFrame(() => {
+      if (largeRead.current) {
+        largeRead.current.jump(line);
+        return;
+      }
       const nodes = [
         ...(previewElement.current?.querySelectorAll<HTMLElement>(
           "[data-line]",
@@ -263,10 +392,28 @@ export default function App() {
     });
   }, []);
   const openNote = useCallback(
-    async (nextPath: string, line?: number, nextWorkspace?: Workspace, bookmarkId?: string, pinned=false) => {
-      const requested=nextWorkspace??current.current.workspace;
-      if(pinned){pendingPins.current.add(tabId({root:requested.root,path:nextPath}));pin(requested.root,nextPath);}
-      if(current.current.hasDocument&&requested.root===current.current.workspace.root&&nextPath===current.current.path&&!line&&!bookmarkId)return true;
+    async (
+      nextPath: string,
+      line?: number,
+      nextWorkspace?: Workspace,
+      bookmarkId?: string,
+      pinned = false,
+    ) => {
+      const requested = nextWorkspace ?? current.current.workspace;
+      if (pinned) {
+        pendingPins.current.add(
+          tabId({ root: requested.root, path: nextPath }),
+        );
+        pin(requested.root, nextPath);
+      }
+      if (
+        current.current.hasDocument &&
+        requested.root === current.current.workspace.root &&
+        nextPath === current.current.path &&
+        !line &&
+        !bookmarkId
+      )
+        return true;
       if (voiceBusy.current) {
         setNotice("Finish or cancel voice typing before switching files.");
         return false;
@@ -284,13 +431,30 @@ export default function App() {
         setLoading(true);
         const ws = nextWorkspace ?? current.current.workspace;
         const note = await readNote(ws.root, nextPath);
-        const old=current.current;
-        if(editor.current&&old.hasDocument)snapshots.current.set(tabId({root:old.workspace.root,path:old.path}),editor.current.snapshot());
-        const id=tabId({root:ws.root,path:nextPath});
-        const cached=snapshots.current.get(id);
+        const old = current.current;
+        if (editor.current && old.hasDocument)
+          snapshots.current.set(
+            tabId({ root: old.workspace.root, path: old.path }),
+            editor.current.snapshot(),
+          );
+        const id = tabId({ root: ws.root, path: nextPath });
+        const cached = snapshots.current.get(id);
         // An external file change invalidates its cached history.
-        setEditorSnapshot(cached&&cached.state.doc.toString()===note.text?cached:undefined);
-        updateTabs(openTab(tabsRef.current,{root:ws.root,path:nextPath,pinned:pinned||pendingPins.current.has(id)||tabsRef.current.some(t=>tabId(t)===id&&t.pinned)}));
+        setEditorSnapshot(
+          cached && cached.state.doc.toString() === note.text
+            ? cached
+            : undefined,
+        );
+        updateTabs(
+          openTab(tabsRef.current, {
+            root: ws.root,
+            path: nextPath,
+            pinned:
+              pinned ||
+              pendingPins.current.has(id) ||
+              tabsRef.current.some((t) => tabId(t) === id && t.pinned),
+          }),
+        );
         pendingPins.current.delete(id);
         revision.current = note.revision;
         setWorkspace(ws);
@@ -308,7 +472,9 @@ export default function App() {
             setMode("source");
             setTimeout(() => jump(mark.from, mark.to), 50);
           } else {
-            setNotice("This bookmark needs a new anchor. Its original passage could not be found.");
+            setNotice(
+              "This bookmark needs a new anchor. Its original passage could not be found.",
+            );
           }
         } else if (line) {
           setMode("source");
@@ -330,15 +496,84 @@ export default function App() {
         operation.current = false;
       }
     },
-    [applyMarks, jump, save, pin,updateTabs],
+    [applyMarks, jump, save, pin, updateTabs],
   );
-  const closeTab=async(tab:NoteTab)=>{
-    if(voiceBusy.current||operation.current){setNotice('Finish the current operation before closing a tab.');return;}
-    const id=tabId(tab),all=tabsRef.current,next=all.filter(t=>tabId(t)!==id);
-    if(current.current.hasDocument&&tabId({root:current.current.workspace.root,path:current.current.path})===id){
-      const neighbor=next[Math.min(all.findIndex(t=>tabId(t)===id),next.length-1)];
-      if(neighbor){const folder=current.current.folders.find(f=>f.root===neighbor.root);if(!folder||!await openNote(neighbor.path,undefined,folder))return;}
-      else{if(!await save()||dirtyRef.current)return;setData(null);setPath('');applyMarks([]);setEditorSnapshot(undefined);}
+  const newTab = useCallback(async () => {
+    if (!current.current.foldersReady || operation.current || voiceBusy.current) return;
+    operation.current = true;
+    let nextPath: string | undefined;
+    let folder: Workspace | undefined;
+    try {
+      if (!(await save()) || dirtyRef.current) return;
+      folder = current.current.folders.find(f => f.root === current.current.workspace.root && !f.error)
+        ?? current.current.folders.find(f => !f.error);
+      if (!folder) throw new Error("Add a folder before creating a note.");
+      nextPath = await createNote(folder.root);
+      folder = { ...folder, ...(await openWorkspace(folder.root)), collapsed: false };
+      setFolders(old => old.map(f => f.root === folder!.root ? folder! : f));
+    } catch (error) { setNotice(String(error)); }
+    finally { operation.current = false; }
+    if (nextPath && folder) {
+      if (await openNote(nextPath, undefined, folder, undefined, true)) setMode("edit");
+    }
+  }, [save, openNote]);
+  const renameFile = async (folder: Workspace, oldPath: string, name: string) => {
+    if (operation.current || voiceBusy.current) throw new Error("Finish the current operation before renaming.");
+    operation.current = true;
+    try {
+      if (!(await save()) || dirtyRef.current) throw new Error("Save your changes before renaming.");
+      const nextPath = await renameNote(folder.root, oldPath, name);
+      const updated = { ...folder, files: folder.files.map(f => f.path === oldPath ? { path: nextPath, name } : f) };
+      setFolders(old => old.map(f => f.root === folder.root ? { ...f, files: updated.files } : f));
+      const oldId = tabId({ root: folder.root, path: oldPath });
+      const cached = snapshots.current.get(oldId);
+      if (cached) snapshots.current.set(tabId({ root: folder.root, path: nextPath }), cached);
+      updateTabs(tabsRef.current.map(t => tabId(t) === oldId ? { ...t, path: nextPath } : t));
+      if (current.current.workspace.root === folder.root) {
+        setWorkspace(updated);
+        if (current.current.path === oldPath) {
+          setEditorSnapshot(editor.current?.snapshot());
+          current.current = { ...current.current, workspace: updated, path: nextPath };
+          setPath(nextPath);
+        }
+      }
+    } finally { operation.current = false; }
+  };
+  const closeTab = async (tab: NoteTab) => {
+    if (voiceBusy.current || operation.current) {
+      setNotice("Finish the current operation before closing a tab.");
+      return;
+    }
+    const id = tabId(tab),
+      all = tabsRef.current,
+      next = all.filter((t) => tabId(t) !== id);
+    if (
+      current.current.hasDocument &&
+      tabId({
+        root: current.current.workspace.root,
+        path: current.current.path,
+      }) === id
+    ) {
+      const neighbor =
+        next[
+          Math.min(
+            all.findIndex((t) => tabId(t) === id),
+            next.length - 1,
+          )
+        ];
+      if (neighbor) {
+        const folder = current.current.folders.find(
+          (f) => f.root === neighbor.root,
+        );
+        if (!folder || !(await openNote(neighbor.path, undefined, folder)))
+          return;
+      } else {
+        if (!(await save()) || dirtyRef.current) return;
+        setData(null);
+        setPath("");
+        applyMarks([]);
+        setEditorSnapshot(undefined);
+      }
     }
     updateTabs(next);
   };
@@ -405,7 +640,7 @@ export default function App() {
         setWorkspace(next[0] ?? { name: "Your folders", root: "", files: [] });
       }
     }
-    updateTabs(tabsRef.current.filter(t=>t.root!==root));
+    updateTabs(tabsRef.current.filter((t) => t.root !== root));
     setFolders(next);
   };
   const dropHandler = useRef<(paths: string[]) => void>(() => {});
@@ -498,8 +733,33 @@ export default function App() {
     await save();
   };
   useEffect(() => {
+    const toggleFocus = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "g" || event.isComposing) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (!event.repeat && !settingsOpen && !palette && !bookmarkDraft) setFocusMode(!focusMode);
+    };
+    window.addEventListener("keydown", toggleFocus, { capture: true });
+    return () => window.removeEventListener("keydown", toggleFocus, { capture: true });
+  }, [focusMode, setFocusMode, settingsOpen, palette, bookmarkDraft]);
+  useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (!(e.metaKey || e.ctrlKey)) return;
+      if (!e.altKey && !e.shiftKey && (e.key.toLowerCase() === "n" || e.key.toLowerCase() === "t")) {
+        e.preventDefault();
+        if (e.repeat) return;
+        if (e.key.toLowerCase() === "n") {
+          if (desktop) void invoke("new_window").catch(error => setNotice(String(error)));
+          else window.open(window.location.href, "_blank", "noopener");
+        } else if (!settingsOpen && !palette && !bookmarkDraft) void newTab();
+        return;
+      }
+      if (e.key === ",") {
+        e.preventDefault();
+        if (!palette && !bookmarkDraft) setSettingsOpen(true);
+        return;
+      }
+      if (settingsOpen) return;
       if (e.key.toLowerCase() === "k") {
         e.preventDefault();
         setPalette((p) => !p);
@@ -515,7 +775,7 @@ export default function App() {
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [save, beginBookmark]);
+  }, [save, beginBookmark, settingsOpen, palette, bookmarkDraft, newTab]);
   useEffect(() => {
     const beforeUnload = (e: BeforeUnloadEvent) => {
       if (dirtyRef.current || voiceBusy.current) {
@@ -566,14 +826,53 @@ export default function App() {
   };
   const isMarkdown = /\.(md|markdown|mdx)$/i.test(path);
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
+    <div className="app-shell" data-focus-mode={focusMode} data-window-focused={windowFocused} data-galaxy={galaxyMode} data-editor-size={fontSize} data-text-width={textWidth}
+      onPointerMove={(event) => {
+        if (event.pointerType === "touch") return;
+        const bounds = event.currentTarget.getBoundingClientRect();
+        const x = event.clientX - bounds.left;
+        const edgeWidth = bounds.width * 0.05;
+        setHoveredEdge(x <= edgeWidth ? "left" : x >= bounds.width - edgeWidth ? "right" : null);
+      }}
+      onPointerLeave={() => setHoveredEdge(null)}>
+      <SidePanelControls navigation={navigation} bookmarks={rail} hoveredEdge={hoveredEdge}
+        onNavigation={() => setNavigation(!navigation)} onBookmarks={() => setRail(!rail)}
+        onStorageError={() => setNotice("Panel widths changed, but could not be saved on this device.")} />
+      {focusMode && (
+        <button className="sidebar-action focus-toggle focus-mode-exit" aria-label="Exit focus mode" aria-pressed={true}
+          aria-describedby="exit-focus-tooltip" aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+G`} onClick={() => setFocusMode(false)}>
+          <BlackHoleIcon />
+          <span className="focus-tooltip" id="exit-focus-tooltip" role="tooltip">
+            <span>Exit focus mode</span><span className="focus-tooltip-keys"><kbd>{mod}</kbd><kbd>G</kbd></span>
+          </span>
+        </button>
+      )}
+      <PlasmaEffects active={plasmaEnabled && windowFocused} dirty={dirty} lineHighlight={showLineHighlight} />
+      <aside id="global-navigation" className="sidebar" hidden={!navigation}>
         <div className="brand">
-          <span className="brand-symbol">✳</span>
+          <button
+            className="brand-emblem"
+            aria-label="Energy effects"
+            aria-pressed={plasmaEnabled}
+            title={plasmaEnabled ? "Energy effects on · Click to turn off" : "Energy effects off · Click to turn on"}
+            onClick={togglePlasma}
+          >
+            <NovaMark className="brand-symbol" />
+          </button>
           <span>
             nova<span className="brand-period">.</span>
           </span>
-          <span className="prototype-label">PREVIEW</span>
+          <button className="galaxy-toggle" aria-label="Galaxy mode" aria-pressed={galaxyMode}
+            title={galaxyMode ? "Galaxy mode on · Switch to solid" : "Galaxy mode · Translucent editor"}
+            onClick={toggleGalaxy}>
+            <svg className="galaxy-symbol" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <g transform="rotate(-30 12 12)" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round">
+                <ellipse cx="12" cy="12" rx="9" ry="4.5" opacity=".4" />
+                <path d="M3 12c0-3 5-5 9-3 5 2 2 6-2 5-3-.7-2-3 0-3M21 12c0 3-5 5-9 3-5-2-2-6 2-5 3 .7 2 3 0 3" />
+              </g>
+              <circle cx="12" cy="12" r="1.8" fill="currentColor" />
+            </svg>
+          </button>
         </div>
         <button className="search-trigger" onClick={() => setPalette(true)}>
           <Search size={16} />
@@ -584,7 +883,10 @@ export default function App() {
           folders={folders}
           activeRoot={workspace.root}
           activePath={path}
-          onOpen={(folder, path,pinned) => void openNote(path, undefined, folder,undefined,pinned)}
+          onOpen={(folder, path, pinned) =>
+            void openNote(path, undefined, folder, undefined, pinned)
+          }
+          onRename={renameFile}
           onChange={changeFolders}
           onRemove={(root) => void removeFolder(root)}
           onRefresh={(root) => void refreshFolder(root)}
@@ -598,38 +900,139 @@ export default function App() {
             stored locally
           </div>
           <p>Drag folder handles to organize your space.</p>
-          <button className="open-folder" onClick={openFolder}>
-            <Plus size={15} />
-            Add folders
-          </button>
-          <div className="sidebar-footnote">Your files. Your space.</div>
+          <div className="sidebar-actions">
+            <button className="sidebar-action" aria-label="Add folders" title="Add folders" onClick={openFolder}>
+              <Plus size={17} aria-hidden="true" />
+            </button>
+            <button className="sidebar-action" aria-label="Settings" title={`Settings (${mod} ,)`}
+              aria-haspopup="dialog" onClick={() => setSettingsOpen(true)}>
+              <SettingsIcon size={17} aria-hidden="true" />
+            </button>
+            <button className="sidebar-action focus-toggle" aria-label="Enter focus mode" aria-pressed={focusMode}
+              aria-describedby="enter-focus-tooltip" aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+G`} onClick={() => setFocusMode(true)}>
+              <BlackHoleIcon />
+              <span className="focus-tooltip" id="enter-focus-tooltip" role="tooltip">
+                <span>Focus mode</span><span className="focus-tooltip-keys"><kbd>{mod}</kbd><kbd>G</kbd></span>
+              </span>
+            </button>
+          </div>
         </div>
       </aside>
-      <main className="main-panel">
+      <main className="main-panel"
+        onPointerMove={(event) => {
+          if (event.pointerType === "touch") return;
+          const bounds = event.currentTarget.getBoundingClientRect();
+          setHoveredTop(event.clientY - bounds.top <= bounds.height * 0.05);
+          setHoveredBottom(bounds.bottom - event.clientY <= bounds.height * 0.05);
+        }}
+        onPointerLeave={() => { setHoveredTop(false); setHoveredBottom(false); }}>
+        <div className="top-bars-container">
+        <div id="top-bars" className="top-bars" hidden={!topBars}>
         <header className="tab-bar">
           <div className="note-tabs" role="tablist" aria-label="Open notes">
-            {tabs.map(tab=>{const active=!!data&&tab.root===workspace.root&&tab.path===path;const name=tab.path.split('/').at(-1);return <div key={tabId(tab)} className={'note-tab '+(active?'active ':'')+(!tab.pinned?'preview-tab':'')}>
-              <button role="tab" aria-selected={active} title={tab.root+'/'+tab.path+(!tab.pinned?' · Preview — double-click to keep open':'')} onDoubleClick={()=>pin(tab.root,tab.path)} onClick={()=>{const folder=folders.find(f=>f.root===tab.root);if(folder)void openNote(tab.path,undefined,folder);}}><FileText size={14}/><span>{name}</span>{active&&dirty&&<span className="dirty-dot"/>}</button>
-              {!tab.pinned&&<button className="tab-pin" title="Keep tab open" aria-label={`Keep ${name} open`} onClick={()=>pin(tab.root,tab.path)}><Plus size={12}/></button>}
-              <button className="tab-close" aria-label={`Close ${name}`} onClick={()=>void closeTab(tab)}><X size={12}/></button>
-            </div>;})}
+            {tabs.map((tab) => {
+              const active =
+                !!data && tab.root === workspace.root && tab.path === path;
+              const name = tab.path.split("/").at(-1);
+              return (
+                <div
+                  key={tabId(tab)}
+                  className={
+                    "note-tab " +
+                    (active ? "active " : "") +
+                    (!tab.pinned ? "preview-tab" : "")
+                  }
+                >
+                  <button
+                    role="tab"
+                    aria-selected={active}
+                    title={
+                      tab.root +
+                      "/" +
+                      tab.path +
+                      (!tab.pinned
+                        ? " · Preview — double-click to keep open"
+                        : "")
+                    }
+                    onDoubleClick={() => pin(tab.root, tab.path)}
+                    onClick={() => {
+                      const folder = folders.find((f) => f.root === tab.root);
+                      if (folder) void openNote(tab.path, undefined, folder);
+                    }}
+                  >
+                    <FileText size={14} />
+                    <span>{name}</span>
+                    {active && dirty && <span className="dirty-dot" />}
+                  </button>
+                  {!tab.pinned && (
+                    <button
+                      className="tab-pin"
+                      title="Keep tab open"
+                      aria-label={`Keep ${name} open`}
+                      onClick={() => pin(tab.root, tab.path)}
+                    >
+                      <Plus size={12} />
+                    </button>
+                  )}
+                  <button
+                    className="tab-close"
+                    aria-label={`Close ${name}`}
+                    onClick={() => void closeTab(tab)}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              );
+            })}
           </div>
+          <button className="icon-button" onClick={() => void newTab()} aria-label="New tab" title="New tab (Ctrl T)"><Plus size={16} /></button>
           <div className="tab-bar-space" />
           <button
             className="icon-button"
-            onClick={() => setRail((r) => !r)}
+            onClick={() => setRail(!rail)}
             aria-label="Toggle bookmarks"
             title="Toggle bookmarks"
           >
             <PanelRight size={17} />
           </button>
         </header>
-        <div className="document-toolbar">
+        <div className="document-toolbar" data-paginated={mode === "read" && preview.length > 500_000}>
           <div className="breadcrumbs">
             <span>{workspace.name}</span>
             <ChevronRight size={13} />
             <span>{path.split("/").at(-1)}</span>
           </div>
+          <div className="read-controls" ref={setReadControls} />
+          <label className="text-width-control">
+            <span>Text width</span>
+            <TextWidthControl value={textWidth} onChange={setTextWidth} />
+          </label>
+          {mode !== "read" && (
+            <button
+              className="line-numbers-toggle"
+              aria-pressed={showLineNumbers}
+              title={showLineNumbers ? "Hide line numbers" : "Show line numbers"}
+              onClick={toggleLineNumbers}
+            >
+              <ListOrdered size={15} aria-hidden="true" />
+              Line numbers
+              <span className="line-numbers-check" aria-hidden="true">
+                {showLineNumbers && <Check size={13} />}
+              </span>
+            </button>
+          )}
+          <button
+            className="line-numbers-toggle"
+            aria-pressed={showLineHighlight}
+            title={showLineHighlight ? "Hide line highlight" : "Show line highlight"}
+            onClick={() => setShowLineHighlight(!showLineHighlight)}
+          >
+            <ScanLine size={15} aria-hidden="true" />
+            Line highlight
+            <span className="line-numbers-check" aria-hidden="true">
+              {showLineHighlight && <Check size={13} />}
+            </span>
+          </button>
           <VoiceControl
             disabled={!data || loading || saving}
             onBegin={() => {
@@ -651,19 +1054,20 @@ export default function App() {
             onError={(error) => setNotice(error)}
           />
           <div className="view-switch">
+            {isMarkdown && (
+              <button
+                onClick={() => switchMode("source")}
+                className={mode === "source" ? "selected" : ""}
+                title="Edit Markdown source"
+              >
+                <Code2 size={14} />
+                Source
+              </button>
+            )}
             <button
-              onClick={() => switchMode("source")}
-              className={mode === "source" ? "selected" : ""}
-              title="Edit Markdown source"
-            >
-              <Code2 size={14} />
-              Source
-            </button>
-            <button
-              onClick={() => switchMode("edit")}
-              disabled={!isMarkdown}
-              className={mode === "edit" ? "selected" : ""}
-              title="Edit formatted Markdown"
+              onClick={() => switchMode(isMarkdown ? "edit" : "source")}
+              className={(isMarkdown ? mode === "edit" : mode !== "read") ? "selected" : ""}
+              title={isMarkdown ? "Edit formatted Markdown" : "Edit text"}
             >
               <Pencil size={13} />
               Edit
@@ -686,9 +1090,19 @@ export default function App() {
             <Save size={15} />
           </button>
         </div>
-        {data && mode === "edit" && isMarkdown && (
-          <FormatToolbar onFormat={(style) => editor.current?.format(style)} />
+        {data && mode !== "read" && isMarkdown && (
+          <FormatToolbar style={paragraphStyle} onFormat={(style) => editor.current?.format(style)}
+            onUndo={() => editor.current?.undo()} onRedo={() => editor.current?.redo()} />
         )}
+        </div>
+        <div className="panel-toggle-zone panel-toggle-top" data-expanded={topBars} data-edge-hover={hoveredTop}>
+          <button className="panel-toggle" aria-label={topBars ? "Collapse top bars" : "Expand top bars"}
+            title={topBars ? "Collapse top bars" : "Expand top bars"} aria-expanded={topBars} aria-controls="top-bars"
+            onClick={() => setTopBars(!topBars)}>
+            {topBars ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+        </div>
+        </div>
         <div className="document-area">
           {loading && <div className="loading">Opening your note…</div>}
           {data && (
@@ -701,11 +1115,16 @@ export default function App() {
                 bookmarks={bookmarks}
                 onChange={changed}
                 onBookmarks={applyMarks}
+                onParagraphStyle={setParagraphStyle}
                 onCursor={(line, col) => setCursor([line, col])}
                 onBookmark={beginBookmark}
                 onSave={() => void save()}
                 isMarkdown={isMarkdown}
                 visual={mode === "edit" && isMarkdown}
+                showLineNumbers={showLineNumbers}
+                showLineHighlight={showLineHighlight}
+                wordWrap={wordWrap}
+                spellcheck={spellcheck}
               />
             </div>
           )}
@@ -717,20 +1136,7 @@ export default function App() {
                 </div>
                 <Suspense fallback={<p>Rendering your note…</p>}>
                   {preview.length > 500_000 ? (
-                    <div className="large-file-message">
-                      <h2>A little more room to write.</h2>
-                      <p>
-                        This file is large. Use the virtualized source editor to
-                        keep memory use down; formatted preview is limited to
-                        500,000 characters in this prototype.
-                      </p>
-                      <button
-                        className="primary"
-                        onClick={() => switchMode("source")}
-                      >
-                        Open in Source mode
-                      </button>
-                    </div>
+                    <LargeRead ref={largeRead} text={preview} markdown={isMarkdown} controlsContainer={readControls} />
                   ) : isMarkdown ? (
                     <Markdown text={preview} />
                   ) : (
@@ -743,7 +1149,9 @@ export default function App() {
                     </pre>
                   )}
                 </Suspense>
-                <div className="end-mark">✳</div>
+                <div className="end-mark">
+                  <NovaMark />
+                </div>
               </article>
             </div>
           )}
@@ -758,7 +1166,15 @@ export default function App() {
             </div>
           )}
         </div>
-        <footer className="status-bar">
+        <div className="status-bar-container">
+        <div className="panel-toggle-zone panel-toggle-bottom" data-expanded={statusBar} data-edge-hover={hoveredBottom}>
+          <button className="panel-toggle" aria-label={statusBar ? "Collapse status bar" : "Expand status bar"}
+            title={statusBar ? "Collapse status bar" : "Expand status bar"} aria-expanded={statusBar} aria-controls="status-bar"
+            onClick={() => setStatusBar(!statusBar)}>
+            {statusBar ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+          </button>
+        </div>
+        <footer id="status-bar" className="status-bar" hidden={!statusBar}>
           <span>
             <span className="status-dot" />
             {saving
@@ -775,13 +1191,14 @@ export default function App() {
           <span>{isMarkdown ? "Markdown" : "Plain text"}</span>
           <span>UTF-8</span>
         </footer>
+        </div>
       </main>
       {rail && (
-        <aside className="bookmark-rail">
+        <aside id="bookmarks-panel" className="bookmark-rail">
           <header>
             <BookmarkIcon size={16} />
             <strong>Bookmarks</strong>
-            <span className="count">{bookmarks.length}</span>
+            <span className="count">{visibleBookmarks.length}</span>
             <button
               className="icon-button"
               onClick={beginBookmark}
@@ -791,22 +1208,32 @@ export default function App() {
               <Plus size={17} />
             </button>
           </header>
-          <div className="rail-intro">Your way back to the good parts.</div>
+          <ScopeToggle label="Bookmark scope" scope={bookmarkScope} onChange={setBookmarkScope} currentLabel="Current tab" allLabel="All bookmarks" />
+          <div className="rail-intro">{bookmarkScope === "current" ? "Your way back to the good parts." : "Across all added folders."}</div>
+          {bookmarkScope === "everywhere" && bookmarksBusy && <div role="status" className="rail-intro">Loading bookmarks…</div>}
+          {bookmarkScope === "everywhere" && bookmarksError && <div role="status" className="rail-intro">{bookmarksError}</div>}
           <div className="bookmark-list">
-            {bookmarks.map((b, i) => (
+            {visibleBookmarks.map(({ bookmark: b, root, path: bookmarkPath }, i) => {
+              const isCurrent = root === workspace.root && bookmarkPath === path;
+              return (
               <div
                 className={
-                  "bookmark-card " + (activeMark === b.id ? "current" : "")
+                  "bookmark-card " + (isCurrent && activeMark === b.id ? "current" : "")
                 }
-                key={b.id}
+                key={JSON.stringify([root, bookmarkPath, b.id])}
               >
                 <button
                   className="bookmark-jump"
-                  disabled={b.unresolved}
+                  disabled={isCurrent && b.unresolved}
                   title={b.quote}
                   onClick={() => {
-                    setActiveMark(b.id);
-                    jump(b.from, b.to);
+                    if (isCurrent) {
+                      setActiveMark(b.id);
+                      jump(b.from, b.to);
+                    } else {
+                      const folder = folders.find((f) => f.root === root);
+                      if (folder) void openNote(bookmarkPath, undefined, folder, b.id);
+                    }
                   }}
                 >
                   <div className="bookmark-meta">
@@ -814,13 +1241,14 @@ export default function App() {
                     <span>
                       {b.unresolved
                         ? "Needs a new anchor"
-                        : `Line ${b.line ?? (editor.current?.text() ?? data?.text ?? "").slice(0, b.from).split("\n").length}`}
+                        : !isCurrent ? "Open passage" : `Line ${b.line ?? (editor.current?.text() ?? data?.text ?? "").slice(0, b.from).split("\n").length}`}
                     </span>
                   </div>
+                  {bookmarkScope === "everywhere" && <span className="bookmark-source">{folders.find((f) => f.root === root)?.name} / {bookmarkPath}</span>}
                   <strong>{b.name}</strong>
                   <p>{b.quote || "The bookmarked text was removed."}</p>
                 </button>
-                <div className="bookmark-actions">
+                {isCurrent && <div className="bookmark-actions">
                   <button
                     className="icon-button"
                     aria-label={`Rename ${b.name}`}
@@ -841,14 +1269,14 @@ export default function App() {
                   >
                     <Trash2 size={12} />
                   </button>
-                </div>
+                </div>}
               </div>
-            ))}
+            ); })}
           </div>
-          {!bookmarks.length && (
+          {!visibleBookmarks.length && !bookmarksBusy && (
             <div className="empty-bookmarks">
               <BookmarkIcon size={25} />
-              <p>Keep a place in your note.</p>
+              <p>{bookmarkScope === "current" ? "Keep a place in your note." : "No bookmarks in your folders yet."}</p>
               <small>
                 Select a passage in Edit mode, then add your first bookmark.
               </small>
@@ -888,9 +1316,17 @@ export default function App() {
       {palette && (
         <Palette
           folders={folders}
+          commands={[{
+            id: "line-numbers",
+            label: "Toggle line numbers",
+            description: showLineNumbers ? "Currently on · Hide line numbers" : "Currently off · Show line numbers",
+            keywords: "show hide numbering gutter",
+            run: toggleLineNumbers,
+          }]}
           scope={searchScope}
           onScopeChange={setSearchScope}
-          activeNote={data?{root:workspace.root,path,text:editor.current?.text()??data.text,bookmarks:marksRef.current}:null}
+          activeNote={data?{root:workspace.root,path,bookmarks:marksRef.current}:null}
+          getActiveText={() => editor.current?.text() ?? data?.text ?? ""}
           onNavigateCurrent={(from,to)=>{if(from!==undefined){setMode('source');requestAnimationFrame(()=>jump(from,to));}else editor.current?.jump(editor.current.selection().from);}}
           onClose={() => {
             setPalette(false);
@@ -903,6 +1339,14 @@ export default function App() {
           }}
         />
       )}
+      {settingsOpen && <Settings onClose={() => setSettingsOpen(false)}
+        galaxy={galaxyMode} onGalaxy={setGalaxyMode} plasma={plasmaEnabled} onPlasma={setPlasmaEnabled}
+        lineHighlight={showLineHighlight} onLineHighlight={setShowLineHighlight}
+        lineNumbers={showLineNumbers} onLineNumbers={setShowLineNumbers} wordWrap={wordWrap} onWordWrap={setWordWrap}
+        spellcheck={spellcheck} onSpellcheck={setSpellcheck} bookmarks={rail} onBookmarks={setRail}
+        fontSize={fontSize} onFontSize={setFontSize}
+        textWidth={textWidth} onTextWidth={setTextWidth}
+        storageError={widthError || galaxyError || plasmaError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
       {bookmarkDraft && (
         <div
           className="overlay"

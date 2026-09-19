@@ -10,6 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "title": "Nova",
@@ -17,7 +18,9 @@
         "height": 880,
         "minWidth": 800,
         "minHeight": 550,
-        "backgroundColor": "#1e1f23"
+        "transparent": true,
+        "backgroundColor": "#00000000",
+        "theme": "Dark"
       }
     ],
     "security": {

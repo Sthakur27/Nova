@@ -11,10 +11,17 @@ import {
 } from "./model";
 export const desktop = isTauri();
 const prefix = "nova-demo-v1:";
+function demoPaths(): string[] {
+  try {
+    const saved: unknown = JSON.parse(localStorage.getItem("nova-demo-files-v1") ?? "null");
+    if (Array.isArray(saved) && saved.every(path => typeof path === "string")) return saved;
+  } catch { /* Storage may be unavailable in previews or tests. */ }
+  return Object.keys(demoFiles);
+}
 export const demoWorkspace: Workspace = {
   name: "My notes",
   root: "demo",
-  files: Object.keys(demoFiles).map((path) => ({
+  files: demoPaths().map((path) => ({
     path,
     name: path.split("/").at(-1)!,
   })),
@@ -157,18 +164,18 @@ export async function searchNotes(
   if (folders.some((f) => f.root === "demo")) {
     const hits: FolderSearchHit[] = [];
     const q = query.trim().toLowerCase();
-    for (const path of Object.keys(demoFiles)) {
+    for (const { path } of demoWorkspace.files) {
       const note = await readNote("demo", path);
       for (const bookmark of note.bookmarks) {
-        if (q && (bookmark.name.toLowerCase().includes(q) || bookmark.quote.toLowerCase().includes(q)))
+        if (!q || bookmark.name.toLowerCase().includes(q) || bookmark.quote.toLowerCase().includes(q))
           result.bookmarks.push({ root: "demo", path, bookmark });
       }
     }
-    for (const path of Object.keys(demoFiles))
+    for (const { path } of demoWorkspace.files)
       textFor(path)
         .split("\n")
         .forEach((snippet, i) => {
-          if (snippet.toLowerCase().includes(query.toLowerCase()))
+          if (query.trim() && snippet.toLowerCase().includes(query.toLowerCase()))
             hits.push({ root: "demo", path, line: i + 1, snippet });
         });
     result.hits.push(...hits.slice(0, 80));
@@ -179,6 +186,36 @@ export async function searchNotes(
       folders.findIndex((f) => f.root === b.root),
   );
   result.hits = result.hits.slice(0, 80);
-  result.bookmarks = result.bookmarks.slice(0, 80);
+  if (query.trim()) result.bookmarks = result.bookmarks.slice(0, 80);
   return result;
+}
+
+function persistDemoFiles() {
+  localStorage.setItem("nova-demo-files-v1", JSON.stringify(demoWorkspace.files.map(f => f.path)));
+}
+export async function createNote(root: string): Promise<string> {
+  if (root !== "demo") return invoke("create_note", { root });
+  let number = 1;
+  let path = "Untitled.md";
+  while (demoWorkspace.files.some(f => f.path === path)) path = `Untitled ${++number}.md`;
+  localStorage.setItem(prefix + path, "");
+  demoWorkspace.files = [...demoWorkspace.files, { path, name: path }];
+  persistDemoFiles();
+  return path;
+}
+export async function renameNote(root: string, path: string, name: string): Promise<string> {
+  if (!name.trim() || /[/\\:]/.test(name) || !/\.(md|markdown|mdx|txt)$/i.test(name))
+    throw new Error("Enter a filename ending in .md, .markdown, .mdx, or .txt.");
+  if (root !== "demo") return invoke("rename_note", { root, path, name });
+  const next = path.slice(0, path.lastIndexOf("/") + 1) + name;
+  if (next === path) return path;
+  if (demoWorkspace.files.some(f => f.path === next)) throw new Error("A file with that name already exists.");
+  const note = await readNote(root, path);
+  localStorage.setItem(prefix + next, note.text);
+  localStorage.setItem(prefix + next + ":bookmarks", JSON.stringify(note.bookmarks));
+  demoWorkspace.files = demoWorkspace.files.map(f => f.path === path ? { path: next, name } : f);
+  persistDemoFiles();
+  localStorage.removeItem(prefix + path);
+  localStorage.removeItem(prefix + path + ":bookmarks");
+  return next;
 }

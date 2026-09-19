@@ -1,7 +1,7 @@
 import { it, expect } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { history, undo } from "@codemirror/commands";
-import { formatTransaction } from "./richMarkdown";
+import { formatTransaction, paragraphStyle, formattingKeymap } from "./richMarkdown";
 import { dictationAnchor, setDictationAnchor } from "./dictation";
 it("adds and removes bold without rewriting surrounding Markdown", () => {
   let s = EditorState.create({
@@ -47,4 +47,32 @@ it("formatting is undoable and moves live dictation anchors", () => {
     },
   });
   expect(state.doc.toString()).toBe("hello");
+});
+
+it("supports all heading levels and resets numbered lists to normal text", () => {
+  for (const level of [1, 2, 3, 4, 5, 6] as const) {
+    const initial = EditorState.create({ doc: "3. hello", selection: { anchor: 4 } });
+    const heading = formatTransaction(initial, `h${level}`).state;
+    expect(heading.doc.toString()).toBe(`${"#".repeat(level)} hello`);
+    expect(paragraphStyle(heading)).toBe(`h${level}`);
+    expect(formatTransaction(heading, "paragraph").state.doc.toString()).toBe("hello");
+  }
+});
+
+it("numbers selected lines and converts existing list markers", () => {
+  const state = EditorState.create({ doc: "- one\n- [x] two\n3. three\nlast", selection: { anchor: 0, head: 24 } });
+  expect(formatTransaction(state, "numbered").state.doc.toString()).toBe("1. one\n2. two\n3. three\nlast");
+});
+
+it("format shortcuts modify the selection and leave plain text editors alone", () => {
+  let state = EditorState.create({ doc: "hello", selection: { anchor: 0, head: 5 } });
+  const view = { get state() { return state; }, dispatch: (tr: import("@codemirror/state").Transaction) => { state = tr.state; } } as import("@codemirror/view").EditorView;
+  const keys = formattingKeymap(() => true);
+  expect(keys.find(k => k.key === "Mod-b")!.run!(view)).toBe(true);
+  expect(state.doc.toString()).toBe("**hello**");
+  keys.find(k => k.key === "Mod-b")!.run!(view);
+  keys.find(k => k.key === "Mod-i")!.run!(view);
+  expect(state.doc.toString()).toBe("*hello*");
+  expect(formattingKeymap(() => false)[0].run!(view)).toBe(false);
+  expect(state.doc.toString()).toBe("*hello*");
 });

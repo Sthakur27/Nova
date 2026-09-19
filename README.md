@@ -1,6 +1,6 @@
 # Nova
 
-A local-first Mac and Windows notes prototype: ordinary folders, plain text and Markdown, filename-first search (including bookmark names and excerpts), and named bookmarks inside any note.
+A local-first Mac and Windows notes prototype: ordinary folders, plain text and Markdown, filename-first search (including bookmark names and excerpts), named bookmarks across your folders, and a customizable writing workspace.
 
 ## Run
 
@@ -8,28 +8,47 @@ Requires Node.js 22+, Rust stable, and CMake (for the local speech engine). On m
 
 ```sh
 npm ci
-npm run tauri dev
+npm run desktop
 ```
 
-If Rust is newly installed on this machine, run `source "$HOME/.cargo/env"` first. `npm run dev` starts a browser-only preview with editable sample notes; local-folder access requires the desktop app. Sample notes persist in local storage and are explicitly labeled.
+For direct `cargo` commands and packaging on a newly configured Mac, run `source "$HOME/.cargo/env"` first if Cargo is not on your PATH. `npm run dev` starts a browser-only preview with editable sample notes; local-folder access requires the desktop app. Sample notes persist in local storage and are explicitly labeled.
+
+### Fast iteration
+
+Run `npm run desktop` and leave it running while making changes. This opens the native app with live frontend updates; Rust changes automatically rebuild and restart it. The launcher automatically chooses an available frontend port, so an existing preview server does not block startup. The command finds Rust in the standard Cargo installation directory, so sourcing Cargo's environment is not needed for this command. Stop it with Ctrl-C.
+
+Quit the installed Nova before starting development: both use the same saved folders and bookmarks. Save edits before a reload or native restart. Development does not update `/Applications/Nova.app`; the Dock copy stays at its last installed version. No DMG or drag-to-Applications step is needed to try changes. Use `npm run package` when you need an installer to share.
 
 ## Use
 
-- **Add folders**: keep up to 100 ordinary folders open together and browse its `.md`, `.markdown`, `.mdx` (rendered as Markdown, without JSX), and `.txt` files. No vault or changes to folder structure.
+- **Add folders**: keep up to 100 ordinary folders open together and browse their `.md`, `.markdown`, `.mdx` (rendered as Markdown, without JSX), and `.txt` files. No vault or changes to folder structure.
 - **Source / Edit / Read**: raw Markdown, styled live editing, and a reading view. Edit supports headings, emphasis, links, lists, task checkboxes, quotes and inline code, plus a formatting toolbar. Complex tables, fenced code and other unsupported structures remain source in Edit; Read renders full supported Markdown. Switching modes does not rewrite the document. One document is mounted at a time. Inactive files are not loaded.
 - Drag a folder handle to reorder roots. Arrow keys on the handle and the folder menu also reorder. Collapse roots independently; remove only removes the explorer entry. Drop folders from Finder/Explorer to add them. Folder order, collapse state, mode and the active note are remembered in app-data `explorer.json`. Unavailable roots remain visible for retry.
-- **Command-K / Ctrl-K**: search filenames first, then saved file contents across all added folders. Results include their folder. All / Files / Text filters; arrows and Enter navigate results. Selecting a text result opens its line in Source mode.
-- **Command-Shift-B / Ctrl-Shift-B**: bookmark a selection or the current line. Name, rename, remove, preview, and jump from the right rail. Read-mode selection works when the selected visible text maps directly to Markdown source.
+- **Command-K / Ctrl-K**: search filenames, bookmark names and excerpts, and saved file contents. Use All / Files / Bookmarks / Text filters, arrows and Enter to navigate, and Escape to close. Results include their folder; text results open at their line in Source mode. The All filter also includes commands such as **Toggle line numbers**.
+- **Search scope**: Everywhere searches all added folders; Current tab searches the focused note, including unsaved edits, and jumps without saving or reloading. The scope is remembered for the session and Current tab is disabled without an open note.
+- **Command-Shift-B / Ctrl-Shift-B**: bookmark a selection or the current line, or use the bookmark button beside the active editor line. Name, rename, remove, preview, and jump from the right rail. Switch between Current tab and All bookmarks to browse passages across added folders. Read-mode selection works when the selected visible text maps directly to Markdown source.
 - **Command-S / Ctrl-S**: save. Switching files and closing the native window also save. Adding, renaming, or deleting a bookmark saves the note and its anchors.
+- **Command− / Ctrl−** and **Command+ / Ctrl+**: zoom the interface out or in (50–200%). Command= / Ctrl= also zooms in; Command-0 / Ctrl-0 resets to 100%.
+- **New note**: click the new-tab + button or press Command-T / Ctrl-T to create `Untitled.md` in the active folder (or the first available folder). Existing names get a numeric suffix.
+- **Rename**: double-click a filename in the explorer, edit its name, then press Enter or leave the field to apply. Escape cancels. Keep a supported extension; renaming within Nova carries its bookmarks and open tab to the new name.
+- **New window**: Command-N / Ctrl-N opens another Nova window.
 - **Refresh folder**: rescan after files are added or removed externally.
 
 Bookmarks live in Tauri's OS app-data directory, under `com.nova.notes.prototype/bookmarks`, keyed by canonical file path. They never add markup or metadata to notes folders. They follow edits using CodeMirror transaction mappings. On reopen, stored excerpts recover moved passages; missing excerpts are flagged. Renaming/moving a file outside Nova does not yet migrate its bookmarks. Deleted-anchor recovery through Undo is not implemented.
 
 Saves compare the disk revision before writing and use a temporary file plus atomic replacement. A detected external change prevents the save and keeps edits open. Copy edits to a safe place before reopening when there is a conflict. CRLF line endings are preserved for CRLF documents; mixed line endings normalize. Atomic replacement may not preserve all extended file attributes. This prototype is not a collaborative editor or a backup system.
 
+## Workspace and formatting
+
+Open **Settings** from the sidebar or with Command-comma / Ctrl-comma. Preferences save automatically on this device: Galaxy mode (translucent background), energy effects, editor text size, text width, line numbers, line highlight, word wrap, spellcheck, and bookmark-panel visibility. Text width applies to Source, Edit, and Read; text size applies to Source and Edit. The document toolbar also offers quick text-width and line-display controls.
+
+Collapse navigation, bookmarks, top bars, or the status bar with the edge controls. Drag a side-panel divider to resize it; double-click to reset. Focused dividers support arrow keys (Shift for larger steps), Home/End, and Enter to reset. Panel widths and visibility are remembered. **Command-G / Ctrl-G** toggles focus mode; the exit control restores the workspace.
+
+The formatting toolbar includes Undo/Redo, headings 1–6, bold, italic, strikethrough, inline code, ordered and unordered lists, tasks, and quotes. In Markdown notes, Command/Ctrl-B and -I apply bold and italic; Command/Ctrl-Shift-X applies strikethrough. Command/Ctrl-Alt-1 through -6 apply headings, and -0 returns to normal text. Command/Ctrl-Shift-7, -8, and -9 apply numbered lists, bullets, and quotes.
+
 ## Tabs
 
-Single-click a file to open it in the one italic preview tab. Browsing replaces that preview only. Double-click a file or tab, click its plus button, or edit it to keep it open as a fixed tab. Clicking an already open file selects its existing tab. Close tabs with their × button. Switching or closing saves first; a save conflict keeps the current note open.
+Single-click a file to open it in the one italic preview tab. Browsing replaces that preview only. Double-click a tab, click its plus button, or edit the note to keep it open as a fixed tab. Double-clicking a filename in the explorer renames it. Clicking an already open file selects its existing tab. Close tabs with their × button. Switching or closing saves first; a save conflict keeps the current note open.
 
 Only the active editor is mounted. Open tabs keep in-memory editor states for cursor position and undo history; these are released when closed or replaced. External file changes invalidate the cached state on reopening. The tab list is session-only; restarting restores the last active note.
 
@@ -56,13 +75,34 @@ This explicit integration test downloads the model and fixture into a temporary 
 ## Bounds and current limitations
 
 - Up to 32 MiB per UTF-8 text file and 50,000 notes per folder.
-- Formatted preview is limited to 500,000 characters; larger documents use the virtualized source editor.
+- Read mode paginates documents over 500,000 characters and prepares Markdown in a background worker. Pages preserve Markdown blocks and cross-document references; bookmarks jump to the corresponding page. The full source and parsed document still reside in memory, and a single oversized Markdown block stays together on one page.
 - Text search streams saved files, returns at most 80 matches, and cancels superseded searches between reads. It skips files over 32 MiB and invalid UTF-8 content. `.git`, `.obsidian`, `node_modules`, `target`, and `.Trash` directories are excluded, and directory symlinks are not followed.
-- No filesystem watcher, automatic reload, new-file UI, image attachments, plugin compatibility, or sync yet. The folder menu’s Refresh action and reopening a file pick up disk changes.
+- No filesystem watcher, automatic reload, image attachments, plugin compatibility, or sync yet. The folder menu’s Refresh action and reopening a file pick up disk changes.
 - Fonts are bundled locally. Markdown raw HTML is not executed. Image rendering is deliberately a placeholder in this first version.
 - RAM targets are not benchmarked yet. Tauri's webview subprocesses must be included in any measurement.
 
 ## Verify / build
+
+### Generate installers
+
+After installing the build prerequisites above and running `npm ci`, run:
+
+```sh
+npm run package
+```
+
+This rebuilds the frontend and native app in release mode, then generates a macOS `.dmg` or Windows NSIS setup `.exe` for the current machine's architecture. Run it again after any changes. It runs without interactive prompts and returns a nonzero exit code if the build fails. macOS installers must be built on a Mac; Windows installers must be built on Windows. End users do not need Node, Rust, or CMake.
+
+Default output locations:
+
+- macOS: `src-tauri/target/release/bundle/dmg/`
+- Windows: `src-tauri/target/release/bundle/nsis/`
+
+For another architecture on the same OS, install its Rust target with `rustup target add <target>`, then run `npm run package -- --target <target>`. Targeted builds place output under `src-tauri/target/<target>/release/bundle/`. A custom `CARGO_TARGET_DIR` changes the target directory.
+
+The **Desktop installers** GitHub Actions workflow runs on every push and pull request, and can also be started with **Actions → Desktop installers → Run workflow**. It runs tests and generates separate Apple Silicon Mac, Intel Mac, and Windows x64 installers. Open a successful run and download its installer under **Artifacts**; filenames on the run include the commit SHA and downloads are retained for 14 days. GitHub requires sign-in to download Actions artifacts. These iteration builds are not published as GitHub Releases.
+
+Installer generation does not configure developer certificates or notarization. Current iteration builds may require OS security approval to open; public distribution still needs signing setup, including Apple notarization. Existing Tauri signing environment variables and configuration are honored by the script. See [Tauri distribution](https://v2.tauri.app/distribute/). Generated installers stay out of Git.
 
 ```sh
 npm test
@@ -71,8 +111,6 @@ cargo test --manifest-path src-tauri/Cargo.toml
 npm run tauri build
 ```
 
-Tests cover live anchor movement, external reanchoring, missing passages, emoji offsets, search ranking, file scope, symlink escapes on Unix, stale-save rejection, and CRLF preservation. A GitHub Actions workflow builds on Mac and Windows when pushed; Windows has not been tested locally.
+Tests cover bookmark tracking and search, formatting, current-tab search, tabs, folder preferences, zoom shortcuts, large-document pagination, note creation and renaming, file scope, symlink escapes on Unix, stale-save rejection, and CRLF preservation. Windows has not been tested locally.
 
 Architecture: React/TypeScript → Tauri IPC → Rust file operations. CodeMirror owns the live text buffer. Markdown rendering is lazy-loaded. Full-text search runs off the UI thread and does not retain all note bodies in memory.
-
-Command-K has an **Everywhere / Current tab** scope switch. Everywhere searches all added folders; Current tab searches the focused note, including unsaved edits, and jumps directly to the selected match without saving or reloading. The scope choice is remembered for the session. Current tab is disabled when no note is open.

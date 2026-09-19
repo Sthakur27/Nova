@@ -2,6 +2,8 @@ import { GFM } from "@lezer/markdown";
 import {
   richMarkdown,
   formatTransaction,
+  formattingKeymap,
+  paragraphStyle,
   type FormatAction,
 } from "./richMarkdown";
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
@@ -17,9 +19,11 @@ import {
   keymap,
   lineNumbers,
   highlightActiveLine,
+  gutter,
+  GutterMarker,
   type DecorationSet,
 } from "@codemirror/view";
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap, undo, redo } from "@codemirror/commands";
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { markdown } from "@codemirror/lang-markdown";
 import {
@@ -33,6 +37,33 @@ import {
   transcriptTransaction,
 } from "./dictation";
 const setMarks = StateEffect.define<Bookmark[]>();
+
+class BookmarkEntry extends GutterMarker {
+  constructor(private readonly onBookmark: () => void) {
+    super();
+  }
+  toDOM() {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "line-bookmark-button";
+    button.title = "Bookmark this line or selection";
+    button.setAttribute("aria-label", "Bookmark this line or selection");
+    const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    icon.setAttribute("viewBox", "0 0 24 24");
+    icon.setAttribute("aria-hidden", "true");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", "M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z");
+    icon.append(path);
+    button.append(icon);
+    // Keep the editor's selection intact when opening the naming dialog.
+    button.addEventListener("mousedown", (event) => event.preventDefault());
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      this.onBookmark();
+    });
+    return button;
+  }
+}
 export const bookmarkField = StateField.define<Bookmark[]>({
   create: () => [],
   update(value, transaction) {
@@ -75,6 +106,8 @@ export type EditorSnapshot = { state: EditorState; scrollTop: number };
 export type EditorHandle = {
   snapshot: () => EditorSnapshot;
   format: (action: FormatAction) => void;
+  undo: () => void;
+  redo: () => void;
   text: () => string;
   selection: () => { from: number; to: number; quote: string };
   jump: (from: number, to?: number) => void;
@@ -89,14 +122,23 @@ type Props = {
   bookmarks: Bookmark[];
   onChange: () => void;
   onBookmarks: (b: Bookmark[]) => void;
+  onParagraphStyle?: (style: FormatAction) => void;
   onCursor: (line: number, col: number) => void;
   onBookmark: () => void;
   onSave: () => void;
   isMarkdown: boolean;
   visual: boolean;
+  showLineNumbers: boolean;
+  showLineHighlight: boolean;
+  wordWrap: boolean;
+  spellcheck: boolean;
 };
 export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
   const presentation = useRef(new Compartment());
+  const wrapping = useRef(new Compartment());
+  const spelling = useRef(new Compartment());
+  const highlighting = useRef(new Compartment());
+  const numbering = useRef(new Compartment());
   const mount = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const latest = useRef(props);
@@ -115,6 +157,8 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
           v.focus();
         }
       },
+      undo: () => { if (view.current) { undo(view.current); view.current.focus(); } },
+      redo: () => { if (view.current) { redo(view.current); view.current.focus(); } },
       text: () => view.current?.state.doc.toString() ?? "",
       beginDictation: () => {
         const v = view.current!;
@@ -162,19 +206,34 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
   );
   useEffect(() => {
     const p = latest.current;
+    const bookmarkEntry = new BookmarkEntry(() => latest.current.onBookmark());
     const extensions = [
       history(),
+      numbering.current.of(p.showLineNumbers ? lineNumbers() : []),
+      gutter({
+        class: "cm-bookmark-entry",
+        renderEmptyElements: true,
+        lineMarker: (v, line) => {
+          const selection = v.state.selection.main;
+          const activeLine = v.state.doc.lineAt(selection.head);
+          return line.from === activeLine.from &&
+            (!selection.empty || activeLine.text.trim())
+            ? bookmarkEntry
+            : null;
+        },
+        lineMarkerChange: (update) => update.selectionSet || update.docChanged,
+      }),
       presentation.current.of(
         p.visual
           ? [
               richMarkdown,
               EditorView.editorAttributes.of({ class: "live-edit" }),
             ]
-          : [lineNumbers(), syntaxHighlighting(defaultHighlightStyle)],
+          : [syntaxHighlighting(defaultHighlightStyle)],
       ),
-      highlightActiveLine(),
+      highlighting.current.of(p.showLineHighlight ? highlightActiveLine() : []),
       highlightSelectionMatches(),
-      EditorView.lineWrapping,
+      wrapping.current.of(p.wordWrap ? EditorView.lineWrapping : []),
       p.isMarkdown ? markdown({ extensions: GFM }) : [],
       bookmarkField,
       dictationAnchor,
@@ -194,14 +253,15 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
             return true;
           },
         },
+        ...formattingKeymap(() => latest.current.isMarkdown),
         ...defaultKeymap,
         ...historyKeymap,
         ...searchKeymap,
       ]),
-      EditorView.contentAttributes.of({
+      spelling.current.of(EditorView.contentAttributes.of({
         "aria-label": "Note editor",
-        spellcheck: "true",
-      }),
+        spellcheck: String(p.spellcheck),
+      })),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
           latest.current.onChange();
@@ -211,6 +271,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
           const pos = update.state.selection.main.head,
             line = update.state.doc.lineAt(pos);
           latest.current.onCursor(line.number, pos - line.from + 1);
+          latest.current.onParagraphStyle?.(paragraphStyle(update.state));
         }
       }),
       EditorView.theme(
@@ -222,16 +283,16 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
           },
           ".cm-scroller": {
             fontFamily: '"SFMono-Regular", Consolas, monospace',
-            fontSize: "14px",
+            fontSize: "var(--editor-font-size, 14px)",
             lineHeight: "1.9",
             overflow: "auto",
           },
-          ".cm-content": { padding: "40px 36px 150px", maxWidth: "900px" },
+          ".cm-content": { padding: "40px 36px 150px", maxWidth: "var(--text-width, 900px)" },
           ".cm-gutters": {
             backgroundColor: "transparent",
             color: "#54565f",
             border: "none",
-            paddingTop: "40px",
+            // CodeMirror already offsets gutter entries by the content padding.
           },
           ".cm-activeLineGutter": { backgroundColor: "#ffffff05" },
           ".cm-activeLine": { backgroundColor: "#ffffff03" },
@@ -261,6 +322,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
     const head = v.state.selection.main.head,
       line = v.state.doc.lineAt(head);
     p.onCursor(line.number, head - line.from + 1);
+    p.onParagraphStyle?.(paragraphStyle(v.state));
     return () => {
       v.destroy();
       view.current = null;
@@ -279,9 +341,27 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
               richMarkdown,
               EditorView.editorAttributes.of({ class: "live-edit" }),
             ]
-          : [lineNumbers(), syntaxHighlighting(defaultHighlightStyle)],
+          : [syntaxHighlighting(defaultHighlightStyle)],
       ),
     });
   }, [props.visual]);
+  useEffect(() => {
+    view.current?.dispatch({
+      effects: numbering.current.reconfigure(props.showLineNumbers ? lineNumbers() : []),
+    });
+  }, [props.showLineNumbers]);
+  useEffect(() => {
+    view.current?.dispatch({
+      effects: highlighting.current.reconfigure(props.showLineHighlight ? highlightActiveLine() : []),
+    });
+  }, [props.showLineHighlight]);
+  useEffect(() => {
+    view.current?.dispatch({ effects: wrapping.current.reconfigure(props.wordWrap ? EditorView.lineWrapping : []) });
+  }, [props.wordWrap]);
+  useEffect(() => {
+    view.current?.dispatch({ effects: spelling.current.reconfigure(EditorView.contentAttributes.of({
+      "aria-label": "Note editor", spellcheck: String(props.spellcheck),
+    })) });
+  }, [props.spellcheck]);
   return <div className="editor-mount" ref={mount} />;
 });

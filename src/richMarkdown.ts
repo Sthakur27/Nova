@@ -6,6 +6,7 @@ import {
   ViewPlugin,
   WidgetType,
   type DecorationSet,
+  type KeyBinding,
 } from "@codemirror/view";
 
 class Bullet extends WidgetType {
@@ -187,11 +188,15 @@ export type FormatAction =
   | "h1"
   | "h2"
   | "h3"
+  | "h4"
+  | "h5"
+  | "h6"
   | "bold"
   | "italic"
   | "strike"
   | "code"
   | "bullet"
+  | "numbered"
   | "task"
   | "quote";
 export function formatTransaction(state: EditorState, action: FormatAction) {
@@ -233,6 +238,10 @@ export function formatTransaction(state: EditorState, action: FormatAction) {
     h1: "# ",
     h2: "## ",
     h3: "### ",
+    h4: "#### ",
+    h5: "##### ",
+    h6: "###### ",
+    numbered: "1. ",
     bullet: "- ",
     task: "- [ ] ",
     quote: "> ",
@@ -245,13 +254,36 @@ export function formatTransaction(state: EditorState, action: FormatAction) {
   for (let n = first.number; n <= last.number; n++) {
     const line = state.doc.line(n);
     const old =
-      /^(?:#{1,6}\s+|[-+*]\s+(?:\[[ xX]\]\s+)?|>\s?)/.exec(line.text)?.[0] ??
+      /^(?:#{1,6}\s+|[-+*]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+|>\s?)/.exec(line.text)?.[0] ??
       "";
     changes.push({
       from: line.from,
       to: line.from + old.length,
-      insert: prefix,
+      insert: action === "numbered" ? `${n - first.number + 1}. ` : prefix,
     });
   }
   return state.update({ changes, userEvent: "input" });
+}
+
+export function paragraphStyle(state: EditorState): FormatAction {
+  const line = state.doc.lineAt(state.selection.main.head).text;
+  const heading = /^(#{1,6})\s/.exec(line);
+  return heading ? `h${heading[1].length}` as FormatAction : "paragraph";
+}
+export const formatShortcuts: { key: string; action: FormatAction }[] = [
+  { key: "Mod-b", action: "bold" },
+  { key: "Mod-i", action: "italic" },
+  { key: "Mod-Shift-x", action: "strike" },
+  { key: "Mod-Alt-0", action: "paragraph" },
+  ...([1, 2, 3, 4, 5, 6] as const).map(level => ({ key: `Mod-Alt-${level}`, action: `h${level}` as FormatAction })),
+  { key: "Mod-Shift-7", action: "numbered" },
+  { key: "Mod-Shift-8", action: "bullet" },
+  { key: "Mod-Shift-9", action: "quote" },
+];
+export function formattingKeymap(enabled: () => boolean): KeyBinding[] {
+  return formatShortcuts.map(({ key, action }) => ({ key, run: view => {
+    if (!enabled()) return false;
+    view.dispatch(formatTransaction(view.state, action));
+    return true;
+  } }));
 }

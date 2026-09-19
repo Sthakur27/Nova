@@ -18,13 +18,39 @@ function FileTree({
   paths,
   active,
   onOpen,
+  onRename,
   prefix = "",
 }: {
   paths: string[];
   active: string;
   onOpen: (path: string, pinned?: boolean) => void;
+  onRename: (path: string, name: string) => Promise<void>;
   prefix?: string;
 }) {
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [renameError, setRenameError] = useState("");
+  const [renameBusy, setRenameBusy] = useState(false);
+  const renamePath = useRef<string | null>(null);
+  const saveRename = async (path: string) => {
+    if (renamePath.current !== path) return;
+    renamePath.current = null;
+    if (draft === path.slice(prefix.length)) {
+      setRenaming(null);
+      return;
+    }
+    setRenameBusy(true);
+    setRenameError("");
+    try {
+      await onRename(path, draft);
+      setRenaming(null);
+    } catch (error) {
+      renamePath.current = path;
+      setRenameError(String(error));
+    } finally {
+      setRenameBusy(false);
+    }
+  };
   const [closed, setClosed] = useState<Set<string>>(new Set());
   const groups = new Map<string, string[]>(),
     files: string[] = [];
@@ -70,19 +96,34 @@ function FileTree({
                   paths={children}
                   active={active}
                   onOpen={onOpen}
+                  onRename={onRename}
                   prefix={prefix + name + "/"}
                 />
               </div>
             )}
           </div>
         ))}
-      {files.sort().map((path) => (
+      {files.sort().map((path) => renaming === path ? (
+        <form key={path} className={"tree-row file-row file-rename " + (path === active ? "active" : "")} onSubmit={(event) => {
+          event.preventDefault();
+          void saveRename(path);
+        }}>
+          <FileText size={14} />
+          <input autoFocus aria-label={`Rename ${path}`} value={draft} readOnly={renameBusy}
+            onFocus={event => event.currentTarget.setSelectionRange(0, Math.max(0, draft.lastIndexOf(".")) || draft.length)}
+            onChange={event => setDraft(event.target.value)}
+            onBlur={() => { void saveRename(path); }}
+            onKeyDown={event => { if (event.key === "Escape" && !renameBusy) { event.preventDefault(); renamePath.current = null; setRenaming(null); } }} />
+          {path === active && <span className="active-dot" />}
+          {renameError && <small role="alert">{renameError}</small>}
+        </form>
+      ) : (
         <button
           key={path}
           title={path}
           className={"tree-row file-row " + (path === active ? "active" : "")}
           onClick={() => onOpen(path)}
-          onDoubleClick={() => onOpen(path, true)}
+          onDoubleClick={() => { if (renameBusy) return; renamePath.current = path; setRenaming(path); setDraft(path.slice(prefix.length)); setRenameError(""); }}
         >
           <FileText size={14} />
           <span>{path.slice(prefix.length)}</span>
@@ -97,6 +138,7 @@ type Props = {
   activeRoot: string;
   activePath: string;
   onOpen: (folder: Workspace, path: string, pinned?: boolean) => void;
+  onRename: (folder: Workspace, path: string, name: string) => Promise<void>;
   onChange: (folders: Workspace[]) => void;
   onRemove: (root: string) => void;
   onRefresh: (root: string) => void;
@@ -108,6 +150,7 @@ export default function Explorer({
   activeRoot,
   activePath,
   onOpen,
+  onRename,
   onChange,
   onRemove,
   onRefresh,
@@ -276,6 +319,7 @@ export default function Explorer({
                     paths={folder.files.map((f) => f.path)}
                     active={folder.root === activeRoot ? activePath : ""}
                     onOpen={(path, pinned) => onOpen(folder, path, pinned)}
+                    onRename={(path, name) => onRename(folder, path, name)}
                   />
                 ) : (
                   <p className="folder-empty">No text or Markdown files.</p>

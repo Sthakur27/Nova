@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 1420",
+    "desktop": "node scripts/dev-desktop.mjs",
     "build": "tsc -b && vite build",
+    "package": "node scripts/package-desktop.mjs",
     "preview": "vite preview --port 1420",
     "tauri": "tauri",
     "test": "vitest run"
@@ -26,10 +28,14 @@
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "remark-rehype": "^11.1.2",
+    "unified": "^11.0.5"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.8.0",
+    "@types/hast": "^3.0.5",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^4.7.0",

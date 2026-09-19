@@ -1,6 +1,7 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import type { ComponentProps } from "react";
+import { memo, useMemo, type ComponentProps } from "react";
+import type { Root } from "hast";
 const tags = [
   "p",
   "h1",
@@ -25,10 +26,13 @@ const components = Object.fromEntries(
     }) => <Tag {...(props as object)} data-line={node?.position?.start.line} />,
   ]),
 );
-export default function Markdown({ text }: { text: string }) {
+export default memo(function Markdown({ text = "", tree }: { text?: string; tree?: Root }) {
+  // Keep ReactMarkdown’s HTML escaping and safe URL handling for worker output.
+  const plugins = useMemo(() => tree ? [() => () => structuredClone(tree)] : [], [tree]);
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
+      rehypePlugins={plugins}
       components={{
         ...components,
         a: ({ children, href }) => (
@@ -46,4 +50,4 @@ export default function Markdown({ text }: { text: string }) {
       {text}
     </ReactMarkdown>
   );
-}
+});

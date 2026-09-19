@@ -1,10 +1,31 @@
-name: Desktop checks
-on: [push, pull_request]
+name: Desktop installers
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: desktop-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            label: mac-apple-silicon
+            bundle: dmg/*.dmg
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            label: mac-intel
+            bundle: dmg/*.dmg
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            label: windows-x64
+            bundle: nsis/*.exe
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -13,13 +34,22 @@ jobs:
           node-version: 22
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          key: ${{ matrix.target }}
       - name: Check CMake
         run: cmake --version
       - run: npm ci
       - run: npm test
-      - run: npm run build
       - run: cargo test --manifest-path src-tauri/Cargo.toml
-      - run: npm run tauri build -- --no-bundle
+      - run: npm run package -- --target ${{ matrix.target }}
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Nova-${{ matrix.label }}-${{ github.sha }}
+          path: src-tauri/target/${{ matrix.target }}/release/bundle/${{ matrix.bundle }}
+          if-no-files-found: error
+          retention-days: 14

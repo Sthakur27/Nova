@@ -1,3 +1,4 @@
+import ScopeToggle from "./ScopeToggle";
 import "./palette.css";
 import {
   searchCurrentNote,
@@ -9,6 +10,7 @@ import {
   Bookmark as BookmarkIcon,
   FileText,
   LayoutGrid,
+  Command,
   Search,
   TextSearch,
   X,
@@ -21,7 +23,9 @@ import {
 } from "./storage";
 export default function Palette({
   folders,
+  commands = [],
   activeNote,
+  getActiveText,
   scope,
   onScopeChange,
   onNavigateCurrent,
@@ -29,7 +33,9 @@ export default function Palette({
   onOpen,
 }: {
   folders: Workspace[];
-  activeNote: CurrentNote | null;
+  commands?: { id: string; label: string; description: string; keywords?: string; run: () => void }[];
+  activeNote: Omit<CurrentNote, "text"> | null;
+  getActiveText: () => string;
   scope: SearchScope;
   onScopeChange: (scope: SearchScope) => void;
   onNavigateCurrent: (from?: number, to?: number) => void;
@@ -68,6 +74,16 @@ export default function Palette({
   const [index, setIndex] = useState(0);
   const panel = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.isComposing) return;
+      event.preventDefault();
+      event.stopPropagation();
+      onClose();
+    };
+    window.addEventListener("keydown", closeOnEscape, { capture: true });
+    return () => window.removeEventListener("keydown", closeOnEscape, { capture: true });
+  }, [onClose]);
   const files = useMemo(
     () =>
       filter === "Text" || filter === "Bookmarks"
@@ -86,8 +102,10 @@ export default function Palette({
   );
   const localHits = useMemo(
     () =>
-      activeNote && currentOnly ? searchCurrentNote(activeNote, query) : [],
-    [activeNote, currentOnly, query],
+      activeNote && currentOnly && query.trim() && filter !== "Files" && filter !== "Bookmarks"
+        ? searchCurrentNote({ ...activeNote, text: getActiveText() }, query)
+        : [],
+    [activeNote, currentOnly, query, filter, getActiveText],
   );
   const localBookmarks = useMemo(
     () =>
@@ -119,6 +137,14 @@ export default function Palette({
       : currentOnly
         ? localBookmarks
         : bookmarks;
+  const matchingCommands = filter === "All" ? commands.filter((command) =>
+    query.trim().toLowerCase().split(/\s+/).every((word) =>
+      `${command.label} ${command.keywords ?? ""}`.toLowerCase().includes(word)),
+  ) : [];
+  const runCommand = (command: (typeof commands)[number]) => {
+    command.run();
+    onClose();
+  };
   const rows = [
     ...files.map((f) => ({
       root: f.root,
@@ -210,22 +236,21 @@ export default function Palette({
         }
         ref={panel}
         onKeyDown={(e) => {
-          if (e.key === "Escape") {
-            e.stopPropagation();
-            onClose();
-          }
           if (e.key === "ArrowDown" || e.key === "ArrowUp") {
             e.preventDefault();
             setIndex((i) =>
               Math.max(
                 0,
-                Math.min(rows.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)),
+                Math.min(matchingCommands.length + rows.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)),
               ),
             );
           }
-          if (e.key === "Enter" && e.target === input.current && rows[index]) {
+          if (e.key === "Enter" && e.target === input.current && matchingCommands[index]) {
             e.preventDefault();
-            const row = rows[index];
+            runCommand(matchingCommands[index]);
+          } else if (e.key === "Enter" && e.target === input.current && rows[index - matchingCommands.length]) {
+            e.preventDefault();
+            const row = rows[index - matchingCommands.length];
             select(
               row.root,
               row.path,
@@ -250,30 +275,17 @@ export default function Palette({
           }
         }}
       >
-        <div className="search-scope" role="group" aria-label="Search scope">
-          <button
-            aria-pressed={!currentOnly}
-            className={!currentOnly ? "selected" : ""}
-            onClick={() => {
-              setIndex(0);
-              onScopeChange("everywhere");
-              input.current?.focus();
-            }}
-          >
-            Everywhere
-          </button>
-          <button
-            aria-pressed={currentOnly}
+        <div className="search-scope">
+          <ScopeToggle
+            label="Search scope"
+            scope={currentOnly ? "current" : "everywhere"}
             disabled={!activeNote}
-            className={currentOnly ? "selected" : ""}
-            onClick={() => {
+            onChange={(next) => {
               setIndex(0);
-              onScopeChange("current");
+              onScopeChange(next);
               input.current?.focus();
             }}
-          >
-            Current tab
-          </button>
+          />
           <span title={currentOnly ? activeNote?.path : undefined}>
             {currentOnly
               ? activeNote?.path.split("/").at(-1)
@@ -319,7 +331,7 @@ export default function Palette({
             placeholder={
               currentOnly
                 ? "Find in this note…"
-                : "A filename, a bookmark, a phrase…"
+                : "A filename, a bookmark, a command…"
             }
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -327,6 +339,7 @@ export default function Palette({
           <button
             className="icon-button"
             aria-label="Close search"
+            title="Close search (Esc)"
             onClick={onClose}
           >
             <X size={17} />
@@ -337,6 +350,23 @@ export default function Palette({
           role="listbox"
           aria-label="Search results"
         >
+          {matchingCommands.length > 0 && <div className="section-label">Commands</div>}
+          {matchingCommands.map((command, i) => (
+            <button
+              role="option"
+              aria-selected={i === index}
+              className="search-result"
+              key={command.id}
+              onClick={() => runCommand(command)}
+            >
+              <Command size={17} aria-hidden="true" />
+              <span>
+                <strong>{command.label}</strong>
+                <small>{command.description}</small>
+              </span>
+              <kbd>↵</kbd>
+            </button>
+          ))}
           {files.length > 0 && (
             <div className="section-label">
               {query ? "File names" : "Your files"} <span>{files.length}</span>
@@ -345,7 +375,7 @@ export default function Palette({
           {files.map((f, i) => (
             <button
               role="option"
-              aria-selected={i === index}
+              aria-selected={matchingCommands.length + i === index}
               className="search-result"
               key={f.root + ":" + f.path}
               onClick={() => select(f.root, f.path)}
@@ -368,7 +398,7 @@ export default function Palette({
           {bookmarkHits.map((hit, i) => (
             <button
               role="option"
-              aria-selected={files.length + i === index}
+              aria-selected={matchingCommands.length + files.length + i === index}
               className="search-result"
               key={hit.root + ":" + hit.path + ":" + hit.bookmark.id}
               onClick={() =>
@@ -397,7 +427,7 @@ export default function Palette({
           {textHits.map((hit, i) => (
             <button
               role="option"
-              aria-selected={files.length + bookmarkHits.length + i === index}
+              aria-selected={matchingCommands.length + files.length + bookmarkHits.length + i === index}
               className="search-result"
               key={hit.root + ":" + hit.path + ":" + hit.line + ":" + i}
               onClick={() =>
@@ -429,7 +459,7 @@ export default function Palette({
           {!currentOnly && error && (
             <p className="search-message error">{error}</p>
           )}
-          {(currentOnly || (!busy && !error)) && !rows.length && (
+          {(currentOnly || (!busy && !error)) && !rows.length && !matchingCommands.length && (
             <p className="search-message">No matches. Try another word.</p>
           )}
         </div>
@@ -440,6 +470,9 @@ export default function Palette({
           </span>
           <span>
             <kbd>↵</kbd> to open
+          </span>
+          <span>
+            <kbd>Esc</kbd> to close
           </span>
           <span>
             {currentOnly
