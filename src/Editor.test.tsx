@@ -58,3 +58,41 @@ it.each([false, true])("opens and edits a 2.3 MB Markdown note without rich pars
     vi.unstubAllGlobals();
   }
 });
+
+it("changes language on rename and preserves text and undo across restored tabs", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  const ref = createRef<EditorHandle>();
+  const render = (filePath: string, snapshot?: ReturnType<EditorHandle["snapshot"]>) => root.render(
+    <Editor ref={ref} initial="class Main {}" snapshot={snapshot} filePath={filePath}
+      bookmarks={[]} onChange={() => {}} onBookmarks={() => {}} onCursor={() => {}}
+      onBookmark={() => {}} onSave={() => {}} isMarkdown={false}
+      showLineNumbers showLineHighlight={false} wordWrap={false} spellcheck />,
+  );
+  try {
+    await act(async () => render("Main.java"));
+    expect(container.querySelector(".cm-foldGutter")).not.toBeNull();
+    expect(container.querySelector(".cm-content")?.getAttribute("spellcheck")).toBe("false");
+    await act(async () => {
+      ref.current!.jump(ref.current!.text().length);
+      ref.current!.beginDictation();
+      ref.current!.insertDictation("addition");
+    });
+    const snapshot = ref.current!.snapshot();
+    await act(async () => render("Main.txt"));
+    expect(container.querySelector(".cm-foldGutter")).toBeNull();
+    expect(container.querySelector(".cm-content")?.getAttribute("spellcheck")).toBe("true");
+    expect(ref.current!.text()).toContain("addition");
+    await act(async () => root.render(null));
+    await act(async () => render("Main.java", snapshot));
+    expect(container.querySelector(".cm-foldGutter")).not.toBeNull();
+    await act(async () => ref.current!.undo());
+    expect(ref.current!.text()).toBe("class Main {}");
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+    vi.unstubAllGlobals();
+  }
+});

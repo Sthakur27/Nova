@@ -72,3 +72,25 @@ This explicit integration test downloads the model and fixture into a temporary 
 - No filesystem watcher, automatic reload, image attachments, plugin compatibility, or sync yet. The folder menu’s Refresh action and reopening a file pick up disk changes.
 - Fonts are bundled locally. Markdown raw HTML is not executed. Image rendering is deliberately a placeholder in this first version.
 - RAM targets are not benchmarked yet. Tauri's webview subprocesses must be included in any measurement.
+
+## Code editing
+
+Open or rename a file with a supported extension to enable code assistance automatically:
+
+| Language | Extensions |
+| --- | --- |
+| Python | `.py`, `.pyw`, `.pyi` |
+| TypeScript | `.ts`, `.mts`, `.cts`, `.tsx` |
+| JavaScript | `.js`, `.mjs`, `.cjs`, `.jsx` |
+| Java | `.java` |
+| JSON | `.json`, `.map` |
+| HTML | `.html`, `.htm` |
+| CSS | `.css` |
+
+The status bar shows the detected language. Code files have syntax highlighting, bracket matching and automatic closing, automatic indentation, and folding controls in the gutter. Spelling checks are disabled for code. Markdown and other text files retain their writing behavior.
+
+Suggestions appear as you type. Press **Ctrl Space** to request suggestions, use the arrow keys to choose one, and **Enter** to accept it. **Escape** dismisses suggestions. **Tab / Shift Tab** indent and unindent code; press **Escape**, then **Tab** to move keyboard focus out of the editor. Python and JavaScript/TypeScript include local-name suggestions; Java includes keywords and class/main snippets. Suggestions also include words from the current document. Completion does not resolve project imports or library APIs.
+
+Basic syntax errors are underlined and marked in the gutter; hover over a marker for details. **⌘ Shift M** (Mac) or **Ctrl Shift M** (Windows) opens the diagnostics panel. JSON uses JSON parsing errors; other languages report syntax the editor's grammar cannot parse. These checks are intentionally limited: they are not compiler validation, type checking, or style linting, and may miss invalid code. Syntax diagnostics are skipped above 200,000 characters and limited to 100 markers for grammar errors to keep editing responsive.
+
+Code assistance runs locally and requires no Python, Node, or Java installation. Nova does not yet run code, debug, provide project-wide analysis, or connect to language servers. Markdown code fences do not use this code-editing mode.

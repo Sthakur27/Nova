@@ -1,6 +1,7 @@
 import LineSpacingControl, { lineSpacings, type LineSpacing } from "./LineSpacingControl";
 import { loadDraft, storeDraft, clearDraft, moveDraft } from "./drafts";
 import Settings from "./Settings";
+import { codeLanguage } from "./codeLanguages";
 import SidePanelControls from "./SidePanelControls";
 import TextWidthControl, { textWidths, type TextWidth } from "./TextWidthControl";
 import { usePreference } from "./preferences";
@@ -1296,6 +1297,7 @@ export default function App() {
                 onSave={() => void save()}
                 onSourceSearch={() => setMode("source")}
                 isMarkdown={isMarkdown}
+                filePath={path}
                 documentMode={documentView && mode !== "source" ? mode : undefined}
                 showLineNumbers={showLineNumbers}
                 showLineHighlight={showLineHighlight}
@@ -1365,7 +1367,7 @@ export default function App() {
               ? `Ln ${cursor[0]}, Col ${cursor[1]}`
               : "Reading mode"}
           </span>
-          <span>{isMarkdown ? "Markdown" : "Plain text"}</span>
+          <span>{isMarkdown ? "Markdown" : codeLanguage(path)?.name ?? "Plain text"}</span>
           <span>UTF-8</span>
         </footer>
         </div>

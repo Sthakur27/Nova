@@ -90,7 +90,7 @@ Your audio stays on your computer and isn't uploaded. Voice typing requires the 
 
 ## A few things to know
 
-Nova is still a prototype. It supports plain text and Markdown notes; image attachments and sync between devices aren't available yet. If you change files in another app, refresh the folder and reopen the note to pick up the changes.
+Nova is still a prototype. Alongside plain text and Markdown notes, it offers basic code editing for Python, TypeScript/JavaScript (including JSX/TSX), Java, JSON, HTML, and CSS. Open a file with the corresponding extension to get syntax highlighting, completion suggestions, basic syntax diagnostics, bracket matching, indentation, and folding. See [code editing](docs/user-guide.md#code-editing) for shortcuts and limits. Image attachments and sync between devices aren't available yet. If you change files in another app, refresh the folder and reopen the note to pick up the changes.
 
 Recovery drafts help you return to unfinished work, but **Save** writes changes to your original files. Keep a separate backup of important notes. If a file changes outside Nova while you're editing, Nova stops the save so you can reconcile the two versions.
 

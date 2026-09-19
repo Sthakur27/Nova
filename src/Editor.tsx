@@ -1,4 +1,5 @@
 import { editorSearch } from "./editorSearch";
+import { codeExtensions, codeLanguage } from "./codeLanguages";
 import { DocumentEditor } from "./DocumentEditor";
 import { supportsDocumentView } from "./documentLimits";
 import { textChanges } from "./documentMarkdown";
@@ -145,6 +146,7 @@ type Props = {
   onSave: () => void;
   onSourceSearch?: () => void;
   isMarkdown: boolean;
+  filePath?: string;
   documentMode?: "edit" | "read";
   showLineNumbers: boolean;
   showLineHighlight: boolean;
@@ -156,6 +158,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
   const spelling = useRef(new Compartment());
   const highlighting = useRef(new Compartment());
   const numbering = useRef(new Compartment());
+  const language = useRef(new Compartment());
   const mount = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const documentMount = useRef<HTMLDivElement>(null);
@@ -281,7 +284,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
       editorSearch,
       highlightSelectionMatches(),
       wrapping.current.of(p.wordWrap ? EditorView.lineWrapping : []),
-      p.isMarkdown ? markdown({ extensions: GFM }) : [],
+      language.current.of(p.isMarkdown ? markdown({ extensions: GFM }) : codeExtensions(p.filePath)),
       // Four spaces nest both bullet and numbered items in Markdown.
       indentUnit.of("    "),
       bookmarkField,
@@ -311,7 +314,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
       ]),
       spelling.current.of(EditorView.contentAttributes.of({
         "aria-label": "Note editor",
-        spellcheck: String(p.spellcheck),
+        spellcheck: String(p.spellcheck && !codeLanguage(p.filePath)),
       })),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
@@ -458,10 +461,15 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
     view.current?.dispatch({ effects: wrapping.current.reconfigure(props.wordWrap ? EditorView.lineWrapping : []) });
   }, [props.wordWrap]);
   useEffect(() => {
+    view.current?.dispatch({ effects: language.current.reconfigure(
+      props.isMarkdown ? markdown({ extensions: GFM }) : codeExtensions(props.filePath),
+    ) });
+  }, [props.isMarkdown, props.filePath]);
+  useEffect(() => {
     view.current?.dispatch({ effects: spelling.current.reconfigure(EditorView.contentAttributes.of({
-      "aria-label": "Note editor", spellcheck: String(props.spellcheck),
+      "aria-label": "Note editor", spellcheck: String(props.spellcheck && !codeLanguage(props.filePath)),
     })) });
-  }, [props.spellcheck]);
+  }, [props.spellcheck, props.filePath]);
   return <div className="editor-mount">
     <div className="source-editor-mount" ref={mount} hidden={!!props.documentMode} />
     <div className="document-pane" ref={documentPane} hidden={!props.documentMode} data-mode={props.documentMode}>
