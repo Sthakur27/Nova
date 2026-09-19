@@ -2,7 +2,31 @@
 
 A local-first Mac and Windows notes prototype: ordinary folders, plain text and Markdown, filename-first search (including bookmark names and excerpts), named bookmarks across your folders, recovery drafts, starred files, and a customizable writing workspace.
 
-## Run
+## Download Nova
+
+**[Find Mac and Windows downloads →](https://github.com/Sthakur27/Nova/actions/workflows/desktop.yml?query=branch%3Amain)**
+
+Nova automatically builds installers for Mac and Windows whenever an update is pushed. You do **not** need to install developer tools or run any commands to use Nova.
+
+1. Sign in to GitHub and open the download page above.
+2. Open a recent **Desktop installers** run. Scroll down to **Artifacts**—GitHub’s name for the downloadable files produced by that run.
+3. Choose the download for your computer:
+
+   | Your computer | Download name begins with |
+   | --- | --- |
+   | Mac with an Apple M-series chip | `Nova-mac-apple-silicon` |
+   | Mac with an Intel processor | `Nova-mac-intel` |
+   | Windows PC with an Intel or AMD 64-bit processor | `Nova-windows-x64` |
+
+4. Unzip the download. On Mac, open the `.dmg` and drag Nova into Applications. On Windows, run the `.exe` installer and follow its steps.
+
+On a Mac, **Apple menu → About This Mac** shows whether you have an Apple chip or an Intel processor.
+
+**No download listed?** The build may still be running, that platform’s build may have failed, or the download may have expired. Check an earlier run with an available installer for your computer. One platform can succeed even when another fails, so a run with a red failure indicator may still contain Mac or Windows downloads. Downloads expire after **14 days** and require a GitHub account with access to this repository. There is no permanent “latest installer” link or GitHub Releases download yet.
+
+These are early, unsigned builds. macOS or Windows may show a security warning when opening them.
+
+## Run from source (developers)
 
 Requires Node.js 22.22.2+ (or 24.15+ / 26+), Rust stable, and CMake (for the local speech engine). On macOS 11 or later, install Xcode Command Line Tools. On Windows install Visual Studio C++ Build Tools (Desktop development with C++) and WebView2. See [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/).
 
@@ -107,7 +131,7 @@ Default output locations:
 
 For another architecture on the same OS, install its Rust target with `rustup target add <target>`, then run `npm run package -- --target <target>`. Targeted builds place output under `src-tauri/target/<target>/release/bundle/`. A custom `CARGO_TARGET_DIR` changes the target directory.
 
-The **Desktop installers** GitHub Actions workflow runs on every push and pull request, and can also be started with **Actions → Desktop installers → Run workflow**. It runs tests and generates separate Apple Silicon Mac, Intel Mac, and Windows x64 installers. Open a successful run and download its installer under **Artifacts**; filenames on the run include the commit SHA and downloads are retained for 14 days. GitHub requires sign-in to download Actions artifacts. These iteration builds are not published as GitHub Releases.
+The **Desktop installers** GitHub Actions workflow runs on every push and pull request, and can also be started with **Actions → Desktop installers → Run workflow**. It runs tests and generates separate Apple Silicon Mac, Intel Mac, and Windows x64 installers. Follow the [download instructions above](#download-nova) to find available installers under **Artifacts**; filenames on the run include the commit SHA and downloads are retained for 14 days. GitHub requires sign-in to download Actions artifacts. These iteration builds are not published as GitHub Releases.
 
 Installer generation does not configure developer certificates or notarization. Current iteration builds may require OS security approval to open; public distribution still needs signing setup, including Apple notarization. Existing Tauri signing environment variables and configuration are honored by the script. See [Tauri distribution](https://v2.tauri.app/distribute/). Generated installers stay out of Git.
 
