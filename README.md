@@ -27,6 +27,12 @@ Bookmarks live in Tauri's OS app-data directory, under `com.nova.notes.prototype
 
 Saves compare the disk revision before writing and use a temporary file plus atomic replacement. A detected external change prevents the save and keeps edits open. Copy edits to a safe place before reopening when there is a conflict. CRLF line endings are preserved for CRLF documents; mixed line endings normalize. Atomic replacement may not preserve all extended file attributes. This prototype is not a collaborative editor or a backup system.
 
+## Tabs
+
+Single-click a file to open it in the one italic preview tab. Browsing replaces that preview only. Double-click a file or tab, click its plus button, or edit it to keep it open as a fixed tab. Clicking an already open file selects its existing tab. Close tabs with their × button. Switching or closing saves first; a save conflict keeps the current note open.
+
+Only the active editor is mounted. Open tabs keep in-memory editor states for cursor position and undo history; these are released when closed or replaced. External file changes invalidate the cached state on reopening. The tab list is session-only; restarting restores the last active note.
+
 ## Voice typing
 
 Click **Dictate** in the document toolbar. On first use, download the English Whisper tiny.en model (77,704,715 bytes, about 78 MB) from the upstream whisper.cpp Hugging Face repository. Nova checks the download's SHA-256 before installing it in its OS app-data `speech` directory. The model is not bundled into the app or committed to Git.
@@ -52,7 +58,7 @@ This explicit integration test downloads the model and fixture into a temporary 
 - Up to 32 MiB per UTF-8 text file and 50,000 notes per folder.
 - Formatted preview is limited to 500,000 characters; larger documents use the virtualized source editor.
 - Text search streams saved files, returns at most 80 matches, and cancels superseded searches between reads. It skips files over 32 MiB and invalid UTF-8 content. `.git`, `.obsidian`, `node_modules`, `target`, and `.Trash` directories are excluded, and directory symlinks are not followed.
-- No filesystem watcher, automatic reload, new-file UI, multiple tabs, image attachments, plugin compatibility, or sync yet. The folder menu’s Refresh action and reopening a file pick up disk changes.
+- No filesystem watcher, automatic reload, new-file UI, image attachments, plugin compatibility, or sync yet. The folder menu’s Refresh action and reopening a file pick up disk changes.
 - Fonts are bundled locally. Markdown raw HTML is not executed. Image rendering is deliberately a placeholder in this first version.
 - RAM targets are not benchmarked yet. Tauri's webview subprocesses must be included in any measurement.
 

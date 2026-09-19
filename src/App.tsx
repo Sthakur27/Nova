@@ -1,3 +1,4 @@
+import {openTab,pinTab,tabId,type NoteTab} from "./tabs";
 import {
   lazy,
   Suspense,
@@ -25,7 +26,7 @@ import {
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import Editor, { type EditorHandle } from "./Editor";
+import Editor, { type EditorHandle, type EditorSnapshot } from "./Editor";
 import Palette from "./Palette";
 import Explorer from "./Explorer";
 import FormatToolbar from "./FormatToolbar";
@@ -47,6 +48,13 @@ import type { Bookmark, DocumentData, Workspace } from "./model";
 const Markdown = lazy(() => import("./Markdown"));
 const mod = navigator.platform.toLowerCase().includes("mac") ? "⌘" : "Ctrl";
 export default function App() {
+  const [tabs,setTabs]=useState<NoteTab[]>([]);
+  const pendingPins=useRef(new Set<string>());
+  const tabsRef=useRef<NoteTab[]>([]);
+  const snapshots=useRef(new Map<string,EditorSnapshot>());
+  const [editorSnapshot,setEditorSnapshot]=useState<EditorSnapshot|undefined>();
+  const updateTabs=useCallback((next:NoteTab[])=>{tabsRef.current=next;setTabs(next);for(const key of snapshots.current.keys())if(!next.some(t=>tabId(t)===key))snapshots.current.delete(key);},[]);
+  const pin=useCallback((root:string,path:string)=>updateTabs(pinTab(tabsRef.current,tabId({root,path}))),[updateTabs]);
   const [folders, setFolders] = useState<Workspace[]>([demoWorkspace]);
   const [foldersReady, setFoldersReady] = useState(false);
   const [externalDrag, setExternalDrag] = useState(false);
@@ -100,9 +108,10 @@ export default function App() {
     setBookmarks(marks);
   }, []);
   const changed = useCallback(() => {
+    pin(current.current.workspace.root,current.current.path);
     dirtyRef.current = true;
     setDirty(true);
-  }, []);
+  }, [pin]);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -133,6 +142,7 @@ export default function App() {
             setWorkspace(candidate.folder);
             setPath(candidate.path);
             setData(note);
+            updateTabs([{root:candidate.folder.root,path:candidate.path,pinned:false}]);
             setPreview(note.text);
             applyMarks(note.bookmarks);
             opened = true;
@@ -251,7 +261,10 @@ export default function App() {
     });
   }, []);
   const openNote = useCallback(
-    async (nextPath: string, line?: number, nextWorkspace?: Workspace) => {
+    async (nextPath: string, line?: number, nextWorkspace?: Workspace, pinned=false) => {
+      const requested=nextWorkspace??current.current.workspace;
+      if(pinned){pendingPins.current.add(tabId({root:requested.root,path:nextPath}));pin(requested.root,nextPath);}
+      if(current.current.hasDocument&&requested.root===current.current.workspace.root&&nextPath===current.current.path&&!line)return true;
       if (voiceBusy.current) {
         setNotice("Finish or cancel voice typing before switching files.");
         return false;
@@ -269,6 +282,14 @@ export default function App() {
         setLoading(true);
         const ws = nextWorkspace ?? current.current.workspace;
         const note = await readNote(ws.root, nextPath);
+        const old=current.current;
+        if(editor.current&&old.hasDocument)snapshots.current.set(tabId({root:old.workspace.root,path:old.path}),editor.current.snapshot());
+        const id=tabId({root:ws.root,path:nextPath});
+        const cached=snapshots.current.get(id);
+        // An external file change invalidates its cached history.
+        setEditorSnapshot(cached&&cached.state.doc.toString()===note.text?cached:undefined);
+        updateTabs(openTab(tabsRef.current,{root:ws.root,path:nextPath,pinned:pinned||pendingPins.current.has(id)||tabsRef.current.some(t=>tabId(t)===id&&t.pinned)}));
+        pendingPins.current.delete(id);
         revision.current = note.revision;
         setWorkspace(ws);
         setPath(nextPath);
@@ -298,8 +319,18 @@ export default function App() {
         operation.current = false;
       }
     },
-    [applyMarks, jump, save],
+    [applyMarks, jump, save, pin,updateTabs],
   );
+  const closeTab=async(tab:NoteTab)=>{
+    if(voiceBusy.current||operation.current){setNotice('Finish the current operation before closing a tab.');return;}
+    const id=tabId(tab),all=tabsRef.current,next=all.filter(t=>tabId(t)!==id);
+    if(current.current.hasDocument&&tabId({root:current.current.workspace.root,path:current.current.path})===id){
+      const neighbor=next[Math.min(all.findIndex(t=>tabId(t)===id),next.length-1)];
+      if(neighbor){const folder=current.current.folders.find(f=>f.root===neighbor.root);if(!folder||!await openNote(neighbor.path,undefined,folder))return;}
+      else{if(!await save()||dirtyRef.current)return;setData(null);setPath('');applyMarks([]);setEditorSnapshot(undefined);}
+    }
+    updateTabs(next);
+  };
   const changeFolders = (next: Workspace[]) => {
     if (current.current.foldersReady) setFolders(next);
   };
@@ -363,6 +394,7 @@ export default function App() {
         setWorkspace(next[0] ?? { name: "Your folders", root: "", files: [] });
       }
     }
+    updateTabs(tabsRef.current.filter(t=>t.root!==root));
     setFolders(next);
   };
   const dropHandler = useRef<(paths: string[]) => void>(() => {});
@@ -541,7 +573,7 @@ export default function App() {
           folders={folders}
           activeRoot={workspace.root}
           activePath={path}
-          onOpen={(folder, path) => void openNote(path, undefined, folder)}
+          onOpen={(folder, path,pinned) => void openNote(path, undefined, folder,pinned)}
           onChange={changeFolders}
           onRemove={(root) => void removeFolder(root)}
           onRefresh={(root) => void refreshFolder(root)}
@@ -564,10 +596,12 @@ export default function App() {
       </aside>
       <main className="main-panel">
         <header className="tab-bar">
-          <div className="file-tab">
-            <FileText size={15} />
-            <span>{path.split("/").at(-1) || "No file open"}</span>
-            {dirty && <span className="dirty-dot" />}
+          <div className="note-tabs" role="tablist" aria-label="Open notes">
+            {tabs.map(tab=>{const active=!!data&&tab.root===workspace.root&&tab.path===path;const name=tab.path.split('/').at(-1);return <div key={tabId(tab)} className={'note-tab '+(active?'active ':'')+(!tab.pinned?'preview-tab':'')}>
+              <button role="tab" aria-selected={active} title={tab.root+'/'+tab.path+(!tab.pinned?' · Preview — double-click to keep open':'')} onDoubleClick={()=>pin(tab.root,tab.path)} onClick={()=>{const folder=folders.find(f=>f.root===tab.root);if(folder)void openNote(tab.path,undefined,folder);}}><FileText size={14}/><span>{name}</span>{active&&dirty&&<span className="dirty-dot"/>}</button>
+              {!tab.pinned&&<button className="tab-pin" title="Keep tab open" aria-label={`Keep ${name} open`} onClick={()=>pin(tab.root,tab.path)}><Plus size={12}/></button>}
+              <button className="tab-close" aria-label={`Close ${name}`} onClick={()=>void closeTab(tab)}><X size={12}/></button>
+            </div>;})}
           </div>
           <div className="tab-bar-space" />
           <button
@@ -633,6 +667,7 @@ export default function App() {
           </div>
           <button
             className="icon-button"
+            data-unsaved={dirty}
             aria-label="Save note"
             title={`Save (${mod} S)`}
             onClick={() => void save()}
@@ -651,6 +686,7 @@ export default function App() {
                 key={JSON.stringify([workspace.root, path, data.revision])}
                 ref={editor}
                 initial={data.text}
+                snapshot={editorSnapshot}
                 bookmarks={bookmarks}
                 onChange={changed}
                 onBookmarks={applyMarks}

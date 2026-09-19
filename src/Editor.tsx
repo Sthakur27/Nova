@@ -71,7 +71,9 @@ const decorations = StateField.define<DecorationSet>({
   },
   provide: (field) => EditorView.decorations.from(field),
 });
+export type EditorSnapshot = { state: EditorState; scrollTop: number };
 export type EditorHandle = {
+  snapshot: () => EditorSnapshot;
   format: (action: FormatAction) => void;
   text: () => string;
   selection: () => { from: number; to: number; quote: string };
@@ -83,6 +85,7 @@ export type EditorHandle = {
 };
 type Props = {
   initial: string;
+  snapshot?: EditorSnapshot;
   bookmarks: Bookmark[];
   onChange: () => void;
   onBookmarks: (b: Bookmark[]) => void;
@@ -101,6 +104,10 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
   useImperativeHandle(
     ref,
     () => ({
+      snapshot: () => ({
+        state: view.current!.state,
+        scrollTop: view.current!.scrollDOM.scrollTop,
+      }),
       format: (action) => {
         const v = view.current;
         if (v) {
@@ -155,101 +162,105 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
   );
   useEffect(() => {
     const p = latest.current;
-    const v = new EditorView({
-      parent: mount.current!,
-      state: EditorState.create({
-        doc: p.initial,
-        extensions: [
-          history(),
-          presentation.current.of(
-            p.visual
-              ? [
-                  richMarkdown,
-                  EditorView.editorAttributes.of({ class: "live-edit" }),
-                ]
-              : [lineNumbers(), syntaxHighlighting(defaultHighlightStyle)],
-          ),
-          highlightActiveLine(),
-          highlightSelectionMatches(),
-          EditorView.lineWrapping,
-          p.isMarkdown ? markdown({ extensions: GFM }) : [],
-          bookmarkField,
-          dictationAnchor,
-          decorations,
-          keymap.of([
-            {
-              key: "Mod-s",
-              run: () => {
-                latest.current.onSave();
-                return true;
-              },
-            },
-            {
-              key: "Mod-Shift-b",
-              run: () => {
-                latest.current.onBookmark();
-                return true;
-              },
-            },
-            ...defaultKeymap,
-            ...historyKeymap,
-            ...searchKeymap,
-          ]),
-          EditorView.contentAttributes.of({
-            "aria-label": "Note editor",
-            spellcheck: "true",
-          }),
-          EditorView.updateListener.of((update) => {
-            if (update.docChanged) {
-              latest.current.onChange();
-              latest.current.onBookmarks(update.state.field(bookmarkField));
-            }
-            if (update.selectionSet || update.docChanged) {
-              const pos = update.state.selection.main.head,
-                line = update.state.doc.lineAt(pos);
-              latest.current.onCursor(line.number, pos - line.from + 1);
-            }
-          }),
-          EditorView.theme(
-            {
-              "&": {
-                height: "100%",
-                backgroundColor: "transparent",
-                color: "#d4d4da",
-              },
-              ".cm-scroller": {
-                fontFamily: '"SFMono-Regular", Consolas, monospace',
-                fontSize: "14px",
-                lineHeight: "1.9",
-                overflow: "auto",
-              },
-              ".cm-content": { padding: "40px 36px 150px", maxWidth: "900px" },
-              ".cm-gutters": {
-                backgroundColor: "transparent",
-                color: "#54565f",
-                border: "none",
-                paddingTop: "40px",
-              },
-              ".cm-activeLineGutter": { backgroundColor: "#ffffff05" },
-              ".cm-activeLine": { backgroundColor: "#ffffff03" },
-              "&.cm-focused .cm-cursor": { borderLeftColor: "#b8a0ed" },
-              "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
-                backgroundColor: "#a98be43b",
-              },
-              ".cm-panels": { background: "#232329", color: "#ddd" },
-              ".cm-search input": {
-                color: "#eee",
-                background: "#18191c",
-                border: "1px solid #555",
-              },
-            },
-            { dark: true },
-          ),
-        ],
+    const extensions = [
+      history(),
+      presentation.current.of(
+        p.visual
+          ? [
+              richMarkdown,
+              EditorView.editorAttributes.of({ class: "live-edit" }),
+            ]
+          : [lineNumbers(), syntaxHighlighting(defaultHighlightStyle)],
+      ),
+      highlightActiveLine(),
+      highlightSelectionMatches(),
+      EditorView.lineWrapping,
+      p.isMarkdown ? markdown({ extensions: GFM }) : [],
+      bookmarkField,
+      dictationAnchor,
+      decorations,
+      keymap.of([
+        {
+          key: "Mod-s",
+          run: () => {
+            latest.current.onSave();
+            return true;
+          },
+        },
+        {
+          key: "Mod-Shift-b",
+          run: () => {
+            latest.current.onBookmark();
+            return true;
+          },
+        },
+        ...defaultKeymap,
+        ...historyKeymap,
+        ...searchKeymap,
+      ]),
+      EditorView.contentAttributes.of({
+        "aria-label": "Note editor",
+        spellcheck: "true",
       }),
-    });
+      EditorView.updateListener.of((update) => {
+        if (update.docChanged) {
+          latest.current.onChange();
+          latest.current.onBookmarks(update.state.field(bookmarkField));
+        }
+        if (update.selectionSet || update.docChanged) {
+          const pos = update.state.selection.main.head,
+            line = update.state.doc.lineAt(pos);
+          latest.current.onCursor(line.number, pos - line.from + 1);
+        }
+      }),
+      EditorView.theme(
+        {
+          "&": {
+            height: "100%",
+            backgroundColor: "transparent",
+            color: "#d4d4da",
+          },
+          ".cm-scroller": {
+            fontFamily: '"SFMono-Regular", Consolas, monospace',
+            fontSize: "14px",
+            lineHeight: "1.9",
+            overflow: "auto",
+          },
+          ".cm-content": { padding: "40px 36px 150px", maxWidth: "900px" },
+          ".cm-gutters": {
+            backgroundColor: "transparent",
+            color: "#54565f",
+            border: "none",
+            paddingTop: "40px",
+          },
+          ".cm-activeLineGutter": { backgroundColor: "#ffffff05" },
+          ".cm-activeLine": { backgroundColor: "#ffffff03" },
+          "&.cm-focused .cm-cursor": { borderLeftColor: "#b8a0ed" },
+          "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
+            backgroundColor: "#a98be43b",
+          },
+          ".cm-panels": { background: "#232329", color: "#ddd" },
+          ".cm-search input": {
+            color: "#eee",
+            background: "#18191c",
+            border: "1px solid #555",
+          },
+        },
+        { dark: true },
+      ),
+    ];
+    const state = p.snapshot
+      ? p.snapshot.state.update({
+          effects: StateEffect.reconfigure.of(extensions),
+        }).state
+      : EditorState.create({ doc: p.initial, extensions });
+    const v = new EditorView({ parent: mount.current!, state });
+    if (p.snapshot) v.scrollDOM.scrollTop = p.snapshot.scrollTop;
     view.current = v;
     v.dispatch({ effects: setMarks.of(p.bookmarks) });
+    const head = v.state.selection.main.head,
+      line = v.state.doc.lineAt(head);
+    p.onCursor(line.number, head - line.from + 1);
     return () => {
       v.destroy();
       view.current = null;

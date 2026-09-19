@@ -22,7 +22,7 @@ function FileTree({
 }: {
   paths: string[];
   active: string;
-  onOpen: (path: string) => void;
+  onOpen: (path: string, pinned?: boolean) => void;
   prefix?: string;
 }) {
   const [closed, setClosed] = useState<Set<string>>(new Set());
@@ -82,6 +82,7 @@ function FileTree({
           title={path}
           className={"tree-row file-row " + (path === active ? "active" : "")}
           onClick={() => onOpen(path)}
+          onDoubleClick={() => onOpen(path, true)}
         >
           <FileText size={14} />
           <span>{path.slice(prefix.length)}</span>
@@ -95,7 +96,7 @@ type Props = {
   folders: Workspace[];
   activeRoot: string;
   activePath: string;
-  onOpen: (folder: Workspace, path: string) => void;
+  onOpen: (folder: Workspace, path: string, pinned?: boolean) => void;
   onChange: (folders: Workspace[]) => void;
   onRemove: (root: string) => void;
   onRefresh: (root: string) => void;
@@ -274,7 +275,7 @@ export default function Explorer({
                   <FileTree
                     paths={folder.files.map((f) => f.path)}
                     active={folder.root === activeRoot ? activePath : ""}
-                    onOpen={(path) => onOpen(folder, path)}
+                    onOpen={(path, pinned) => onOpen(folder, path, pinned)}
                   />
                 ) : (
                   <p className="folder-empty">No text or Markdown files.</p>
