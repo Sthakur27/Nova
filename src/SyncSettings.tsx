@@ -1,3 +1,4 @@
+import { mobile } from "./platform";
 import { confirmSyncOff, stopsSync } from "./confirmSyncOff";
 import DriveRestore from "./DriveRestore";
 import { useEffect, useRef, useState } from "react";
@@ -83,6 +84,7 @@ export default function SyncSettings({ onRestored, uploads, onUpload, drive, fol
         {slowCredentialCheck && <p role="status">Your system credential store is still responding. Check for a macOS Keychain or Windows credential prompt and allow Nova to read its saved Google connection.</p>}
         {drive.error && <p role="alert">{drive.error}</p>}
       </div>
+      {drive.status.connected && mobile && <DriveRestore disabled={!!uploads.activeRoot || drive.busy} onRestored={onRestored} />}
       {drive.status.connected && <div className="sync-transfer-panel">
         <div className="sync-transfer-actions">
           <button disabled={!!uploads.activeRoot || folder.root === "demo" || !included || busy} onClick={() => void onUpload()}>
@@ -99,7 +101,7 @@ export default function SyncSettings({ onRestored, uploads, onUpload, drive, fol
     {error && <p className="folder-error" role="alert">{error}</p>}
     {Object.entries(uploads.items).filter(([key,item]) => key.startsWith(`${folder.root}\n`) && item.state === "error" && !folder.files.some(file => file.path === item.path)).map(([key,item]) => <p key={key} className="folder-error" role="status">{item.path}: {item.message}</p>)}
     {drive.status.connected && <>
-    <DriveRestore disabled={!!uploads.activeRoot || drive.busy} onRestored={onRestored} />
+    {!mobile && <DriveRestore disabled={!!uploads.activeRoot || drive.busy} onRestored={onRestored} />}
     <div className="sync-section-heading"><h2>Files & folders</h2><span>{included} selected</span></div>
     <div className="sync-filters">
       <label>Workspace<select value={folder.root} disabled={busy} onChange={event => {

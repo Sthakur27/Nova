@@ -31,7 +31,7 @@ export default function DriveRestore({disabled,onRestored}:{disabled:boolean;onR
   }
   return <section className="drive-restore" aria-labelledby="restore-title">
     <h2 id="restore-title">Set up this device</h2>
-    <p>Keep using your local folders, or bring notes from another device.</p>
+    <p>{mobile ? "Google Drive is connected. To see your other device’s notes in Explorer, download its workspace below. Connecting alone does not download files." : "Keep using your local folders, or bring notes from another device."}</p>
     <ol><li>Choose a workspace from your Drive <strong>.nova</strong> folder.</li><li>{mobile ? "Nova stores a separate copy on this device, available offline." : "Choose where to store it on this laptop."}</li><li>Nova downloads into a new subfolder and adds it to your navigation.</li></ol>
     <button disabled={disabled || busy} onClick={() => void discover()}><Download size={15}/>{busy ? "Working…" : workspaces ? "Refresh Drive workspaces" : "Bring notes to this device"}</button>
     {workspaces && <div className="restore-fields">
