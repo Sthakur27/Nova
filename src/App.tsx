@@ -1,4 +1,8 @@
-import { confirmSyncOff } from "./confirmSyncOff";
+import TabButton from "./TabButton";
+import { openAfterTabClose } from "./closeTabNavigation";
+import CloudSetup from "./CloudSetup";
+import { confirmCloudMove } from "./confirmCloudMove";
+import { useCloudSpaces } from "./useCloudSpaces";
 import CloseTabDialog, { type CloseTabChoice } from "./CloseTabDialog";
 import { installTabCloseShortcut } from "./tabShortcuts";
 import ReadFind from "./ReadFind";
@@ -22,7 +26,10 @@ import { useBackgroundBlur } from "./useBackgroundBlur";
 import ScopeToggle from "./ScopeToggle";
 import type {SearchScope} from "./currentSearch";
 import { openTab, pinTab, reorderTab, tabId, type NoteTab } from "./tabs";
-import { useTabReorder } from "./useTabReorder";
+import { useTabReorder, type PaneDrop } from "./useTabReorder";
+import EditorPanes from "./EditorPanes";
+import { paneMode, paneToolbar, type PaneView } from "./paneToolbar";
+import { initialPane, paneLeaves, reconcilePanes, selectPaneTab, movePaneTab, mapPane, parsePaneLayout, type Pane, type PaneNode } from "./paneLayout";
 import {
   lazy,
   Suspense,
@@ -89,7 +96,6 @@ import {
   discardEmptyUntitled,
   revealNote,
   setFileStar,
-  setWorkspaceSyncChoice,
   loadFolders,
   loadExplorer,
   saveExplorer,
@@ -130,6 +136,8 @@ async function readRecoverableNote(root: string, path: string) {
   return { note: draft ?? await readNote(root, path), recovered: !!draft };
 }
 
+type PaneSession = { workspace: Workspace; path: string; data: DocumentData; mode: EditorMode; snapshot?: EditorSnapshot; dirty: boolean; cursor: [number, number]; preview: string; formats?: FormatAction[]; paragraph?: FormatAction };
+
 export default function App() {
   const compact = useCompactLayout();
   const [mobileView, setMobileView] = useState<"notes" | "editor" | "bookmarks">("editor");
@@ -142,22 +150,6 @@ export default function App() {
   const uploads = useDriveUploads(drive.status.connected);
   const [syncFolder, setSyncFolder] = useState<Workspace | null>(null);
   const [syncPath, setSyncPath] = useState<string | undefined>();
-  const [syncBusy, setSyncBusy] = useState(false);
-  const syncPending = useRef(false);
-  async function toggleFileSync(folder: Workspace, notePath: string) {
-    if (syncPending.current || folder.syncError) return;
-    syncPending.current = true;
-    setSyncBusy(true);
-    try {
-      const included = syncIncluded(folder.syncPolicy, notePath);
-      if (included && !await confirmSyncOff(notePath)) return;
-      const policy = await setWorkspaceSyncChoice(folder.root, notePath, included ? "exclude" : "include");
-      setFolders(old => old.map(item => item.root === folder.root ? { ...item, syncPolicy: policy } : item));
-      setWorkspace(old => old.root === folder.root ? { ...old, syncPolicy: policy } : old);
-      uploads.schedule(folder.root);
-    } catch (error) { setNotice(String(error)); }
-    finally { syncPending.current = false; setSyncBusy(false); }
-  }
   function showSync(folder: Workspace, notePath?: string) {
     setSyncPath(notePath);
     setSyncFolder(folders.find(item => item.root === folder.root) ?? folders[0] ?? folder);
@@ -193,6 +185,18 @@ export default function App() {
     };
   }, []);
   const [tabs, setTabs] = useState<NoteTab[]>([]);
+  const [paneLayout, setPaneLayout] = useState<PaneNode>(initialPane);
+  const paneLayoutRef = useRef<PaneNode>(paneLayout);
+  const [activePane, setActivePane] = useState("main");
+  const activePaneRef = useRef("main");
+  const paneSessions = useRef(new Map<string, PaneSession>());
+  const paneEditors = useRef(new Map<string, EditorHandle>());
+  const paneActions = useRef<{ capture: () => void; activate: (id: string) => boolean; drop: (id: string, target: PaneDrop) => void } | null>(null);
+  const updatePaneLayout = useCallback((next: PaneNode) => {
+    paneLayoutRef.current = next;
+    setPaneLayout(next);
+  }, []);
+  const focusPane = useCallback((id: string) => { activePaneRef.current = id; setActivePane(id); }, []);
   const pendingPins = useRef(new Set<string>());
   const tabsRef = useRef<NoteTab[]>([]);
   const snapshots = useRef(new Map<string, EditorSnapshot>());
@@ -202,13 +206,17 @@ export default function App() {
   const updateTabs = useCallback((next: NoteTab[]) => {
     tabsRef.current = next;
     setTabs(next);
+    updatePaneLayout(reconcilePanes(paneLayoutRef.current, next.map(tabId), activePaneRef.current));
     for (const key of snapshots.current.keys())
       if (!next.some((t) => tabId(t) === key)) snapshots.current.delete(key);
+    for (const key of paneSessions.current.keys())
+      if (!next.some(t => tabId(t) === key)) paneSessions.current.delete(key);
   }, []);
   const reorderTabs = useCallback((id: string, beforeId: string | null) => {
     updateTabs(reorderTab(tabsRef.current, id, beforeId));
   }, [updateTabs]);
-  const tabStripRef = useTabReorder(reorderTabs);
+  const dropTab = useCallback((id: string, target: PaneDrop) => paneActions.current?.drop(id, target), []);
+  const tabStripRef = useTabReorder(reorderTabs, dropTab);
   const pin = useCallback(
     (root: string, path: string) => {
       const id = tabId({ root, path });
@@ -233,6 +241,7 @@ export default function App() {
   const draftWrite = useRef(0);
   const draftFailed = useRef(false);
   const [mode, setMode] = useState<EditorMode>("edit");
+  const sharedViewMode = useRef<EditorMode | null>(null);
   const [preview, setPreview] = useState("");
   const [searchScope,setSearchScope]=useState<SearchScope>("everywhere");
   const [palette, setPalette] = useState(false);
@@ -245,6 +254,7 @@ export default function App() {
   const [topBars, setTopBars, topBarsError] = usePreference<boolean>("top-bars", true);
   const [statusBar, setStatusBar, statusBarError] = usePreference<boolean>("status-bar", true);
   const [focusMode, setFocusMode, focusModeError] = usePreference<boolean>("focus-mode", false);
+  const focusModeActive = focusMode || (!navigation && !rail && !topBars && !(terminalOpen && statusBar));
   const [hoveredBottom, setHoveredBottom] = useState(false);
   const [hoveredTop, setHoveredTop] = useState(false);
   const [hoveredEdge, setHoveredEdge] = useState<"left" | "right" | null>(null);
@@ -355,6 +365,73 @@ export default function App() {
       return false;
     }
   }, []);
+  const capturePane = () => {
+    if (!data || !current.current.hasDocument) return;
+    const id = tabId({ root: current.current.workspace.root, path: current.current.path });
+    const snapshot = editor.current?.snapshot();
+    if (snapshot) snapshots.current.set(id, snapshot);
+    paneSessions.current.set(id, { workspace: current.current.workspace, path: current.current.path,
+      data: { text: editor.current?.text() ?? data.text, revision: revision.current, bookmarks: marksRef.current },
+      snapshot, formats: activeFormats, paragraph: paragraphStyle, dirty: dirtyRef.current, mode: current.current.mode, cursor: [cursor[0], cursor[1]], preview: editor.current?.text() ?? preview });
+  };
+  const activatePane = (id: string): boolean => {
+    if (id === activePaneRef.current) return true;
+    if (operation.current || saveInFlight.current || voiceBusy.current) return false;
+    const pane = paneLeaves(paneLayoutRef.current).find(p => p.id === id);
+    const session = pane?.selected ? paneSessions.current.get(pane.selected) : undefined;
+    if (!session) return false;
+    if (current.current.workspace.cloudSpace && dirtyRef.current) {
+      void save().then(saved => { if (saved) paneActions.current?.activate(id); });
+      return false;
+    }
+    capturePane();
+    // The old editor remains mounted; a failed draft write cannot discard its text.
+    void preserveDraft();
+    focusPane(id);
+    const handle = paneEditors.current.get(pane!.selected!);
+    editor.current = handle ?? null;
+    current.current = { ...current.current, workspace: session.workspace, path: session.path, mode: session.mode, hasDocument: true };
+    revision.current = session.data.revision;
+    dirtyRef.current = session.dirty;
+    applyMarks(session.data.bookmarks);
+    setWorkspace(session.workspace); setPath(session.path); setData(session.data);
+    setMode(session.mode); setDirty(session.dirty); setPreview(session.preview);
+    setEditorSnapshot(session.snapshot); setCursor(session.cursor); setActiveMark(null);
+    setActiveFormats(session.formats ?? []); setParagraphStyle(session.paragraph ?? "paragraph");
+    return true;
+  };
+  paneActions.current = { capture: capturePane, activate: activatePane, drop: (id, target) => {
+    if (compact || operation.current || saveInFlight.current || voiceBusy.current) return;
+    capturePane();
+    const next = movePaneTab(paneLayoutRef.current, id, target.pane, target.edge, target.before);
+    if (next === paneLayoutRef.current) return;
+    const tab = tabsRef.current.find(t => tabId(t) === id);
+    if (!tab) return;
+    pin(tab.root, tab.path);
+    // Load unseen tabs through the usual recovery path before moving them.
+    const folder = current.current.folders.find(f => f.root === tab.root);
+    if (!folder) return;
+    void openNote(tab.path, undefined, folder).then(opened => {
+      if (!opened) return;
+      requestAnimationFrame(() => {
+        if (tabId({ root: current.current.workspace.root, path: current.current.path }) !== id) return;
+        paneActions.current?.capture();
+        setEditorSnapshot(paneSessions.current.get(id)?.snapshot);
+        const moved = movePaneTab(paneLayoutRef.current, id, target.pane, target.edge, target.before);
+        updatePaneLayout(moved);
+        const owner = paneLeaves(moved).find(p => p.tabs.includes(id));
+        if (owner) focusPane(owner.id);
+      });
+    });
+  } };
+  const preserveInactiveDrafts = useCallback(async (): Promise<boolean> => {
+    const activeId = tabId({ root: current.current.workspace.root, path: current.current.path });
+    try {
+      await Promise.all(Array.from(paneSessions.current.entries()).filter(([id, session]) => id !== activeId && session.dirty)
+        .map(([, session]) => storeDraft(session.workspace.root, session.path, session.data)));
+      return true;
+    } catch (error) { setNotice(`Unable to preserve a pane's draft: ${String(error)}`); return false; }
+  }, []);
   const prepareUpdate = async () => {
     if (operation.current || saveInFlight.current || voiceBusy.current || !current.current.foldersReady) {
       throw new Error("Finish the current operation or voice typing before updating.");
@@ -365,16 +442,18 @@ export default function App() {
       await saveExplorer({
         folders: c.folders.map(({ root, name, collapsed, closedDirectories }) => ({ root, name, collapsed, closedDirectories })),
         active: c.hasDocument ? { root: c.workspace.root, path: c.path } : null,
-        tabs: tabsRef.current, mode: c.mode,
+        tabs: tabsRef.current, panes: paneLayoutRef.current, mode: c.mode,
       });
-      if (!(await preserveDraft())) throw new Error("Save your note before restarting; its recovery draft could not be preserved.");
+      if (!await preserveInactiveDrafts() || !(await preserveDraft())) throw new Error("Save your note before restarting; its recovery draft could not be preserved.");
     } catch (error) { operation.current = false; throw error; }
   };
   const appUpdate = useAppUpdate(desktop, prepareUpdate, () => { operation.current = false; });
+  const [editVersion, setEditVersion] = useState(0);
   const changed = useCallback(() => {
     pin(current.current.workspace.root, current.current.path);
     dirtyRef.current = true;
     setDirty(true);
+    setEditVersion(value => value + 1);
     // The editor immediately supplies the updated anchors via onBookmarks.
   }, [pin]);
   useEffect(() => {
@@ -388,17 +467,30 @@ export default function App() {
           ? getCurrentWindow().label.startsWith("nova-")
           : new URLSearchParams(window.location.search).get("new-window") === "true";
         const prefs = freshWindow
-          ? { ...savedPrefs, folders: savedPrefs?.folders ?? [demoWorkspace], active: null, tabs: [] }
+          ? { ...savedPrefs, folders: savedPrefs?.folders ?? [demoWorkspace], active: null, tabs: [], panes: undefined }
           : savedPrefs;
-        const restored = prefs
-          ? await loadFolders(prefs.folders)
-          : [demoWorkspace];
+        const loaded = prefs ? await loadFolders(prefs.folders) : mobile ? [] : [demoWorkspace];
+        const restored = mobile ? loaded.filter(folder => !!folder.cloudSpace) : loaded;
         if (cancelled) return;
         setFolders(restored);
         const mode = prefs?.mode ?? "edit";
         setMode(mode);
-        const restoredTabs = prefs?.tabs ?? [];
+        const restoredTabs = (prefs?.tabs ?? []).filter(tab => restored.some(folder => folder.root === tab.root));
         updateTabs(restoredTabs);
+        const restoredLayout = parsePaneLayout(prefs?.panes, restoredTabs.map(tabId));
+        if (restoredLayout) {
+          updatePaneLayout(restoredLayout);
+          await Promise.all(paneLeaves(restoredLayout).map(async pane => {
+            const tab = restoredTabs.find(t => tabId(t) === pane.selected);
+            const folder = restored.find(f => f.root === tab?.root);
+            if (!tab || !folder) return;
+            try {
+              const { note, recovered } = await readRecoverableNote(tab.root, tab.path);
+              paneSessions.current.set(tabId(tab), { workspace: folder, path: tab.path, data: note, dirty: recovered, mode: readFileMode(tab.path, mode), cursor: [1, 1], preview: note.text });
+            } catch (error) { setNotice(String(error)); }
+          }));
+          if (cancelled) return;
+        }
         const candidates: { folder: Workspace; path: string }[] = [];
         const active = restored.find(
           (f) => f.root === prefs?.active?.root && !f.error,
@@ -430,6 +522,9 @@ export default function App() {
                 pinned: false,
               },
             ]);
+            const initialId = tabId({ root: candidate.folder.root, path: candidate.path });
+            const owner = paneLeaves(paneLayoutRef.current).find(p => p.tabs.includes(initialId));
+            if (owner) { updatePaneLayout(selectPaneTab(paneLayoutRef.current, owner.id, initialId)); focusPane(owner.id); }
             setPreview(note.text);
             applyMarks(note.bookmarks);
             opened = true;
@@ -471,8 +566,9 @@ export default function App() {
       active: data ? { root: workspace.root, path } : null,
       mode,
       tabs,
+      panes: paneLayout,
     }).catch((error) => setNotice(String(error)));
-  }, [foldersReady, folders, workspace.root, path, mode, !!data, tabs]);
+  }, [foldersReady, folders, workspace.root, path, mode, !!data, tabs, paneLayout]);
   const save = useCallback(async (): Promise<boolean> => {
     if (saveInFlight.current) return saveInFlight.current;
     const run = async () => {
@@ -491,6 +587,7 @@ export default function App() {
               : null,
             mode: c.mode,
             tabs: tabsRef.current,
+            panes: paneLayoutRef.current,
           });
         } catch (error) {
           setNotice(String(error));
@@ -511,13 +608,15 @@ export default function App() {
             revision.current,
           );
         await saveBookmarks(ws.root, file, marks);
-        if (syncIncluded(ws.syncPolicy, file)) uploads.schedule(ws.root);
+        if (ws.cloudSpace) uploads.schedule(ws.root);
         if (editor.current?.text() === text) {
           await clearDraft(ws.root, file);
           if (editor.current?.text() === text && marksRef.current === marks) {
             dirtyRef.current = false;
             draftFailed.current = false;
             setDirty(false);
+            const session = paneSessions.current.get(tabId({ root: ws.root, path: file }));
+            if (session) { session.dirty = false; session.data = { text, bookmarks: marks, revision: revision.current }; }
           } else { await preserveDraft(); }
         } else { await preserveDraft(); }
         return true;
@@ -536,8 +635,14 @@ export default function App() {
     }
   }, [preserveDraft]);
   useEffect(() => {
+    if (!workspace.cloudSpace || !dirty) return;
+    const timer = setTimeout(() => { if (!operation.current && !voiceBusy.current) void save(); }, 700);
+    const retry = setInterval(() => { if (dirtyRef.current && !operation.current && !voiceBusy.current) void save(); }, 4000);
+    return () => { clearTimeout(timer); clearInterval(retry); };
+  }, [workspace.root, workspace.cloudSpace, dirty, editVersion, save]);
+  useEffect(() => {
     if (!mobile) return;
-    const preserve = () => { if (document.hidden) void preserveDraft(); };
+    const preserve = () => { if (document.hidden) { void preserveDraft(); if (current.current.workspace.cloudSpace) void save(); } };
     const flush = () => { void preserveDraft(); };
     document.addEventListener("visibilitychange", preserve);
     window.addEventListener("pagehide", flush);
@@ -571,6 +676,7 @@ export default function App() {
       nextWorkspace?: Workspace,
       bookmarkId?: string,
       pinned = false,
+      reportError = true,
     ) => {
       setMobileView("editor");
       const requested = nextWorkspace ?? current.current.workspace;
@@ -586,8 +692,11 @@ export default function App() {
         nextPath === current.current.path &&
         !line &&
         !bookmarkId
-      )
+      ) {
+        const owner = paneLeaves(paneLayoutRef.current).find(p => p.tabs.includes(tabId({ root: requested.root, path: nextPath })));
+        if (owner) { updatePaneLayout(selectPaneTab(paneLayoutRef.current, owner.id, tabId({ root: requested.root, path: nextPath }))); focusPane(owner.id); }
         return true;
+      }
       if (voiceBusy.current) {
         setNotice("Finish or cancel voice typing before switching files.");
         return false;
@@ -595,10 +704,12 @@ export default function App() {
       if (operation.current || saveInFlight.current) return false;
       operation.current = true;
       try {
+        if (current.current.workspace.cloudSpace && dirtyRef.current && !await save()) return false;
         if (!(await preserveDraft())) return false;
         setLoading(true);
         const ws = nextWorkspace ?? current.current.workspace;
         const { note, recovered } = await readRecoverableNote(ws.root, nextPath);
+        paneActions.current?.capture();
         const old = current.current;
         if (editor.current && old.hasDocument)
           snapshots.current.set(
@@ -621,8 +732,10 @@ export default function App() {
               pinned ||
               pendingPins.current.has(id) ||
               tabsRef.current.some((t) => tabId(t) === id && t.pinned),
-          }),
+          }, new Set(paneLeaves(paneLayoutRef.current).find(p => p.id === activePaneRef.current)?.tabs ?? [])),
         );
+        const owner = paneLeaves(paneLayoutRef.current).find(p => p.tabs.includes(id));
+        if (owner) { updatePaneLayout(selectPaneTab(paneLayoutRef.current, owner.id, id)); focusPane(owner.id); }
         pendingPins.current.delete(id);
         dirtyRef.current = recovered;
         setDirty(recovered);
@@ -634,7 +747,7 @@ export default function App() {
         applyMarks(note.bookmarks);
         setActiveMark(null);
         setCursor([1, 1]);
-        setMode(readFileMode(nextPath));
+        setMode(sharedViewMode.current ? paneMode(sharedViewMode.current, nextPath) : readFileMode(nextPath));
         if (bookmarkId) {
           const mark = note.bookmarks.find((b) => b.id === bookmarkId);
           if (mark && !mark.unresolved) {
@@ -659,23 +772,24 @@ export default function App() {
         }
         return true;
       } catch (e) {
-        setNotice(String(e));
+        if (reportError) setNotice(String(e));
         return false;
       } finally {
         setLoading(false);
         operation.current = false;
       }
     },
-    [applyMarks, jump, preserveDraft, pin, updateTabs],
+    [applyMarks, jump, preserveDraft, pin, updateTabs, save],
   );
-  const newTab = useCallback(async () => {
+  const newTab = useCallback(async (requested?: Workspace) => {
     if (!current.current.foldersReady || operation.current || voiceBusy.current) return;
     operation.current = true;
     let nextPath: string | undefined;
     let folder: Workspace | undefined;
     try {
+      if (current.current.workspace.cloudSpace && dirtyRef.current && !await save()) return;
       if (!(await preserveDraft())) return;
-      folder = current.current.folders.find(f => f.root === current.current.workspace.root && !f.error)
+      folder = current.current.folders.find(f => f.root === (requested?.root ?? current.current.workspace.root) && !f.error)
         ?? current.current.folders.find(f => !f.error);
       if (!folder) throw new Error("Add a folder before creating a note.");
       nextPath = await createNote(folder.root, defaultExtension);
@@ -688,7 +802,18 @@ export default function App() {
     if (nextPath && folder) {
       await openNote(nextPath, undefined, folder, undefined, true);
     }
-  }, [preserveDraft, openNote, defaultExtension]);
+  }, [preserveDraft, openNote, defaultExtension, save]);
+  const renamePaneTab = (oldId: string, nextTab: NoteTab) => {
+    const nextId = tabId(nextTab);
+    if (oldId === nextId) return;
+    const session = paneSessions.current.get(oldId);
+    if (session) paneSessions.current.set(nextId, { ...session, path: nextTab.path, snapshot: paneEditors.current.get(oldId)?.snapshot() ?? session.snapshot });
+    let layout = paneLayoutRef.current;
+    for (const pane of paneLeaves(layout)) if (pane.tabs.includes(oldId)) {
+      layout = mapPane(layout, pane.id, node => node.kind === "pane" ? { ...node, tabs: node.tabs.map(id => id === oldId ? nextId : id), selected: node.selected === oldId ? nextId : node.selected } : node);
+    }
+    updatePaneLayout(layout);
+  };
   const renameFile = async (folder: Workspace, oldPath: string, name: string, moving = false) => {
     if (operation.current || saveInFlight.current || voiceBusy.current) throw new Error("Finish the current operation before renaming.");
     operation.current = true;
@@ -697,12 +822,14 @@ export default function App() {
       await starQueue.current;
       const nextPath = await (moving ? moveNote(folder.root, oldPath, name) : renameNote(folder.root, oldPath, name));
       await moveDraft(folder.root, oldPath, nextPath);
-      uploads.schedule(folder.root);
+      if (folder.cloudSpace) uploads.schedule(folder.root);
       if (nextPath !== oldPath) createdNotes.current.delete(tabId({ root: folder.root, path: oldPath }));
       name = nextPath.split("/").at(-1)!;
       const updated = { ...folder, ...(await openWorkspace(folder.root)) };
       setFolders(old => old.map(f => f.root === folder.root ? { ...f, files: updated.files, syncPolicy: updated.syncPolicy, starred: updated.starred } : f));
       const oldId = tabId({ root: folder.root, path: oldPath });
+      paneActions.current?.capture();
+      renamePaneTab(oldId, { root: folder.root, path: nextPath, pinned: true });
       const cached = snapshots.current.get(oldId);
       if (cached) snapshots.current.set(tabId({ root: folder.root, path: nextPath }), cached);
       updateTabs(tabsRef.current.map(t => tabId(t) === oldId ? { ...t, path: nextPath } : t));
@@ -742,9 +869,10 @@ export default function App() {
     try {
       operation.current = true;
       const active = current.current.hasDocument && tabId({ root: current.current.workspace.root, path: current.current.path }) === tabId(tab);
-      const draft = active ? null : await loadDraft(tab.root, tab.path);
+      const parked = paneSessions.current.get(tabId(tab));
+      const draft = active ? null : parked?.dirty ? parked.data : await loadDraft(tab.root, tab.path);
       if ((active && dirtyRef.current) || draft) {
-        const choice = await new Promise<CloseTabChoice>(resolve => setClosePrompt({ path: tab.path, resolve }));
+        const choice = current.current.folders.find(folder => folder.root === tab.root)?.cloudSpace ? "save" : await new Promise<CloseTabChoice>(resolve => setClosePrompt({ path: tab.path, resolve }));
         setClosePrompt(null);
         if (choice === "cancel") return;
         if (choice === "save") {
@@ -757,7 +885,7 @@ export default function App() {
             await saveBookmarks(tab.root, tab.path, draft.bookmarks);
             await clearDraft(tab.root, tab.path);
             const folder = current.current.folders.find(folder => folder.root === tab.root);
-            if (folder && syncIncluded(folder.syncPolicy, tab.path)) uploads.schedule(tab.root);
+            if (folder?.cloudSpace) uploads.schedule(tab.root);
           }
         } else {
           await clearDraft(tab.root, tab.path);
@@ -779,21 +907,18 @@ export default function App() {
           path: current.current.path,
         }) === id
       ) {
-        const neighbor =
-          next[
-            Math.min(
-              all.findIndex((t) => tabId(t) === id),
-              next.length - 1,
-            )
-          ];
-        if (neighbor) {
-          const folder = current.current.folders.find(
-            (f) => f.root === neighbor.root,
-          );
-          if (!folder || !(await openNote(neighbor.path, undefined, folder)))
-            return;
-        } else {
-          if (!(await preserveDraft())) return;
+        // Preserve first; choosing a replacement must never decide whether the
+        // requested tab is allowed to close.
+        if (!(await preserveDraft())) return;
+        const ownGroup = paneLeaves(paneLayoutRef.current).find(p => p.tabs.includes(id));
+        const opened = await openAfterTabClose(all, tab, ownGroup?.tabs ?? [], async neighbor => {
+          const folder = current.current.folders.find(f => f.root === neighbor.root);
+          return !!folder && await openNote(neighbor.path, undefined, folder, undefined, neighbor.pinned, false);
+        });
+        if (!opened) {
+          current.current = { ...current.current, hasDocument: false, path: "" };
+          dirtyRef.current = false;
+          setDirty(false);
           setData(null);
           setPath("");
           applyMarks([]);
@@ -802,6 +927,7 @@ export default function App() {
       }
       updateTabs(next);
       closed = true;
+      setNotice("");
       operation.current = true;
       try { await discardCreatedNote(tab); }
       catch (error) { setNotice(`Could not clean up empty note: ${String(error)}`); }
@@ -821,8 +947,11 @@ export default function App() {
   useEffect(() => installTabCloseShortcut(window, mod === "⌘", () => {
     if (document.querySelector("dialog[open]") || palette || bookmarkDraft || closingTab.current) return;
     const c = current.current;
-    const tab = tabsRef.current.find(tab => tab.root === c.workspace.root && tab.path === c.path);
-    if (c.hasDocument && tab) void closeTab(tab);
+    const selected = paneLeaves(paneLayoutRef.current).find(pane => pane.id === activePaneRef.current)?.selected;
+    const tab = tabsRef.current.find(tab => c.hasDocument
+      ? tab.root === c.workspace.root && tab.path === c.path
+      : tabId(tab) === selected);
+    if (tab) void closeTab(tab);
   }));
   const changeFolders = (next: Workspace[]) => {
     if (current.current.foldersReady) setFolders(next);
@@ -840,6 +969,29 @@ export default function App() {
       if (first) await openNote(first.files[0].path, undefined, first);
     }
   };
+  const cloud = useCloudSpaces(drive.status.connected, foldersReady, spaces => {
+    setFolders(previous => [...previous.filter(folder => !folder.cloudSpace && !mobile), ...spaces.map(space => ({...space, collapsed: previous.find(f => f.root === space.root)?.collapsed ?? false}))]);
+    const currentSpace = spaces.find(space => space.root === current.current.workspace.root);
+    if (currentSpace) setWorkspace(currentSpace);
+    else if ((!current.current.hasDocument || !!current.current.workspace.cloudSpace) && spaces.length) {
+      setWorkspace(spaces[0]);
+      if (spaces[0].files.length) void openNote(spaces[0].files[0].path, undefined, spaces[0]);
+    }
+  });
+  async function moveToCloud(folder: Workspace, notePath: string) {
+    try {
+      const target = current.current.folders.find(f => !!f.cloudSpace);
+      if (!target) { showSync(folder); return; }
+      if (!await confirmCloudMove(notePath, target.name)) return;
+      if (current.current.workspace.root === folder.root && current.current.path === notePath && !await save()) return;
+      const nextPath = await invoke<string>("cloud_move_in", {source:folder.root,path:notePath,target:target.root});
+      await refreshFolder(folder.root); await refreshFolder(target.root);
+      updateTabs(tabsRef.current.filter(tab => !(tab.root === folder.root && tab.path === notePath)));
+      const updated = await openWorkspace(target.root);
+      await openNote(nextPath, undefined, updated, undefined, true);
+      uploads.schedule(target.root);
+    } catch(error) { setNotice(String(error)); }
+  }
   const openFolder = async () => {
     if (voiceBusy.current) {
       setNotice("Finish or cancel voice typing before adding folders.");
@@ -878,10 +1030,17 @@ export default function App() {
     }
   };
   uploads.configure({
-    roots: foldersReady ? folders.filter(folder => folder.root !== "demo" && !folder.error && !folder.syncError
+    focusedFile: () => {
+      const note = current.current;
+      return note.hasDocument && note.workspace.cloudSpace && note.path
+        ? { root: note.workspace.root, path: note.path } : null;
+    },
+    roots: foldersReady ? folders.filter(folder => !!folder.cloudSpace && folder.cloudSpace.account === drive.status.account && folder.root !== "demo" && !folder.error && !folder.syncError
       && (Object.values(folder.syncPolicy?.rules ?? {}).some(Boolean))).map(folder => folder.root) : [],
-    protectedPaths: root => current.current.workspace.root === root && (dirtyRef.current || operation.current || !!saveInFlight.current || voiceBusy.current)
-      ? [current.current.path] : [],
+    protectedPaths: root => [...new Set([
+      ...Array.from(paneSessions.current.values()).filter(s => s.workspace.root === root && s.dirty).map(s => s.path),
+      ...(current.current.workspace.root === root && (dirtyRef.current || operation.current || !!saveInFlight.current || voiceBusy.current) ? [current.current.path] : []),
+    ])],
     onComplete: async (root, changes) => {
       if (!changes.length) return;
       await refreshFolder(root);
@@ -890,8 +1049,18 @@ export default function App() {
         const renamed = changes.find(change => change.previousPath === tab.path && change.path !== tab.path);
         if (tab.root !== root || !renamed || (before.workspace.root === root && before.path === tab.path && dirtyRef.current)) return tab;
         snapshots.current.delete(tabId(tab));
+        renamePaneTab(tabId(tab), { ...tab, path: renamed.path });
         return {...tab, path: renamed.path};
       }));
+      for (const change of changes) {
+        const id = tabId({ root, path: change.path });
+        const session = paneSessions.current.get(id);
+        if (!session || session.dirty || (before.workspace.root === root && before.path === session.path)) continue;
+        const note = await readNote(root, change.path);
+        if (paneSessions.current.get(id) !== session || session.dirty || (current.current.workspace.root === root && current.current.path === session.path)) continue;
+        paneSessions.current.set(id, { ...session, data: note, preview: note.text, snapshot: undefined });
+        updatePaneLayout({ ...paneLayoutRef.current });
+      }
       const change = changes.find(change => change.previousPath === before.path);
       if (before.workspace.root !== root || !change || !before.hasDocument) return;
       if (dirtyRef.current || operation.current || saveInFlight.current || voiceBusy.current) {
@@ -1049,14 +1218,14 @@ export default function App() {
       if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "g" || event.isComposing) return;
       event.preventDefault();
       event.stopPropagation();
-      if (!event.repeat && !syncFolder && !settingsOpen && !palette && !bookmarkDraft && !renameTarget && !fileAction) changeFocusMode(!focusMode);
+      if (!event.repeat && !syncFolder && !settingsOpen && !palette && !bookmarkDraft && !renameTarget && !fileAction) changeFocusMode(!focusModeActive);
     };
     window.addEventListener("keydown", toggleFocus, { capture: true });
     return () => window.removeEventListener("keydown", toggleFocus, { capture: true });
-  }, [focusMode, changeFocusMode, syncFolder, settingsOpen, palette, bookmarkDraft, renameTarget, fileAction]);
+  }, [focusModeActive, changeFocusMode, syncFolder, settingsOpen, palette, bookmarkDraft, renameTarget, fileAction]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (syncFolder) return;
+      if (syncFolder || (mobile && !drive.status.connected)) return;
       if (e.target instanceof Element && e.target.closest("#terminal-panel")) return;
       if (!(e.metaKey || e.ctrlKey)) return;
       if (!e.altKey && !e.shiftKey && (e.key.toLowerCase() === "n" || e.key.toLowerCase() === "t")) {
@@ -1094,7 +1263,7 @@ export default function App() {
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [save, beginBookmark, syncFolder, settingsOpen, palette, bookmarkDraft, renameTarget, fileAction, newTab]);
+  }, [drive.status.connected, save, beginBookmark, syncFolder, settingsOpen, palette, bookmarkDraft, renameTarget, fileAction, newTab]);
   useEffect(() => {
     const preserveSession = async () => {
       const c = current.current;
@@ -1102,16 +1271,17 @@ export default function App() {
       await saveExplorer({
         folders: c.folders.map(({ root, name, collapsed, closedDirectories }) => ({ root, name, collapsed, closedDirectories })),
         active: c.hasDocument ? { root: c.workspace.root, path: c.path } : null,
-        tabs: tabsRef.current, mode: c.mode,
+        tabs: tabsRef.current, panes: paneLayoutRef.current, mode: c.mode,
       });
     };
     const preserve = async () => {
-      try { await preserveSession(); return await preserveDraft(); }
+      try { await preserveSession(); return await preserveInactiveDrafts() && await preserveDraft(); }
       catch (error) { setNotice(`Unable to preserve your session: ${String(error)}`); return false; }
     };
     const beforeUnload = (e: BeforeUnloadEvent) => {
       // Native close/quit awaits the durable writes below. Browser recovery is synchronous.
       if (voiceBusy.current || draftFailed.current) { e.preventDefault(); e.returnValue = ""; }
+      void preserveInactiveDrafts();
       void preserveDraft();
     };
     window.addEventListener("beforeunload", beforeUnload);
@@ -1175,13 +1345,31 @@ export default function App() {
   }, []);
   useBackgroundBlur(galaxyMode, backgroundMode === "frosted", frostedPanes, {
     compact, mobileView, navigation, rail, focusMode, topBars, statusBar, terminalStarted,
+    editorLayout: paneLeaves(paneLayout).map(pane => pane.id).join(","),
   }, setNotice);
   const switchMode = (next: EditorMode) => {
-    if (next === "read") setPreview(editor.current?.text() ?? data?.text ?? "");
-    setMode(next);
-    try { saveFileMode(path, next); }
-    catch { setNotice("View mode changed, but could not be saved on this device."); }
+    capturePane();
+    sharedViewMode.current = next;
+    const visiblePanes = paneLeaves(paneLayoutRef.current).filter(pane => !compact || pane.id === activePaneRef.current);
+    let storageFailed = false;
+    for (const pane of visiblePanes) {
+      const session = pane.selected ? paneSessions.current.get(pane.selected) : undefined;
+      if (!session) continue;
+      session.mode = paneMode(next, session.path);
+      session.preview = paneEditors.current.get(pane.selected!)?.text() ?? session.data.text;
+      try { saveFileMode(session.path, next); } catch { storageFailed = true; }
+    }
+    setPreview(editor.current?.text() ?? data?.text ?? "");
+    setMode(paneMode(next, path));
+    updatePaneLayout({ ...paneLayoutRef.current });
+    if (storageFailed) setNotice("View mode changed, but could not be saved on this device.");
   };
+  const visibleViews: PaneView[] = paneLeaves(paneLayout).filter(pane => !compact || pane.id === activePane).flatMap(pane => {
+    if (pane.id === activePane) return data ? [{ path, mode, length: Math.max(data.text.length, editor.current?.text().length ?? 0) }] : [];
+    const session = pane.selected ? paneSessions.current.get(pane.selected) : undefined;
+    return session ? [{ path: session.path, mode: session.mode, length: session.data.text.length }] : [];
+  });
+  const toolbar = paneToolbar(visibleViews);
   const isMarkdown = /\.(md|markdown|mdx)$/i.test(path);
   const documentView = isMarkdown && supportsDocumentView(
     data?.text.length ?? 0, editorSnapshot?.state.doc.length ?? 0, preview.length,
@@ -1190,8 +1378,199 @@ export default function App() {
     editor.current?.toggleTask(offset, checked);
     setPreview(editor.current?.text() ?? "");
   };
+  useEffect(() => {
+    if (!foldersReady) return;
+    let cancelled = false;
+    for (const pane of paneLeaves(paneLayout)) {
+      const tab = tabs.find(t => tabId(t) === pane.selected);
+      if (!tab || paneSessions.current.has(tabId(tab)) || (tab.root === workspace.root && tab.path === path)) continue;
+      const folder = folders.find(f => f.root === tab.root);
+      if (!folder) continue;
+      void readRecoverableNote(tab.root, tab.path).then(({ note, recovered }) => {
+        if (cancelled) return;
+        paneSessions.current.set(tabId(tab), { workspace: folder, path: tab.path, data: note, dirty: recovered, mode: sharedViewMode.current ? paneMode(sharedViewMode.current, tab.path) : readFileMode(tab.path), cursor: [1, 1], preview: note.text });
+        updatePaneLayout({ ...paneLayoutRef.current });
+      }).catch(error => { if (!cancelled) setNotice(String(error)); });
+    }
+    return () => { cancelled = true; };
+  }, [foldersReady, paneLayout, tabs, folders, workspace.root, path, updatePaneLayout]);
+  if (mobile && (!drive.status.connected || (!cloud.loaded && !folders.some(folder => folder.cloudSpace?.account === drive.status.account && !!drive.status.account)))) {
+    return <CloudSetup drive={drive} loading={cloud.loading} error={cloud.error} retry={()=>void cloud.refresh()}/>;
+  }
+  function renderPaneTabs(pane: Pane) { return (
+          <div className="note-tabs" hidden={!compact && (!topBars || focusMode)} role="tablist" aria-label="Open notes">
+            {(compact ? tabs.map(tabId) : pane.tabs).map(id => tabs.find(tab => tabId(tab) === id)).filter((tab): tab is NoteTab => !!tab).map((tab) => {
+              const active =
+                pane.selected === tabId(tab);
+              const name = tab.path.split("/").at(-1);
+              const tabFolder = folders.find(folder => folder.root === tab.root);
+              const selectedForSync = !tabFolder?.syncError && syncIncluded(tabFolder?.syncPolicy, tab.path);
+              return (
+                <div
+                  key={tabId(tab)}
+                  data-tab-id={tabId(tab)}
+                  className={
+                    "note-tab " +
+                    (active ? "active " : "") +
+                    (!tab.pinned ? "preview-tab" : "")
+                  }
+                >
+                  <TabButton
+                    role="tab"
+                    aria-selected={active}
+                    tooltip={
+                      (tabFolder?.cloudSpace ? `Cloud / ${tabFolder.name}` : tab.root) +
+                      "/" +
+                      tab.path +
+                      (!tab.pinned
+                        ? " · Preview — double-click to keep open"
+                        : "")
+                    }
+                    onDoubleClick={() => {
+                      if (!tab.pinned) { pin(tab.root, tab.path); return; }
+                      const folder = folders.find(f => f.root === tab.root);
+                      if (folder) setRenameTarget({ folder, path: tab.path });
+                    }}
+                    onClick={() => {
+                      const folder = folders.find((f) => f.root === tab.root);
+                      if (folder) void openNote(tab.path, undefined, folder);
+                    }}
+                  >
+                    <FileText size={14} />
+                    <span>{name}</span>
+                    {active && (tabId(tab) === tabId({ root: workspace.root, path }) ? dirty : paneSessions.current.get(tabId(tab))?.dirty) && <span className="dirty-dot" />}
+                  </TabButton>
+                  {drive.status.connected && tabFolder?.cloudSpace && <button className="tab-sync" data-selected={selectedForSync}
+                    aria-label={`Sync settings for ${name}: ${selectedForSync ? "selected for sync" : "local only"}`}
+                    title={selectedForSync ? (uploads.items[`${tab.root}\n${tab.path}`]?.message ?? "Selected · Waiting for sync") : "Local only · Choose sync settings"}
+                    aria-haspopup="dialog" disabled={!tabFolder}
+                    onClick={() => { if (tabFolder) showSync(tabFolder, tab.path); }}>
+                    {selectedForSync ? <Cloud size={13} /> : <CloudOff size={13} />}
+                  </button>}
+                  <button
+                    className="tab-close"
+                    aria-label={`Close ${name}`}
+                    onClick={() => void closeTab(tab)}
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+  ); }
+  function renderPaneDocument(pane: Pane) {
+    const isActive = pane.id === activePane;
+    const session = pane.selected ? paneSessions.current.get(pane.selected) : undefined;
+    const workspace = isActive ? current.current.workspace : session?.workspace ?? current.current.workspace;
+    const path = isActive ? current.current.path : session?.path ?? "";
+    const paneData = isActive ? data : session?.data ?? null;
+    const paneMode = isActive ? mode : session?.mode ?? "source";
+    const panePreview = isActive ? preview : session?.preview ?? "";
+    const paneSnapshot = isActive ? editorSnapshot : session?.snapshot;
+    const paneLoading = isActive && loading;
+    return renderContent(paneData, paneMode, panePreview);
+    function renderContent(data: DocumentData | null, mode: EditorMode, preview: string) {
+      const loading = paneLoading;
+      const editorSnapshot = paneSnapshot;
+      const bookmarks = isActive ? marksRef.current : session?.data.bookmarks ?? [];
+      const isMarkdown = /\.(md|markdown|mdx)$/i.test(path);
+      const documentView = isMarkdown && supportsDocumentView(data?.text.length ?? 0, editorSnapshot?.state.doc.length ?? 0, preview.length);
+      return (
+        <div className="document-area">
+          {loading && <div className="loading">Opening your note…</div>}
+          {data && (
+            <div className={"write-pane " + (mode === "read" && !documentView ? "hidden" : "")}>
+              <Editor
+                key={JSON.stringify([workspace.root, path, data.revision])}
+                ref={handle => {
+                  const id = tabId({ root: workspace.root, path });
+                  if (handle) paneEditors.current.set(id, handle); else paneEditors.current.delete(id);
+                  if (pane.id === activePaneRef.current) editor.current = handle;
+                }}
+                initial={data.text}
+                snapshot={editorSnapshot}
+                bookmarks={bookmarks}
+                onChange={() => { if (activatePane(pane.id)) changed(); }}
+                onBookmarks={(marks) => { if (activatePane(pane.id)) { applyMarks(marks); void preserveDraft(); } }}
+                onParagraphStyle={style => { if (isActive) setParagraphStyle(style); }}
+                onFormatting={formats => { if (isActive) setActiveFormats(formats); }}
+                onCursor={(line, col) => { if (isActive) setCursor([line, col]); }}
+                onBookmark={beginBookmark}
+                onSave={() => void save()}
+                onSourceSearch={() => setMode("source")}
+                isMarkdown={isMarkdown}
+                filePath={path}
+                onRename={name => renameFile(workspace, path, name)}
+                documentMode={documentView && mode !== "source" ? mode : undefined}
+                showLineNumbers={showLineNumbers}
+                showLineHighlight={showLineHighlight}
+                wordWrap={wordWrap}
+                spellcheck={spellcheck}
+              />
+            </div>
+          )}
+          {data && mode === "read" && !documentView && (
+            <div className="read-pane" ref={isActive ? attachPreview : undefined}>
+              <div className="start-mark" aria-hidden="true"><GalaxyMark circled /></div>
+              <article className="prose">
+                <div className="document-eyebrow">
+                  {isMarkdown ? "A NOTE IN YOUR SPACE" : "PLAIN & SIMPLE"}
+                </div>
+                <FileTitle key={path} path={path} onRename={name => renameFile(workspace, path, name)} />
+                <Suspense fallback={<p>Rendering your note…</p>}>
+                  {preview.length > RICH_DOCUMENT_LIMIT ? (
+                    <LargeRead ref={isActive ? largeRead : undefined} text={preview} markdown={isMarkdown} controlsContainer={isActive ? readControls : null} onToggleTask={toggleReadTask} />
+                  ) : isMarkdown ? (
+                    <Markdown text={preview} onToggleTask={toggleReadTask} />
+                  ) : (
+                    <pre className="plain-preview">
+                      {preview.split("\n").map((line, i) => (
+                        <div data-line={i + 1} key={i}>
+                          {line || "\u00a0"}
+                        </div>
+                      ))}
+                    </pre>
+                  )}
+                </Suspense>
+                <div className="end-mark">
+                  <GalaxyMark circled />
+                </div>
+              </article>
+            </div>
+          )}
+          {!data && !loading && (
+            <div className="empty-editor">
+              <FolderOpen size={32} />
+              <h2>{mobile ? "A little space to think." : "A folder is all you need."}</h2>
+              <p>{mobile ? "Create your first Cloud note. Edits save and sync automatically." : "Open a folder with Markdown or text files."}</p>
+              <button className="primary" onClick={mobile ? () => void newTab() : openFolder}>
+                {mobile ? "Create a note" : "Open folder"}
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    }
+  }
+  const cloudRoots = folders.filter(folder => folder.cloudSpace?.account === drive.status.account).map(folder => folder.root);
+  const hasUnsyncedChanges = cloudRoots.some(root => uploads.pending[root])
+    || !!(workspace.cloudSpace && dirty)
+    || Array.from(paneSessions.current.entries()).some(([id, session]) =>
+      id !== tabId({root: workspace.root, path}) && session.workspace.cloudSpace && session.dirty);
+  const syncNeedsAttention = !!cloud.error || cloudRoots.some(root => !!uploads.errors[root]);
+  const syncStatus = syncNeedsAttention ? "Sync needs attention"
+    : uploads.transferringRoot ? "Syncing…"
+    : hasUnsyncedChanges ? "Unsynced changes"
+    : cloudRoots.length && cloudRoots.every(root => uploads.completed[root]) ? "Up to date"
+    : "Waiting to sync";
+  const syncedTimes = cloudRoots.map(root => uploads.lastSyncedAt[root]);
+  const lastSyncedAt = syncedTimes.length && syncedTimes.every(Boolean) ? Math.min(...syncedTimes) : null;
+  const lastSyncedLabel = lastSyncedAt
+    ? `Last synced at ${new Date(lastSyncedAt).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"})}`
+    : "Not synced this session";
   return (
-    <div className="app-shell" data-compact={compact} data-mobile={mobile} data-mobile-view={mobileView} data-focus-mode={!compact && focusMode} data-window-focused={windowFocused} data-galaxy={galaxyMode} data-background={supportsTranslucency ? backgroundMode : "off"} data-frosted-panes={supportsTranslucency && frostedPanes} data-editor-size={fontSize} data-editor-font={editorFont} data-text-width={textWidth} data-line-spacing={lineSpacing}
+    <div className="app-shell" data-compact={compact} data-mobile={mobile} data-mobile-view={mobileView} data-top-bars={compact || topBars} data-focus-mode={!compact && focusMode} data-window-focused={windowFocused} data-galaxy={galaxyMode} data-background={supportsTranslucency ? backgroundMode : "off"} data-frosted-panes={supportsTranslucency && frostedPanes} data-editor-size={fontSize} data-editor-font={editorFont} data-text-width={textWidth} data-line-spacing={lineSpacing}
       onPointerMove={(event) => {
         if (event.pointerType === "touch") return;
         const bounds = event.currentTarget.getBoundingClientRect();
@@ -1203,7 +1582,7 @@ export default function App() {
       {!compact && <SidePanelControls navigation={navigation} bookmarks={rail} hoveredEdge={hoveredEdge}
         onNavigation={() => setNavigation(!navigation)} onBookmarks={() => setRail(!rail)}
         onStorageError={() => setNotice("Panel widths changed, but could not be saved on this device.")} />}
-      {!compact && focusMode && (
+      {!compact && focusModeActive && (
         <button className="sidebar-action focus-toggle focus-mode-exit" aria-label="Exit focus mode" aria-pressed={true}
           aria-describedby="exit-focus-tooltip" aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+G`} onClick={() => changeFocusMode(false)}>
           <BlackHoleIcon />
@@ -1245,7 +1624,7 @@ export default function App() {
           <kbd>{mod} K</kbd>
         </button>
         <Explorer
-          folders={folders}
+          folders={folders.filter(folder => !folder.cloudSpace || (drive.status.connected && folder.cloudSpace.account === drive.status.account))}
           activeRoot={workspace.root}
           activePath={path}
           onOpen={(folder, path, pinned = false) => {
@@ -1256,8 +1635,9 @@ export default function App() {
             else setFileAction({ folder, path, action });
           }}
           onSync={drive.status.connected ? folder => showSync(folder) : undefined}
-          onToggleSync={drive.status.connected ? (folder, path) => void toggleFileSync(folder, path) : undefined}
-          syncBusy={syncBusy}
+          onNew={folder => void newTab(folder)}
+          onCloudMove={drive.status.connected ? (folder, path) => void moveToCloud(folder, path) : undefined}
+          syncBusy={!!uploads.activeRoot}
           onStar={starFile}
           onRename={(folder, path) => setRenameTarget({ folder, path })}
           onChange={changeFolders}
@@ -1269,15 +1649,15 @@ export default function App() {
         <div className="sidebar-bottom">
           {drive.status.connected && <button className="global-sync-button" aria-haspopup="dialog" onClick={() => showSync(workspace)}>
             <Cloud size={18} aria-hidden="true" />
-            <span><strong>Sync</strong><small>{uploads.activeRoot ? "Syncing…" : Object.values(uploads.errors).some(Boolean) ? "Sync needs attention" : drive.status.email}</small></span>
+            <span><strong>Cloud</strong><small>{uploads.transferringRoot ? "Syncing…" : Object.values(uploads.errors).some(Boolean) ? "Sync needs attention" : drive.status.email}</small></span>
             <ChevronRight size={14} aria-hidden="true" />
           </button>}
           <div className="local-indicator">
             <span />
             {folders.length} {folders.length === 1 ? "folder" : "folders"} ·
-            stored locally
+            {mobile ? "available offline" : "on this device"}
           </div>
-          <p>{mobile ? "Notes stay on this device." : "Drag folder handles to organize your space."}</p>
+          <p>{mobile ? "Cloud notes save and sync automatically." : "Drag folder handles to organize your space."}</p>
           <div className="sidebar-actions">
             <button className="sidebar-action" hidden={mobile} aria-label="Add folders" title="Add folders" onClick={openFolder}>
               <Plus size={17} aria-hidden="true" />
@@ -1301,7 +1681,7 @@ export default function App() {
           </div>
         </div>
       </aside>
-      <main className="main-panel" hidden={compact && mobileView !== "editor"}
+      <main ref={tabStripRef} className="main-panel" hidden={compact && mobileView !== "editor"}
         onPointerMove={(event) => {
           if (event.pointerType === "touch") return;
           const bounds = event.currentTarget.getBoundingClientRect();
@@ -1315,73 +1695,16 @@ export default function App() {
         <div className="top-bars-container">
         <div id="top-bars" className="top-bars" hidden={!compact && !topBars}>
         <header className="tab-bar">
-          <div ref={tabStripRef} className="note-tabs" role="tablist" aria-label="Open notes">
-            {tabs.map((tab) => {
-              const active =
-                !!data && tab.root === workspace.root && tab.path === path;
-              const name = tab.path.split("/").at(-1);
-              const tabFolder = folders.find(folder => folder.root === tab.root);
-              const selectedForSync = !tabFolder?.syncError && syncIncluded(tabFolder?.syncPolicy, tab.path);
-              return (
-                <div
-                  key={tabId(tab)}
-                  data-tab-id={tabId(tab)}
-                  className={
-                    "note-tab " +
-                    (active ? "active " : "") +
-                    (!tab.pinned ? "preview-tab" : "")
-                  }
-                >
-                  <button
-                    role="tab"
-                    aria-selected={active}
-                    title={
-                      tab.root +
-                      "/" +
-                      tab.path +
-                      (!tab.pinned
-                        ? " · Preview — double-click to keep open"
-                        : " · Double-click to rename")
-                    }
-                    onDoubleClick={() => {
-                      if (!tab.pinned) { pin(tab.root, tab.path); return; }
-                      const folder = folders.find(f => f.root === tab.root);
-                      if (folder) setRenameTarget({ folder, path: tab.path });
-                    }}
-                    onClick={() => {
-                      const folder = folders.find((f) => f.root === tab.root);
-                      if (folder) void openNote(tab.path, undefined, folder);
-                    }}
-                  >
-                    <FileText size={14} />
-                    <span>{name}</span>
-                    {active && dirty && <span className="dirty-dot" />}
-                  </button>
-                  {drive.status.connected && <button className="tab-sync" data-selected={selectedForSync}
-                    aria-label={`Sync settings for ${name}: ${selectedForSync ? "selected for sync" : "local only"}`}
-                    title={selectedForSync ? (uploads.items[`${tab.root}\n${tab.path}`]?.message ?? "Selected · Waiting for sync") : "Local only · Choose sync settings"}
-                    aria-haspopup="dialog" disabled={!tabFolder}
-                    onClick={() => { if (tabFolder) showSync(tabFolder, tab.path); }}>
-                    {selectedForSync ? <Cloud size={13} /> : <CloudOff size={13} />}
-                  </button>}
-                  <button
-                    className="tab-close"
-                    aria-label={`Close ${name}`}
-                    onClick={() => void closeTab(tab)}
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
+          <button hidden={compact} className="icon-button" aria-label="Split editor right" title="Move current tab to a pane on the right"
+            disabled={!data || (paneLeaves(paneLayout).find(p => p.id === activePane)?.tabs.length ?? 0) < 2}
+            onClick={() => dropTab(tabId({ root: workspace.root, path }), { pane: activePane, edge: "right", before: null })}><PanelsTopLeft size={17} /></button>
           <button className="icon-button new-tab-button" onClick={() => void newTab()} aria-label="New tab" title="New tab (Ctrl T)"><Plus size={16} /></button>
           <div className="tab-bar-space" />
-          {drive.status.connected && <div className="top-drive-actions"><button className="top-sync-button" aria-label={drive.status.connected ? "Sync settings · Google Drive connected" : "Connect Google Drive"}
-            title={drive.status.connected ? `Connected as ${drive.status.email}` : "Connect Google Drive"} aria-haspopup="dialog" onClick={() => showSync(workspace)}>
-            <Cloud size={16} aria-hidden="true" /><span>{uploads.activeRoot ? "Syncing…" : Object.values(uploads.errors).some(Boolean) ? "Sync needs attention" : "Drive connected"}</span>
+          {drive.status.connected && <div className="top-drive-actions"><button className="top-sync-button" data-pending={hasUnsyncedChanges || syncNeedsAttention} aria-label={`Sync settings · ${syncStatus} · ${lastSyncedLabel}`}
+            title={`${syncStatus} · ${lastSyncedLabel}\nConnected as ${drive.status.email}${lastSyncedAt ? ` · Last synced ${new Date(lastSyncedAt).toLocaleString()}` : ""}`} aria-haspopup="dialog" onClick={() => showSync(workspace)}>
+            <Cloud size={16} aria-hidden="true" /><span>{syncStatus}</span>
           </button><button className="icon-button" aria-label="Open workspace in Google Drive"
-            title="Open workspace in Google Drive" disabled={!!uploads.activeRoot || workspace.root === "demo"}
+            title="Open workspace in Google Drive" disabled={!workspace.cloudSpace}
             onClick={() => void uploads.openFolder(workspace.root)}><ExternalLink size={15} aria-hidden="true" /></button></div>}
           <button hidden={compact} className="icon-button" onClick={toggleTerminal}
             aria-label={terminalOpen ? "Collapse terminal" : "Open terminal"} title={`Toggle terminal (${mod}↓)`} aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+ArrowDown`}
@@ -1415,7 +1738,7 @@ export default function App() {
           >
             <FolderOpen size={17} aria-hidden="true" />
           </button>}
-          {mode !== "read" && !(documentView && mode === "edit") && (
+          {toolbar.hasLineNumbers && (
             <button
               className="line-numbers-toggle"
               aria-pressed={showLineNumbers}
@@ -1488,37 +1811,38 @@ export default function App() {
             onError={(error) => setNotice(error)}
           />}
           <div className="view-switch">
-            {isMarkdown && (
+            {toolbar.hasMarkdown && (
               <button
                 onClick={() => switchMode("source")}
-                className={mode === "source" ? "selected" : ""}
+                className={toolbar.source ? "selected" : ""}
                 aria-label="Source"
-                aria-pressed={mode === "source"}
-                title="Edit Markdown source"
+                aria-pressed={toolbar.source}
+                title="Show source in all panes"
               >
                 <Code2 size={14} />
               </button>
             )}
             <button
-              onClick={() => switchMode(isMarkdown ? "edit" : "source")}
-              className={(isMarkdown ? mode === "edit" : mode !== "read") ? "selected" : ""}
+              onClick={() => switchMode("edit")}
+              className={toolbar.edit ? "selected" : ""}
               aria-label="Edit"
-              aria-pressed={isMarkdown ? mode === "edit" : mode !== "read"}
-              title={documentView ? "Edit formatted Markdown" : isMarkdown ? "Edit Markdown source (large note)" : "Edit text"}
+              aria-pressed={toolbar.edit}
+              title="Edit all panes · Formatted Markdown and plain text"
             >
               <Pencil size={13} />
             </button>
             <button
               onClick={() => switchMode("read")}
-              className={mode === "read" ? "selected" : ""}
+              className={toolbar.read ? "selected" : ""}
               aria-label="Read"
-              aria-pressed={mode === "read"}
-              title="Read"
+              aria-pressed={toolbar.read}
+              title="Read all panes"
             >
               <BookOpen size={14} />
             </button>
           </div>
           <button
+            hidden={!!workspace.cloudSpace}
             className="icon-button"
             data-unsaved={dirty}
             aria-label="Save note"
@@ -1528,16 +1852,21 @@ export default function App() {
             <Save size={15} />
           </button>
         </div>
-        {data && mode !== "read" && isMarkdown && (
-          <FormatToolbar active={activeFormats} style={paragraphStyle} onFormat={(style) => editor.current?.format(style)}
+        {toolbar.hasFormatting && (
+          <FormatToolbar formattingDisabled={!data || !isMarkdown || mode === "read"} disabled={!data || mode === "read"}
+            active={isMarkdown ? activeFormats : []} style={isMarkdown ? paragraphStyle : "paragraph"} onFormat={(style) => editor.current?.format(style)}
             onUndo={() => editor.current?.undo()} onRedo={() => editor.current?.redo()} />
         )}
         </div>
         <div className="panel-toggle-zone panel-toggle-top" data-expanded={topBars} data-edge-hover={hoveredTop}>
           <button className="panel-toggle" aria-label={topBars ? "Collapse top bars" : "Expand top bars"}
-            title={`${topBars ? "Collapse" : "Expand"} top bars (${mod}↑)`} aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+ArrowUp`} aria-expanded={topBars} aria-controls="top-bars"
+            aria-describedby="top-bars-tooltip" aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+ArrowUp`} aria-expanded={topBars} aria-controls="top-bars"
             onClick={() => setTopBars(!topBars)}>
             {topBars ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            <span className="focus-tooltip" id="top-bars-tooltip" role="tooltip">
+              <span>{topBars ? "Collapse" : "Expand"} top bars</span>
+              <span className="focus-tooltip-keys"><kbd>{mod}</kbd><kbd>↑</kbd></span>
+            </span>
           </button>
         </div>
         </div>
@@ -1547,75 +1876,9 @@ export default function App() {
           disabled={!!(syncFolder || settingsOpen || palette || bookmarkDraft || renameTarget || fileAction)}
           onJump={jump}
         />}
-        <div className="document-area">
-          {loading && <div className="loading">Opening your note…</div>}
-          {data && (
-            <div className={"write-pane " + (mode === "read" && !documentView ? "hidden" : "")}>
-              <Editor
-                key={JSON.stringify([workspace.root, path, data.revision])}
-                ref={editor}
-                initial={data.text}
-                snapshot={editorSnapshot}
-                bookmarks={bookmarks}
-                onChange={changed}
-                onBookmarks={(marks) => { applyMarks(marks); preserveDraft(); }}
-                onParagraphStyle={setParagraphStyle}
-                onFormatting={setActiveFormats}
-                onCursor={(line, col) => setCursor([line, col])}
-                onBookmark={beginBookmark}
-                onSave={() => void save()}
-                onSourceSearch={() => setMode("source")}
-                isMarkdown={isMarkdown}
-                filePath={path}
-                onRename={name => renameFile(workspace, path, name)}
-                documentMode={documentView && mode !== "source" ? mode : undefined}
-                showLineNumbers={showLineNumbers}
-                showLineHighlight={showLineHighlight}
-                wordWrap={wordWrap}
-                spellcheck={spellcheck}
-              />
-            </div>
-          )}
-          {data && mode === "read" && !documentView && (
-            <div className="read-pane" ref={attachPreview}>
-              <div className="start-mark" aria-hidden="true"><GalaxyMark circled /></div>
-              <article className="prose">
-                <div className="document-eyebrow">
-                  {isMarkdown ? "A NOTE IN YOUR SPACE" : "PLAIN & SIMPLE"}
-                </div>
-                <FileTitle key={path} path={path} onRename={name => renameFile(workspace, path, name)} />
-                <Suspense fallback={<p>Rendering your note…</p>}>
-                  {preview.length > RICH_DOCUMENT_LIMIT ? (
-                    <LargeRead ref={largeRead} text={preview} markdown={isMarkdown} controlsContainer={readControls} onToggleTask={toggleReadTask} />
-                  ) : isMarkdown ? (
-                    <Markdown text={preview} onToggleTask={toggleReadTask} />
-                  ) : (
-                    <pre className="plain-preview">
-                      {preview.split("\n").map((line, i) => (
-                        <div data-line={i + 1} key={i}>
-                          {line || "\u00a0"}
-                        </div>
-                      ))}
-                    </pre>
-                  )}
-                </Suspense>
-                <div className="end-mark">
-                  <GalaxyMark circled />
-                </div>
-              </article>
-            </div>
-          )}
-          {!data && !loading && (
-            <div className="empty-editor">
-              <FolderOpen size={32} />
-              <h2>{mobile ? "A little space to think." : "A folder is all you need."}</h2>
-              <p>{mobile ? "Start your first note. Your words stay on this device." : "Open a folder with Markdown or text files."}</p>
-              <button className="primary" onClick={mobile ? () => void newTab() : openFolder}>
-                {mobile ? "Create a note" : "Open folder"}
-              </button>
-            </div>
-          )}
-        </div>
+        <EditorPanes layout={paneLayout} active={activePane} compact={compact}
+          onActivate={activatePane} renderTabs={renderPaneTabs} renderDocument={renderPaneDocument}
+          onResize={(id, ratio) => updatePaneLayout(mapPane(paneLayoutRef.current, id, node => node.kind === "split" ? { ...node, ratio } : node))} />
         {!mobile && <TerminalPanel hoveredEdge={hoveredBottom} started={terminalStarted} open={terminalOpen && statusBar} root={workspace.root} controlsContainer={terminalControls}
           onOpenChange={(open) => { if (open) { setTerminalStarted(true); setStatusBar(true); } setTerminalOpen(open); }} onStorageError={() => setNotice("Terminal height changed, but could not be saved on this device.")} />}
         <div className="status-bar-container">
@@ -1625,8 +1888,8 @@ export default function App() {
             {saving
               ? "Saving…"
               : dirty
-                ? draftStatus === "saving" ? "Saving draft…" : draftStatus === "error" ? "Draft not saved" : "Draft saved · Unsaved to file"
-                : "All changes saved"}
+                ? workspace.cloudSpace ? "Saving on this device…" : draftStatus === "saving" ? "Saving draft…" : draftStatus === "error" ? "Draft not saved" : "Draft saved · Unsaved to file"
+                : workspace.cloudSpace ? uploads.errors[workspace.root] ? "Saved on this device · Sync needs attention" : uploads.transferringRoot === workspace.root ? "Syncing…" : uploads.completed[workspace.root] ? "Up to date" : "Saved on this device · Waiting to sync" : "All changes saved"}
           </span>
           <span>
             {mode !== "read"
@@ -1810,7 +2073,7 @@ export default function App() {
           }
         } finally { operation.current = false; }
       }} />}
-      {syncFolder && <SyncSettings onRestored={async root => { const restored = await openWorkspace(root); await acceptFolders([restored]); setSyncFolder(restored); setSyncPath(undefined); }} uploads={uploads} onUpload={async () => { if (await save()) await uploads.upload(syncFolder.root); }} drive={drive} key={syncFolder.root} folder={syncFolder} folders={folders} initialPath={syncPath} onFolderChange={folder => showSync(folder)} onClose={() => setSyncFolder(null)}
+      {syncFolder && <SyncSettings cloudLoading={cloud.loading} cloudError={cloud.error} onRefreshCloud={()=>void cloud.refresh()} onRestored={async root => { const restored = await openWorkspace(root); await acceptFolders([restored]); setSyncFolder(restored); setSyncPath(undefined); }} uploads={uploads} onUpload={async () => { if (await save()) await uploads.upload(syncFolder.root); }} drive={drive} key={syncFolder.root} folder={syncFolder} folders={folders} initialPath={syncPath} onFolderChange={folder => showSync(folder)} onClose={() => setSyncFolder(null)}
         onSaved={policy => { setFolders(old => old.map(folder => folder.root === syncFolder.root ? { ...folder, syncPolicy: policy, syncError: undefined } : folder)); setWorkspace(old => old.root === syncFolder.root ? { ...old, syncPolicy: policy } : old); uploads.schedule(syncFolder.root); }} />}
       {renameTarget && (
         <RenameDialog

@@ -33,6 +33,8 @@ notarize the app.
 
 Run `npm run desktop` and leave it running while making changes. This opens the native app with live frontend updates; Rust changes automatically rebuild and restart it. The launcher automatically chooses an available frontend port, so an existing preview server does not block startup. The command finds Rust in the standard Cargo installation directory, so sourcing Cargo's environment is not needed for this command. Stop it with Ctrl-C.
 
+On macOS, `./run.sh` starts desktop development and `./runios.sh` starts iOS development with Xcode and network hosting enabled. Both first stop existing development sessions belonging to this checkout, including their child servers and builds, so switching targets frees ports and development locks. Use the npm commands directly when you want to keep another session running.
+
 Quit the installed Nova before starting development: both use the same saved folders and bookmarks. Unsaved edits are retained as local recovery drafts across reloads and native restarts. Development does not update `/Applications/Nova.app`; the Dock copy stays at its last installed version. No DMG or drag-to-Applications step is needed to try changes. Use `npm run package` when you need an installer to share.
 
 ## Verify / build
@@ -124,7 +126,7 @@ use the saved desktop connection; run only the intended test with `--ignored`.
 
 ## Google Drive connection test
 
-See the [standalone Drive smoke test](sync.md#developer-connection-smoke-test) for manual OAuth, generated-note upload, and exact read-back checks. It is independent of the app’s stored connection and is not run by the normal test suite.
+Use `python3 scripts/test-drive-connection.py --help` for the standalone Drive smoke test, which performs manual OAuth, generated-note upload, and exact read-back checks. It is independent of the app’s stored connection and is not run by the normal test suite.
 
 ## iPhone and iPad
 

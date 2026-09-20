@@ -1,153 +1,86 @@
-# Google Drive sync
+# Local and Cloud notes
 
-Google Drive is optional and available in configured desktop and iOS builds.
-Open **Settings → Google Drive → Set up sync**, or the cloud button beside Settings.
-Choose **Connect Google Drive**, finish sign-in in your browser, and return to Nova.
-The app requests `drive.file` access and stores its refresh token in the system
-credential store. Sign-in can be cancelled and times out after five minutes.
-Browser previews and Android builds cannot connect. iPhone and iPad use native
-Google sign-in; see [iPhone and iPad](#iphone-and-ipad) for setup.
+Desktop Explorer separates **Local** folders from **Cloud** spaces. Local files
+stay in the folders you chose. Connecting Google Drive never opts them into sync.
+Mobile is Cloud only: its setup screen requires a Google Drive connection before
+opening the editor, Explorer, search, or settings.
 
-After connecting, **Sync** appears in the sidebar and top tab bar. A tab’s cloud
-button focuses that file in the dialog; explorer cloud buttons toggle individual
-file choices. The workspace menu also opens sync settings. Switch workspaces or
-search paths in the dialog. Cloud icons show selection; per-file messages show
-upload results and errors. Use the explorer header’s cloud filter to show only
-selected files, optionally combined with the star filter.
+## Connect and use another device
 
-## Upload saved notes
+On desktop, choose the cloud button beside Settings, then **Connect Google Drive**.
+On iPhone or iPad, use the setup screen. Finish Google sign-in and return to Nova.
+Nova discovers and downloads its Cloud spaces automatically; there is no restore
+picker or local destination to choose. An empty account starts with **Notes**.
 
-Selected notes upload after Save or a selection change, following a short delay.
-Only saved file contents upload; unsaved recovery drafts stay local. **Sync now**
-saves the active note first, then checks incoming changes and uploads selected saved files in the workspace
-chosen in the dialog. **Open in Drive** opens the workspace’s cloud folder from
-the Sync dialog, the button beside the top-bar connection status, or
-**Settings → Google Drive → Workspace folder**.
+The same Cloud names appear on every device. Nova manages offline copies in its
+private application data directory under `Synced/<account-and-Drive-ID hash>`.
+These internal names are not the names shown in Explorer. On iOS the persisted
+root is `mobile-sync/<hash>`, independent of the app's container location.
 
-Nova creates a `.nova` folder in Google Drive with a folder for each workspace,
-preserving note subfolders. Uploads accept UTF-8 text up to 32 MiB per file.
-Bookmarks, stars, drafts, and the local `.nova` registry are not uploaded.
-Local upload receipts record the last uploaded contents separately for each account.
+Nova stores managed files inside **.nova** in Google Drive. Use **Open in Drive**
+in Cloud settings or the top bar to open the current Cloud space in your browser.
+Each space's folder menu has **New note**. On desktop, a local note's context menu
+has **Move to Cloud…**: the confirmation names the destination, then Nova saves a
+complete Cloud copy on the device before removing the original. An existing note
+with the same name blocks the move; it is never overwritten. Unsaved inactive
+local drafts must be opened and saved first. The current action uses the first
+Cloud space; dragging between Local and Cloud is not implemented.
 
-An unchanged cloud copy is skipped. Updates compare the remote contents with the
-last local receipt and use a conditional revision guard. A different remote version
-pauses that file’s upload and reports the problem. Review both versions in Drive
-and Nova; downloading a fresh workspace makes another local copy for comparison.
-There is no automatic merge or conflict-copy creation.
+## Autosave and status
 
-## Bring notes to another desktop
+Cloud notes save on the device shortly after typing pauses and before switching
+notes. They then upload automatically. The Save control remains for Local notes.
+Status distinguishes saving on this device, waiting to sync, syncing, up to date,
+and sync errors. Cloud settings expose retry and connection errors.
 
-1. Connect the same Google account and open **Sync**.
-2. Choose **Bring notes to this device**, then a Drive workspace.
-3. Choose a local parent folder and select **Download & open workspace**.
+Downloaded notes remain editable offline. Saved changes retry on foreground checks
+and periodic checks while Nova is visible. Discovery and reconciliation run every
+minute and when the app regains focus. The focused note is checked every five
+seconds: one Drive metadata request compares its last modified time and version
+with the synced receipt. If both match and the local content is unchanged, the
+check returns before workspace discovery, content downloads, reconciliation or
+writes. Boot and full periodic checks compare the complete Drive metadata listing
+against persisted file IDs, paths, modification times and versions, and verify
+the local file set and content receipts. An unchanged workspace returns before
+reconciliation, downloads or registry writes. Metadata listing remains necessary
+to discover new notes, removals and folder moves.
+There is no closed-app background service.
+Uninstalling the mobile app removes offline copies and any changes that have not
+finished uploading.
 
-Nova creates a new uniquely named subfolder without overwriting existing local
-files, downloads Nova-managed text files, and adds the workspace to navigation.
-The new workspace remembers its Drive link and includes the downloaded notes for
-future uploads; new notes remain local unless included explicitly or by a folder
-default. Restore is limited to 512 MiB total, 50,000 notes, 32 MiB per note, and
-bounded folder nesting. Google Docs documents are not converted to text.
+## Identity and safety
 
-## Selection rules
+A workspace's local `.nova` registry records its Cloud display name, Drive folder
+ID and account identity, plus per-file Drive IDs and content receipts. New devices
+use the remote folder ID, not the source computer's local folder path. Nova renames
+and moves update the same Drive file. Remote renames follow the file ID locally,
+provided there is no conflicting edit or destination collision.
 
-- Workspaces start local only. Each added workspace is configured separately.
-- Include a workspace or subfolder to include its existing and future notes by default.
-- A file or subfolder may explicitly include, explicitly exclude, or inherit.
-- The nearest explicit choice wins. Changing a parent keeps child exceptions.
-- Counts show effective file selections, not successful uploads. A local-by-default
-  folder may contain explicitly included notes.
-- Explicit file choices follow renames and moves performed in Nova. Inherited
-  choices adopt the destination folder’s default. Deletion removes the file’s rule.
-- Choices persist in the workspace `.nova` registry alongside stars. Invalid or
-  unknown policy versions display an error and default to no selections.
-- The current explorer derives subfolders from notes: empty folders do not appear.
-- Other sync software is outside Nova’s control. Keeping a note local in Nova
-  cannot exclude it from Google Drive for desktop or another backup program.
+Each reconciliation pass reads Drive before uploading. Incoming text replaces a
+local file only if local contents match the last synced receipt. Conflicting local
+and remote edits pause that file; neither version is silently overwritten. Open
+edits and saved recovery drafts are protected. Automatic merge is not implemented.
 
-## Current limits
+**Deletion remains device-only in this version.** The delete dialog explains that
+Drive copies are retained. A local tombstone prevents the retained copy from
+reappearing on that device. A file removed from Drive pauses sync and retains its
+local copy; Nova does not silently recreate it. Restore it in Drive to resume.
 
-- Initial setup downloads into a new workspace. Selected paths then receive
-  background checks every minute while Nova is running; there is no push service.
-- Upload scheduling is in memory. There is no durable offline queue or failure-specific
-  retry/backoff; periodic checks can try again, or save again or use **Sync now** after resolving an error.
-- Renames and moves inside Nova preserve Drive IDs. External filesystem renames
-  are not inferred automatically. Deletions do not propagate to the other copy.
-- Changes that turn off effective sync, including inherited folder defaults, ask
-  for confirmation. **Keep syncing** or Escape cancels; **Turn off sync** applies
-  the change. Disconnect also asks for confirmation. Existing local and Drive
-  files remain, an upload already in progress may finish, and other devices keep
-  their own settings.
-- Excluding a file stops future uploads and downloads but retains both copies.
-  Disconnect removes this device’s saved credential; it does not delete Drive
-  files or revoke the Google account’s app authorization.
-- Overlapping local workspaces have independent selections. An exclusion in one
-  does not prevent another included workspace from uploading the same file.
-- Workspace/file identity still depends on local paths for newly uploaded folders.
-  Synced and downloaded workspaces store an explicit Drive link. Portable
-  bookmarks and stable identities across arbitrary external moves remain future work.
+Disconnect requires confirmation, removes this device's saved credential, and
+retains local and Drive files. Mobile returns to setup. It does not revoke Google's
+app authorization. Existing Local folders and legacy selections do not participate
+in the managed Cloud sync loop.
 
-## Developer connection smoke test
+## Limits
 
-The standalone `scripts/test-drive-connection.py` checks desktop OAuth and a
-Drive upload/read-back independently of Nova. It does not save an app connection or use
-its sync selections. Run it manually with Python 3 and a desktop OAuth client:
+- UTF-8 text files up to 32 MiB; initial downloads up to 512 MiB and 50,000 notes.
+- Google Docs conversion, attachments, bookmark/star sync, and automatic merging
+  are not available. Empty subfolders are not shown in the current Explorer.
+- External filesystem renames are not inferred from file contents.
+- Other backup applications can still upload files in their own watched folders.
+- Browser previews and Android cannot connect to Drive.
 
-```sh
-python3 scripts/test-drive-connection.py --client-id YOUR_DESKTOP_CLIENT_ID
-```
-
-Enter the client secret at the hidden prompt, then open the printed authorization
-URL in your browser. The script uses PKCE, a state-checked loopback callback, and
-`drive.file` permission. Authorization times out after 30 minutes.
-
-The test creates a new **Nova connection test** folder and a generated Markdown
-note, downloads the note, and checks that its bytes match. It never reads local
-notes or saves tokens; test artifacts remain in Drive for inspection or manual
-removal. A successful test does not enable sync inside Nova. This manual network
-test is separate from `npm test` and requires Google API/OAuth setup.
-
-## Incoming changes, renames, and deletion safety
-
-While connected, Nova checks selected workspaces shortly after launch, every minute,
-and when the window regains focus. Save and selection changes also schedule a sync.
-Each pass reads Drive before uploading. A remote change replaces a local file only
-when the local content matches its last-synced hash. Different edits on both sides
-pause that file; Nova does not merge or discard either version. Open unsaved edits
-and native recovery drafts are protected. Clean open notes refresh after downloads.
-New Drive files download only into paths included by this device's sync rules.
-
-The local `.nova` registry now records Drive file IDs, their previous remote paths,
-and content receipts per account. Renames and moves made inside Nova carry these
-records and update the same Drive file. Remote renames follow the ID locally, unless
-there is a conflicting edit, another local rename, an excluded destination, or an
-existing file at that path. Renames made outside Nova are not inferred from hashes;
-they may look like a local deletion plus a new file and need manual review.
-
-Deletion is deliberately local in this version. Deleting a note in Nova leaves a
-registry tombstone so its retained Drive copy does not automatically download again.
-A missing Drive ID pauses sync and keeps the local file; it never silently recreates
-the Drive copy. Restore the cloud file to resume. Empty cloud folders are retained.
-Turning sync off stops both directions for that path and leaves both existing copies.
-An already-issued upload may finish. Other devices retain their own selection rules.
-
-Validation includes native HTTP-backed reconciliation tests for incoming changes,
-conflicts, ID-preserving renames, destination collisions, deleted-file tombstones,
-opt-out and draft protection. Real Google Drive verification requires native Keychain
-access and is separate from these deterministic tests.
-
-## iPhone and iPad
-
-The iOS app uses the same Drive file IDs, per-path choices, conflict handling, and
-`.nova` Drive folder as desktop. It checks on launch, on return to the foreground,
-and every minute while visible. Saves schedule another check. There is no closed-app
-background service; edits saved before suspension retry when Nova is opened again.
-
-Connect from the cloud button or **Settings → Google Drive → Set up sync**. To bring a desktop workspace to
-mobile, choose **Bring notes to this device**, select its Drive workspace, then
-**Download & open workspace**. Nova stores the copy in its private app storage,
-separate from **On this device** notes, and preserves its Drive association. Files
-remain readable/editable offline. Uninstalling Nova removes its local app storage;
-only changes that finished syncing are recoverable from Drive.
+## iOS configuration
 
 Google sign-in uses ASWebAuthenticationSession with a state-checked PKCE callback.
 Refresh credentials stay in the iOS Keychain; tokens never enter the webview or
@@ -161,26 +94,27 @@ the build environment, then rebuild the native app. This client needs no secret.
 Desktop's client secret is not embedded in the iOS binary. Testing-mode Google apps
 still require the signing-in account to be an approved test user.
 
-Mobile workspace keys (`mobile`, `mobile-sync/<workspace>`) remain stable when iOS
-changes an app container path. Restored workspace bookmark and draft identities are
-scoped separately, and the on-device workspace gets a persisted random Drive key.
 
-### Live iOS verification — 2026-09-20
+## Live verification — 2026-09-20
 
-Verified with Device Hub’s iPhone 18 Pro simulator and Google Drive in Chrome,
-using the configured iOS OAuth client and a signed simulator build:
+Using brand-new test files only, verified with the signed iPhone simulator,
+native desktop app, and Google Drive in Chrome:
 
-- Google sign-in completes and the connection appears in Nova.
-- The existing `mine` Drive workspace restores into private local `Synced` storage
-  with three files, retaining its original cloud workspace ID.
-- Editing and saving `Nova E2E sync check.txt` in the mobile editor updates the same
-  Drive file ID; the browser preview displays the exact appended mobile marker.
-- Renaming that test file in Drive while Nova is backgrounded updates the local
-  filename and open note title on return to the foreground, preserving contents.
-- The test filename was restored in Drive and synchronized back locally.
-- Installing the final build over the simulator app and launching it cold preserves
-  the Google connection, restored workspace, and note contents without signing in
-  again. The startup sync receives the restored filename.
+- Cloud discovery and the Notes space appear automatically.
+- Mobile Explorer shows Cloud without legacy local folders.
+- Mobile edits autosave and appear in the Drive browser preview without Save.
+- A brand-new local desktop fixture moves into Cloud through its confirmation
+  dialog, retains its text, removes the local source, uploads to Drive, and
+  appears automatically in the iPhone Explorer.
+- Renaming the test note in Drive updates mobile after foregrounding.
+- The desktop automatically receives the mobile note; desktop autosaved edits
+  subsequently appear in the mobile editor.
+- After backing up only the new test note’s mobile cache, a cold launch downloads
+  and opens the existing Cloud note automatically, with the latest contents.
+- An unconnected iPad simulator shows only the Cloud setup screen.
+- The desktop Open in Drive shortcut opens the matching Notes folder in Chrome.
 
-Only the synthetic E2E note was edited/renamed. Physical-device and iPad sync
-verification are still separate checks; these results cover the iPhone simulator.
+Physical-device and signed-in iPad sync remain separate checks. Local-copy collision tests
+and the HTTP-backed reconciliation suite cover failure protection separately.
+
+While Nova is visible and focused, the active Cloud note is checked every five seconds. Other notes keep the 60-second schedule. The faster check pauses for unsaved edits, a Local tab, or an unfocused window. This is polling, not live collaborative editing.

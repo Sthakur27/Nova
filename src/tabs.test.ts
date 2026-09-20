@@ -33,3 +33,8 @@ it("double-click upgrades an existing preview and distinguishes folders", () => 
     openTab([{ ...a, pinned: true }], { ...a, root: "/two" }),
   ).toHaveLength(2);
 });
+
+it("only replaces the preview within the focused editor group", () => {
+  const a = { root: "r", path: "a", pinned: false }, b = { root: "r", path: "b", pinned: false }, c = { root: "r", path: "c", pinned: false };
+  expect(openTab([a, b], c, new Set([tabId(b)]))).toEqual([a, c]);
+});

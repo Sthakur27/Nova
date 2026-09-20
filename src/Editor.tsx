@@ -453,6 +453,25 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
     };
   }, []);
   useEffect(() => {
+    const surfaces = [view.current?.scrollDOM, documentPane.current];
+    const cleanups = surfaces.map(surface => {
+      if (!surface) return () => {};
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      const onScroll = () => {
+        surface.classList.add("is-scrolling");
+        clearTimeout(timeout);
+        timeout = setTimeout(() => surface.classList.remove("is-scrolling"), 1000);
+      };
+      surface.addEventListener("scroll", onScroll, { passive: true });
+      return () => {
+        clearTimeout(timeout);
+        surface.removeEventListener("scroll", onScroll);
+        surface.classList.remove("is-scrolling");
+      };
+    });
+    return () => cleanups.forEach(cleanup => cleanup());
+  }, []);
+  useEffect(() => {
     const v = view.current;
     if (!v) return;
     if (!props.documentMode) {

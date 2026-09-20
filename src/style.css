@@ -1065,6 +1065,19 @@ kbd {
   background: #ffffff13;
   border-radius: 10px;
 }
+/* Preserve the scroll gutter while hiding idle editor thumbs, including on hover. */
+.editor-mount :is(.cm-scroller, .document-pane) {
+  scrollbar-color: transparent transparent;
+}
+.editor-mount :is(.cm-scroller, .document-pane).is-scrolling {
+  scrollbar-color: #ffffff13 transparent;
+}
+.editor-mount :is(.cm-scroller, .document-pane)::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+.editor-mount :is(.cm-scroller, .document-pane).is-scrolling::-webkit-scrollbar-thumb {
+  background: #ffffff13;
+}
 ::selection {
   background: #b393d63b;
 }
@@ -1246,6 +1259,10 @@ kbd {
   align-items: center;
   gap: 2px;
   padding: 4px 2px;
+  border-radius: 5px;
+}
+.root-header:hover {
+  background: #ffffff04;
 }
 .root-title {
   display: flex;
@@ -1287,6 +1304,32 @@ kbd {
   list-style: none;
   padding: 4px;
   color: #8f899c;
+  opacity: 0;
+  pointer-events: none;
+}
+.root-menu summary::-webkit-details-marker {
+  display: none;
+}
+.root-header:hover .root-menu > summary,
+.root-menu > summary:focus-visible,
+.root-menu[open] > summary {
+  opacity: 1;
+  pointer-events: auto;
+}
+.root-menu > summary:hover,
+.root-menu[open] > summary {
+  background: #ffffff09;
+  color: #c8b3e6;
+}
+.root-menu > summary:focus-visible {
+  outline: 1px solid #cfacff;
+  outline-offset: 2px;
+}
+@media (hover: none) {
+  .root-menu > summary {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 .root-menu > div {
   position: absolute;
@@ -1757,10 +1800,10 @@ kbd {
   box-shadow: inset 1px 0 10px #a878ed12, inset -1px 0 8px #739afa16;
 }
 /* Tint the full top pane once, including every wrapped toolbar row. */
-.app-shell[data-galaxy="true"] :is(.top-bars, .terminal-panel, .status-bar, .main-panel > .nova-find) {
+.app-shell[data-galaxy="true"] :is(.top-bars, .editor-group .note-tabs, .terminal-panel, .status-bar, .main-panel > .nova-find) {
   background: var(--galaxy-black);
 }
-.app-shell[data-galaxy="true"][data-frosted-panes="true"] :is(.sidebar, .bookmark-rail, .top-bars, .terminal-panel, .status-bar) {
+.app-shell[data-galaxy="true"][data-frosted-panes="true"] :is(.sidebar, .bookmark-rail, .top-bars, .editor-group .note-tabs, .terminal-panel, .status-bar) {
   background: rgba(9, 9, 17, 0.5);
 }
 .app-shell[data-galaxy="true"] :is(.tab-bar, .document-toolbar, .format-toolbar, .terminal-tab-bar) {
@@ -1807,7 +1850,7 @@ kbd {
 }
 .app-shell[data-galaxy="true"] .loading { background: #090911e8; }
 @media (prefers-reduced-transparency: reduce) {
-  .app-shell[data-galaxy="true"][data-frosted-panes="true"] :is(.sidebar, .bookmark-rail, .top-bars, .terminal-panel, .status-bar) { background: var(--galaxy-black); }
+  .app-shell[data-galaxy="true"][data-frosted-panes="true"] :is(.sidebar, .bookmark-rail, .top-bars, .editor-group .note-tabs, .terminal-panel, .status-bar) { background: var(--galaxy-black); }
   .app-shell[data-galaxy="true"]:is([data-background="on"], [data-background="frosted"]) .document-area { background: var(--galaxy-black); }
 }
 
@@ -1934,7 +1977,7 @@ kbd {
 }
 
 /* Focus mode hides all workspace panels; exiting expands them all. */
-.app-shell[data-focus-mode="true"] :is(.sidebar, .bookmark-rail, .top-bars, .status-bar, .panel-toggle-zone) {
+.app-shell[data-focus-mode="true"] :is(.sidebar, .bookmark-rail, .top-bars, .editor-group .note-tabs, .status-bar, .panel-toggle-zone) {
   display: none;
 }
 .focus-mode-exit {
@@ -1989,11 +2032,27 @@ kbd {
   transition: opacity 120ms ease, transform 120ms ease, visibility 120ms;
 }
 .focus-toggle:hover .focus-tooltip,
-.focus-toggle:focus-visible .focus-tooltip {
+.focus-toggle:focus-visible .focus-tooltip,
+.panel-toggle:hover .focus-tooltip,
+.panel-toggle:focus-visible .focus-tooltip {
   visibility: visible;
   opacity: 1;
   transform: translateY(0);
 }
+.panel-toggle-top .focus-tooltip,
+.panel-toggle-terminal .focus-tooltip {
+  left: 50%;
+  translate: -50% 0;
+}
+.panel-toggle-top .focus-tooltip { top: calc(100% + 10px); bottom: auto; }
+.panel-toggle-left .focus-tooltip,
+.panel-toggle-right .focus-tooltip {
+  top: 50%;
+  bottom: auto;
+  translate: 0 -50%;
+}
+.panel-toggle-left .focus-tooltip { left: calc(100% + 10px); }
+.panel-toggle-right .focus-tooltip { left: auto; right: calc(100% + 10px); }
 .focus-tooltip-keys { display: flex; gap: 4px; }
 .focus-tooltip kbd {
   display: grid;
@@ -2324,8 +2383,8 @@ kbd {
 .global-sync-button small { font-size: 11px; color: #aaa2b6; }
 .global-sync-button:hover, .top-sync-button:hover { background: #b497dc19; }
 .top-sync-button {
-  display: flex; align-items: center; gap: 6px; flex-shrink: 0; padding: 7px 10px;
-  border: 1px solid #b497dc25; border-radius: 6px; margin: 0 5px;
+  display: flex; align-items: center; gap: 5px; flex-shrink: 0; padding: 4px 6px;
+  border: 1px solid transparent; border-radius: 6px; margin: 0 5px;
   background: transparent; color: #c8b2e4; cursor: pointer; font: inherit; font-size: 12px;
 }
 .top-drive-actions { display: flex; align-items: center; flex-shrink: 0; margin-right: 5px; }
@@ -2488,3 +2547,108 @@ kbd {
 .app-update-dialog progress { width: 100%; accent-color: #b59bf3; }
 .app-update-dialog .dialog-buttons button { display: inline-flex; align-items: center; gap: 6px; }
 .app-update-error { color: #f0b4b4; overflow-wrap: anywhere; }
+
+.explorer-section-label { margin: 16px 12px 8px; font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted, #a49cb0); }
+.cloud-setup { min-height: 100dvh; box-sizing: border-box; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 18px; max-width: 520px; margin: auto; padding: max(32px, env(safe-area-inset-top)) 28px max(32px, env(safe-area-inset-bottom)); color: #e7e1ef; }
+.cloud-setup h1 { font-size: 32px; line-height: 1.15; margin: 0; }
+.cloud-setup p { margin: 0; line-height: 1.6; }
+.cloud-setup-detail { color: #a49cb0; font-size: 14px; }
+.cloud-setup button { min-height: 44px; padding: 10px 18px; border-radius: 10px; background: #b497dc; color: #211a2e; }
+.cloud-space-card { padding: 16px 0; border-top: 1px solid #ffffff16; }
+.cloud-space-card h2 { font-size: 16px; }
+.cloud-space-card button { margin: 8px 8px 0 0; }
+
+/* Editor groups use stable hosts so rearranging splits retains editor history. */
+.editor-panes, .editor-split, .editor-group, .pane-slot, .pane-host, .pane-content, .split-child {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.editor-panes { overflow: hidden; }
+.editor-group, .pane-slot, .pane-host, .pane-content { flex-direction: column; }
+.editor-group { position: relative; overflow: hidden; }
+.editor-split { position: relative; }
+.editor-split[data-axis="vertical"] { flex-direction: column; }
+.editor-group .note-tabs {
+  flex: 0 0 40px;
+  height: 40px;
+  max-height: 40px;
+  border-bottom: 1px solid #ffffff0b;
+  background: #1a1b1f;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.editor-group .note-tabs::-webkit-scrollbar { display: none; }
+.editor-group .note-tab > [role="tab"] { height: 100%; padding-block: 8px; }
+.app-shell[data-top-bars="false"] .editor-group .note-tabs { display: none; }
+.format-toolbar :is(button, select):disabled { opacity: .35; cursor: default; }
+.editor-group[data-active="true"] > .pane-slot .note-tabs { box-shadow: inset 0 -1px #b79ad966; }
+.editor-group .note-tab { flex-shrink: 0; }
+/* Overlay the shared edge: the resize target must not expose an untinted gap. */
+.editor-divider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  transform: translateX(-50%);
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+  z-index: 3;
+}
+.editor-divider::after {
+  content: "";
+  position: absolute;
+  inset: 0 3px;
+  background: transparent;
+}
+.editor-split[data-axis="vertical"] > .editor-divider {
+  left: 0;
+  right: 0;
+  bottom: auto;
+  width: auto;
+  height: 8px;
+  transform: translateY(-50%);
+  cursor: row-resize;
+}
+.editor-split[data-axis="vertical"] > .editor-divider::after { inset: 3px 0; }
+.editor-divider:is(:hover, :focus-visible, :active)::after { background: #b79ad97a; }
+.editor-group[data-pane-drop]::after { content: "Move to group"; position: absolute; inset: 42px 3px 3px; z-index: 20; pointer-events: none; border: 1px solid #c7a6ed; border-radius: 5px; background: #b79ad92b; display: grid; place-items: center; color: #e6d5fb; font-size: 12px; }
+.editor-group[data-pane-drop="left"]::after { content: "Split left"; right: 50%; }
+.editor-group[data-pane-drop="right"]::after { content: "Split right"; left: 50%; }
+.editor-group[data-pane-drop="top"]::after { content: "Split above"; bottom: 50%; }
+.editor-group[data-pane-drop="bottom"]::after { content: "Split below"; top: 50%; }
+.editor-group .prose { padding-inline: clamp(16px, 5cqw, 66px); }
+
+/* Keep semantic hidden controls hidden even when component styles set display. */
+[hidden] { display: none !important; }
+
+.explorer-section-header { display: flex; align-items: center; gap: 4px; padding: 8px 6px 4px; }
+.explorer-section-header h2 { flex: 1; min-width: 0; margin: 0; font-size: inherit; }
+.explorer-section-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 2px; border: 0; background: transparent; color: var(--muted, #a49cb0); text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
+.explorer-new-cloud, .explorer-add-local { display: flex; align-items: center; gap: 4px; border: 0; border-radius: 5px; padding: 5px 6px; color: #cfacff; background: transparent; font-size: 11px; white-space: nowrap; cursor: pointer; }
+.explorer-new-cloud { opacity: 0; pointer-events: none; }
+.explorer-section-header:hover .explorer-new-cloud, .explorer-new-cloud:focus-visible { opacity: 1; pointer-events: auto; }
+.explorer-new-cloud:hover, .explorer-add-local:hover, .explorer-section-toggle:hover { background: #b58aff12; color: #dfcaff; }
+.explorer-section-toggle:focus-visible, .explorer-new-cloud:focus-visible, .explorer-add-local:focus-visible { outline: 1px solid #cfacff; outline-offset: 1px; }
+.explorer-section + .explorer-section { margin-top: 8px; }
+.explorer-add-local { margin: 4px 12px 8px; }
+
+.top-sync-button[data-pending="true"] { color: #e8bc79; border-color: #e8bc7940; }
+
+/* Portaled so tab-strip scrolling and split panes do not clip the path. */
+.tab-path-tooltip {
+  position: fixed;
+  bottom: auto;
+  z-index: 160;
+  max-width: calc(100vw - 16px);
+  box-sizing: border-box;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  visibility: visible;
+  opacity: 1;
+  transform: none;
+}

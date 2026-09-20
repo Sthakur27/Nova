@@ -52,7 +52,7 @@ export async function setFileStar(root: string, path: string, starred: boolean):
   return result;
 }
 export async function chooseWorkspaces(): Promise<Workspace[]> {
-  if (mobile) return [await openWorkspace("mobile")];
+  if (mobile) throw new Error("Mobile uses Cloud spaces. Connect Google Drive to get started.");
   if (!desktop) throw new Error("Add local folders in the Nova desktop app.");
   const selected = await open({
     directory: true,
@@ -88,10 +88,10 @@ export async function loadExplorer(): Promise<ExplorerPreferences | null> {
   if (native) {
     const saved = parsePreferences(await invoke("load_explorer"));
     if (!mobile) return saved;
-    const validRoot = (root: string) => root === "mobile" || /^mobile-sync\/[^/\\]+$/.test(root);
+    const validRoot = (root: string) => /^mobile-sync\/[^/\\]+$/.test(root);
     // Stable virtual root survives iOS changing the app container's absolute path.
     return {
-      folders: [{ root: "mobile", name: "On this device", collapsed: false }, ...(saved?.folders.filter(folder => folder.root !== "mobile" && validRoot(folder.root)) ?? [])],
+      folders: saved?.folders.filter(folder => validRoot(folder.root)) ?? [],
       active: saved?.active && validRoot(saved.active.root) ? saved.active : null,
       mode: saved?.mode ?? "edit",
       tabs: saved?.tabs?.filter(tab => validRoot(tab.root)) ?? [],

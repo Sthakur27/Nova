@@ -37,3 +37,30 @@ it("opens on the first click, promotes on double-click, and preserves keyboard a
     vi.unstubAllGlobals();
   }
 });
+
+it("puts Cloud first, creates there while Local is active, and collapses sections independently", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  localStorage.clear();
+  const host = document.createElement("div"), root = createRoot(host);
+  document.body.append(host);
+  const local: Workspace = {root:"/local",name:"Local folder",files:[],collapsed:false};
+  const cloud: Workspace = {root:"/cloud",name:"Notes",files:[],collapsed:false,cloudSpace:{id:"drive-id",name:"Notes",account:"account"}};
+  const onNew=vi.fn(), noop=()=>{};
+  const render = () => <Explorer folders={[local, cloud]} activeRoot={local.root} activePath="" onNew={onNew}
+    onOpen={noop} onRename={noop} onStar={noop} onFileAction={noop} onChange={noop} onRemove={noop} onRefresh={noop} onAdd={noop} externalDrag={false}/>;
+  try {
+    await act(async()=>root.render(render()));
+    expect([...host.querySelectorAll('.explorer-section')].map(node=>node.getAttribute('aria-label'))).toEqual(['Cloud notes','Local notes']);
+    const toggles=host.querySelectorAll<HTMLButtonElement>('.explorer-section-toggle');
+    await act(async()=>toggles[0].click());
+    expect(host.querySelector<HTMLElement>('#explorer-cloud')!.hidden).toBe(true);
+    expect(host.querySelector<HTMLElement>('#explorer-local')!.hidden).toBe(false);
+    await act(async()=>host.querySelector<HTMLButtonElement>('[aria-label="New Cloud note"]')!.click());
+    expect(onNew).toHaveBeenCalledExactlyOnceWith(cloud);
+    expect(host.querySelector<HTMLElement>('#explorer-cloud')!.hidden).toBe(false);
+    await act(async()=>toggles[1].click());
+    expect(localStorage.getItem('nova:explorer-local-collapsed:v1')).toBe('on');
+    expect(host.querySelector<HTMLElement>('#explorer-local')!.hidden).toBe(true);
+    expect(host.querySelector<HTMLElement>('#explorer-cloud')!.hidden).toBe(false);
+  } finally { await act(async()=>root.unmount());host.remove();localStorage.clear();vi.unstubAllGlobals(); }
+});

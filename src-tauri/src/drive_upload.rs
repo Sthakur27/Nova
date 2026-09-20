@@ -1,4 +1,6 @@
-//! Uploads selected saved notes. Remote edits are never silently overwritten.
+#[path = "cloud_spaces.rs"]
+pub mod cloud_spaces;
+// Uploads selected saved notes. Remote edits are never silently overwritten.
 use reqwest::blocking::{Client, Response};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -13,7 +15,7 @@ const API: &str = "https://www.googleapis.com/drive/v3/files";
 pub struct Item { pub path: String, pub state: String, pub message: String }
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Report { root: String, folder_url: String, items: Vec<Item>, changes: Vec<Change> }
+pub struct Report { root: String, folder_url: String, items: Vec<Item>, changes: Vec<Change>, uploaded: bool }
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Change { path: String, previous_path: String }
@@ -62,7 +64,7 @@ impl Drive {
         let mut result = Vec::new(); let mut page = String::new();
         loop {
             let query = format!("trashed = false and '{parent}' in parents");
-            let value: Value = checked(self.client.get(&self.api).bearer_auth(&self.token).query(&[("q",query.as_str()),("fields","nextPageToken,files(id,name,parents,mimeType,appProperties,size,version)"),("pageSize","1000"),("pageToken",page.as_str())]).send().map_err(network)?)?.json().map_err(network)?;
+            let value: Value = checked(self.client.get(&self.api).bearer_auth(&self.token).query(&[("q",query.as_str()),("fields","nextPageToken,files(id,name,parents,mimeType,appProperties,size,version,modifiedTime)"),("pageSize","1000"),("pageToken",page.as_str())]).send().map_err(network)?)?.json().map_err(network)?;
             result.extend(value["files"].as_array().ok_or("Invalid Drive listing.")?.iter().cloned());
             if result.len() > 50000 { return Err("This Drive folder is too large to restore.".into()); }
             match value["nextPageToken"].as_str() { Some(next) => page = next.into(), None => break }
@@ -128,10 +130,18 @@ fn id(file: &Value) -> Result<String, String> {
     Ok(id.into())
 }
 fn base_folder(drive: &Drive) -> Result<String,String> {
-    let base = drive.folder("root", "nova-notes-v1", ".nova")?;
-    // Migrate the existing Nova-managed container in place; keep file IDs/links.
-    checked(drive.client.patch(format!("{API}/{base}")).bearer_auth(&drive.token).json(&json!({"name":".nova"})).send().map_err(network)?)?;
-    Ok(base)
+    if let Some(file) = drive.find("root", "nova-notes-v1")? {
+        if file["mimeType"] != "application/vnd.google-apps.folder" {
+            return Err("Nova’s Drive folder was replaced with a file.".into());
+        }
+        let base = id(&file)?;
+        // Migrate legacy names once; ordinary polls are read-only.
+        if file["name"] != ".nova" {
+            checked(drive.client.patch(format!("{}/{base}", drive.api)).bearer_auth(&drive.token).json(&json!({"name":".nova"})).send().map_err(network)?)?;
+        }
+        return Ok(base);
+    }
+    drive.folder("root", "nova-notes-v1", ".nova")
 }
 fn workspace_folder(drive: &Drive, root: &Path) -> Result<String, String> {
     let base = base_folder(drive)?;
@@ -162,26 +172,49 @@ fn allowed(root: &Path, path: &str) -> Result<bool, String> {
     let registry=crate::read_registry(root)?;
     Ok(registry["syncDeletedPaths"][path]!=true && crate::sync_policy::read(&registry)?.included(path))
 }
-fn upload_workspace(app: tauri::AppHandle, root: PathBuf, protected_paths: Vec<String>) -> Result<Report, String> {
+fn upload_workspace(app: tauri::AppHandle, root: PathBuf, protected_paths: Vec<String>, only_path: Option<String>) -> Result<Report, String> {
     let drive = Drive::new()?;
     // Validate policy before creating anything remotely.
     crate::sync_policy::read(&crate::read_registry(&root)?)?;
-    let folder = workspace_folder(&drive, &root)?;
     let account = drive_auth::account_key()?;
+    if let Some(path) = only_path.as_deref() {
+        let data_dir = app.path().app_data_dir().map_err(crate::err)?;
+        if reconcile::focused_unchanged(&drive, &root, &account, path, &data_dir, &protected_paths)? {
+            #[cfg(desktop)]
+            let root_id = root.to_string_lossy().into_owned();
+            #[cfg(target_os = "ios")]
+            let root_id = crate::mobile_storage::identity(&data_dir, &root)?;
+            return Ok(Report { root: root_id, folder_url: String::new(),
+                items: vec![Item {path:path.into(),state:"uploaded".into(),message:"Saved file is up to date in Drive.".into()}],
+                changes: vec![], uploaded: false });
+        }
+    }
+    let folder = workspace_folder(&drive, &root)?;
     #[cfg(desktop)]
     let root_id = root.to_string_lossy().into_owned();
     #[cfg(target_os = "ios")]
     let root_id = crate::mobile_storage::identity(&app.path().app_data_dir().map_err(crate::err)?, &root)?;
-    let mut report = Report { root: root_id, folder_url: format!("https://drive.google.com/drive/folders/{folder}"), items: Vec::new(), changes: Vec::new() };
+    let mut report = Report { root: root_id, folder_url: format!("https://drive.google.com/drive/folders/{folder}"), items: Vec::new(), changes: Vec::new(), uploaded: false };
+    let remote = reconcile::remote_tree(&drive, &folder)?;
+    if only_path.is_none() && reconcile::workspace_unchanged(
+        &root, &account, &remote, &app.path().app_data_dir().map_err(crate::err)?, &protected_paths,
+    )? {
+        let registry = crate::read_registry(&root)?;
+        let policy = crate::sync_policy::read(&registry)?;
+        report.items = remote.iter().filter(|entry| policy.included(&entry.path)
+            && registry["syncDeletedPaths"][&entry.path] != true).map(|entry| Item {path:entry.path.clone(),
+            state:"uploaded".into(),message:"Saved file is up to date in Drive.".into()}).collect();
+        return Ok(report);
+    }
     {
         let access=app.state::<Access>();let _lock=access.writes.lock().map_err(crate::err)?;
         let mut registry=crate::read_registry(&root)?;
         registry["driveWorkspace"]=json!({"id":folder,"account":account});
         let stars=crate::registry_stars(&registry)?;crate::write_registry(&root,registry,&stars)?;
     }
-    let remote = reconcile::remote_tree(&drive, &folder)?;
-    let blocked = reconcile::pull(&app, &drive, &root, &account, &remote, &protected_paths, &mut report)?;
+    let blocked = reconcile::pull(&app, &drive, &root, &account, &remote, &protected_paths, &mut report, only_path.as_deref())?;
     for file in crate::files_in(&root)? {
+        if only_path.as_deref().is_some_and(|selected| selected != file.path) { continue; }
         if blocked.contains(&file.path) || protected_paths.contains(&file.path) { continue; }
         if !allowed(&root, &file.path)? { continue; }
         let emit = |state: &str, message: &str| { let _ = app.emit("drive-upload-progress", json!({"root":report.root,"path":file.path,"state":state,"message":message})); };
@@ -225,17 +258,18 @@ fn upload_workspace(app: tauri::AppHandle, root: PathBuf, protected_paths: Vec<S
             }
             Ok(())
         })();
-        let (state,message) = match result { Ok(()) => ("uploaded","Saved file is up to date in Drive.".to_string()), Err(error) => ("error",error) };
+        if result.is_ok() { report.uploaded = true; }
+        let (state,message) = match result { Ok(()) => ("uploaded","Uploaded changes to Google Drive.".to_string()), Err(error) => ("error",error) };
         emit(state,&message);
         report.items.push(Item { path:file.path,state:state.into(),message });
     }
     Ok(report)
 }
 #[tauri::command]
-pub async fn drive_upload(root: String, protected_paths: Option<Vec<String>>, app: tauri::AppHandle, access: State<'_,Access>, auth: State<'_,DriveAuth>) -> Result<Report,String> {
+pub async fn drive_upload(root: String, protected_paths: Option<Vec<String>>, only_path: Option<String>, app: tauri::AppHandle, access: State<'_,Access>, auth: State<'_,DriveAuth>) -> Result<Report,String> {
     let root = crate::root_path(&access,&root)?;
     let guard = drive_auth::transfer_guard(&auth)?;
-    tauri::async_runtime::spawn_blocking(move || { let _guard = guard; upload_workspace(app,root,protected_paths.unwrap_or_default()) }).await.map_err(crate::err)?
+    tauri::async_runtime::spawn_blocking(move || { let _guard = guard; upload_workspace(app,root,protected_paths.unwrap_or_default(),only_path) }).await.map_err(crate::err)?
 }
 #[tauri::command]
 pub async fn drive_open_folder(app: tauri::AppHandle, root: String, access: State<'_,Access>, auth: State<'_,DriveAuth>) -> Result<(),String> {

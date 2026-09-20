@@ -74,3 +74,35 @@ it.each(["escape", "cancel", "outside", "blur"])("cancels on %s without changing
   expect(reorder).not.toHaveBeenCalled();
   expect(container.querySelector("[data-drop-side], [data-reordering]")).toBeNull();
 });
+
+it("recognizes vertical drags into pane edges and drops between groups", async () => {
+  const drop = vi.fn();
+  function Panes() {
+    const ref = useTabReorder(reorder, drop);
+    return <div ref={ref}>{["left", "right"].map(id => <section key={id} data-editor-pane={id}>
+      <div role="tablist"><div data-tab-id={id}><button role="tab">{id}</button></div></div>
+    </section>)}</div>;
+  }
+  await act(async () => root.render(<Panes />));
+  const panes = container.querySelectorAll<HTMLElement>("[data-editor-pane]");
+  panes.forEach((pane, i) => {
+    pane.getBoundingClientRect = () => ({ ...rect(i * 300, 300), top: 0, bottom: 400, height: 400 });
+    pane.querySelector<HTMLElement>('[role="tablist"]')!.getBoundingClientRect = () => rect(i * 300, 300);
+    pane.querySelector<HTMLElement>('[data-tab-id]')!.getBoundingClientRect = () => rect(i * 300, 100);
+  });
+  pointer(button("left"), "pointerdown", 50);
+  pointer(window, "pointermove", 50, 390);
+  expect(panes[0].dataset.paneDrop).toBe("bottom");
+  pointer(window, "pointerup", 50, 390);
+  expect(drop).toHaveBeenCalledWith("left", { pane: "left", edge: "bottom", before: null });
+  expect(container.querySelector("[data-pane-drop]")).toBeNull();
+  pointer(button("left"), "pointerdown", 50);
+  pointer(window, "pointermove", 440, 200);
+  expect(panes[1].dataset.paneDrop).toBe("center");
+  pointer(window, "pointerup", 440, 200);
+  expect(drop).toHaveBeenLastCalledWith("left", { pane: "right", edge: undefined, before: null });
+  pointer(button("left"), "pointerdown", 50);
+  pointer(window, "pointermove", 310, 20);
+  pointer(window, "pointerup", 310, 20);
+  expect(drop).toHaveBeenLastCalledWith("left", { pane: "right", before: "right" });
+});

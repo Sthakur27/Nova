@@ -1,14 +1,14 @@
 export type NoteTab = { root: string; path: string; pinned: boolean };
 export const tabId = (tab: Pick<NoteTab, "root" | "path">) =>
   JSON.stringify([tab.root, tab.path]);
-export function openTab(tabs: NoteTab[], note: NoteTab): NoteTab[] {
+export function openTab(tabs: NoteTab[], note: NoteTab, previewIds?: ReadonlySet<string>): NoteTab[] {
   const id = tabId(note),
     existing = tabs.findIndex((t) => tabId(t) === id);
   if (existing >= 0)
     return tabs.map((t, i) =>
       i === existing ? { ...t, pinned: t.pinned || note.pinned } : t,
     );
-  const preview = tabs.findIndex((t) => !t.pinned);
+  const preview = tabs.findIndex((t) => !t.pinned && (!previewIds || previewIds.has(tabId(t))));
   if (!note.pinned && preview >= 0)
     return tabs.map((t, i) => (i === preview ? note : t));
   return [...tabs, note];

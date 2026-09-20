@@ -51,6 +51,8 @@ struct NoteFile {
 }
 #[derive(Serialize)]
 struct Workspace {
+    #[serde(rename = "cloudSpace", skip_serializing_if = "Option::is_none")]
+    cloud_space: Option<serde_json::Value>,
     root: String,
     name: String,
     files: Vec<NoteFile>,
@@ -257,7 +259,10 @@ fn write_registry(root: &Path, mut registry: serde_json::Value, stars: &[String]
     registry["starred"] = serde_json::json!(stars);
     let bytes = serde_json::to_vec_pretty(&registry).map_err(err)?;
     if bytes.len() > 4 * 1024 * 1024 { return Err(".nova registry is too large.".into()); }
-    atomic_write(&root.join(".nova"), &bytes)
+    let path = root.join(".nova");
+    // Polling must not replace the registry (or trigger file watchers) without a delta.
+    if fs::read(&path).ok().as_deref() == Some(bytes.as_slice()) { return Ok(()); }
+    atomic_write(&path, &bytes)
 }
 fn update_star(root: &Path, path: &str, starred: bool) -> Result<Vec<String>, String> {
     scoped_path(root, path)?;
@@ -302,7 +307,10 @@ async fn open_workspace(root: String, access: State<'_, Access>) -> Result<Works
         Ok(policy) => (policy, None),
         Err(error) => (sync_policy::SyncPolicy::default(), Some(error)),
     };
+    let cloud_space = read_registry(&path)?.get("cloudSpace").filter(|v| v.is_object()).cloned();
+    let display_name = cloud_space.as_ref().and_then(|v| v["name"].as_str()).map(str::to_owned);
     Ok(Workspace {
+        cloud_space,
         sync_policy,
         sync_error,
         starred,
@@ -310,15 +318,15 @@ async fn open_workspace(root: String, access: State<'_, Access>) -> Result<Works
         #[cfg(mobile)]
         root: root.clone(),
         #[cfg(mobile)]
-        name: if root == "mobile" { "On this device".into() } else { path.file_name().unwrap_or_default().to_string_lossy().into_owned() },
+        name: display_name.unwrap_or_else(|| if root == "mobile" { "On this device".into() } else { path.file_name().unwrap_or_default().to_string_lossy().into_owned() }),
         #[cfg(desktop)]
         root: path.to_string_lossy().into_owned(),
         #[cfg(desktop)]
-        name: path
+        name: display_name.unwrap_or_else(|| path
             .file_name()
             .unwrap_or_default()
             .to_string_lossy()
-            .into_owned(),
+            .into_owned()),
         files,
     })
 }
@@ -643,6 +651,17 @@ fn rename_file(source: &Path, name: &str) -> Result<PathBuf, String> {
     }
     let target = source.with_file_name(name);
     if target == source { return Ok(target); }
+    // On case-insensitive volumes the new spelling resolves to the source itself.
+    // Require the same canonical path and no separate directory entry: a symlink
+    // or another hard link to this file must still count as a collision.
+    if fs::symlink_metadata(&target).map(|metadata| metadata.is_file()).unwrap_or(false)
+        && fs::canonicalize(&target).map_err(err)? == fs::canonicalize(source).map_err(err)?
+        && !fs::read_dir(source.parent().ok_or("Missing parent folder")?).map_err(err)?
+            .collect::<Result<Vec<_>, _>>().map_err(err)?
+            .iter().any(|entry| entry.file_name() == std::ffi::OsStr::new(name)) {
+        fs::rename(source, &target).map_err(err)?;
+        return Ok(target);
+    }
     // Creating a link fails if the destination exists, so an existing note is never overwritten.
     fs::hard_link(source, &target).map_err(err)?;
     if let Err(error) = fs::remove_file(source) {
@@ -898,6 +917,8 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             background::set_background_blur,
+            drive_upload::cloud_spaces::cloud_setup,
+            drive_upload::cloud_spaces::cloud_move_in,
             drive_upload::drive_workspaces,
             drive_upload::drive_restore,
             drive_upload::drive_upload,
@@ -973,6 +994,7 @@ pub fn run() {
     #[cfg(target_os = "ios")]
     let builder = builder.invoke_handler(tauri::generate_handler![
         drive_auth::drive_status, drive_auth::drive_connect, drive_auth::drive_cancel, drive_auth::drive_disconnect,
+        drive_upload::cloud_spaces::cloud_setup, drive_upload::cloud_spaces::cloud_move_in,
         drive_upload::drive_upload, drive_upload::drive_open_folder, drive_upload::drive_workspaces, drive_upload::drive_restore,
         open_workspace, set_file_star, set_sync_choice, read_note, save_note, save_bookmarks, search_notes, load_draft, save_draft, load_explorer, save_explorer, create_note, rename_note, move_note, delete_note
     ]);
@@ -1124,6 +1146,48 @@ mod tests {
         assert!(!source.exists());
         assert_eq!(fs::read_to_string(renamed).unwrap(), "original");
         assert_eq!(fs::read_to_string(dir.path().join("taken.md")).unwrap(), "existing");
+    }
+    #[test]
+    fn case_only_rename_updates_disk_name_and_stars() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(dir.path()).unwrap();
+        fs::write(root.join("work.md"), "original").unwrap();
+        update_star(&root, "work.md", true).unwrap();
+        for (old, new) in [("work.md", "Work.md"), ("Work.md", "WORK.MD"), ("WORK.MD", "work.md")] {
+            let target = rename_starred_file(&root, &root.join(old), new).unwrap();
+            assert_eq!(target, root.join(new));
+            assert_eq!(fs::read_to_string(&target).unwrap(), "original");
+            let names: Vec<_> = fs::read_dir(&root).unwrap().map(|entry| entry.unwrap().file_name()).collect();
+            assert!(names.contains(&std::ffi::OsString::from(new)));
+            assert!(!names.contains(&std::ffi::OsString::from(old)));
+            assert_eq!(registry_stars(&read_registry(&root).unwrap()).unwrap(), vec![new]);
+        }
+    }
+    #[test]
+    fn case_only_rename_rejects_a_distinct_existing_entry() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("work.md");
+        let target = dir.path().join("Work.md");
+        fs::write(&source, "original").unwrap();
+        // Case-sensitive volumes can contain both spellings, even as hard links.
+        if !target.exists() {
+            fs::hard_link(&source, &target).unwrap();
+            assert!(rename_file(&source, "Work.md").is_err());
+            assert!(source.exists());
+            assert_eq!(fs::read_to_string(&target).unwrap(), "original");
+        }
+    }
+    #[cfg(unix)]
+    #[test]
+    fn rename_rejects_a_symlink_to_the_source() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("work.md");
+        let target = dir.path().join("alias.md");
+        fs::write(&source, "original").unwrap();
+        std::os::unix::fs::symlink(&source, &target).unwrap();
+        assert!(rename_file(&source, "alias.md").is_err());
+        assert!(fs::symlink_metadata(&target).unwrap().file_type().is_symlink());
+        assert_eq!(fs::read_to_string(&source).unwrap(), "original");
     }
     #[test]
     fn search_identifies_same_named_files_in_distinct_roots() {

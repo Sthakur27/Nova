@@ -32,8 +32,8 @@ it("keeps pane and center blur independent, tracks resizing, and respects reduce
     useBackgroundBlur(galaxy, center, panes, {
       compact: false, mobileView: "editor", navigation: true, rail: true, focusMode: false, topBars: true, statusBar: true, terminalStarted: true,
     }, onError);
-    return createElement("div", {}, ...["sidebar", "document-area", "bookmark-rail", "top-bars", "terminal-panel", "status-bar"].map(className =>
-      createElement("div", { className, key: className })));
+    return createElement("div", {}, ...["sidebar", "document-area", "bookmark-rail", "top-bars", "terminal-panel", "status-bar", "editor-group"].map(className =>
+      createElement("div", { className, key: className }, className === "editor-group" ? createElement("div", { className: "note-tabs" }) : null)));
   }
   const render = async (center: boolean, panes: boolean, galaxy = true) => {
     await act(async () => root.render(createElement(Harness, { center, panes, galaxy })));
@@ -42,7 +42,7 @@ it("keeps pane and center blur independent, tracks resizing, and respects reduce
   const regions = () => (vi.mocked(invoke).mock.lastCall?.[1] as { regions: unknown })?.regions;
   try {
     await render(false, true);
-    const elements = [...container.querySelectorAll<HTMLElement>(".sidebar, .document-area, .bookmark-rail, .top-bars, .terminal-panel, .status-bar")];
+    const elements = [...container.querySelectorAll<HTMLElement>(".sidebar, .document-area, .bookmark-rail, .top-bars, .terminal-panel, .status-bar, .note-tabs")];
     const boxes = [
       { x: 0, y: 0, width: 200, height: 800 },
       { x: 200, y: 100, width: 600, height: 400 },
@@ -50,6 +50,7 @@ it("keeps pane and center blur independent, tracks resizing, and respects reduce
       { x: 200, y: 0, width: 600, height: 100 },
       { x: 200, y: 500, width: 600, height: 260 },
       { x: 200, y: 760, width: 600, height: 40 },
+      { x: 200, y: 100, width: 300, height: 40 },
     ];
     elements.forEach((element, index) => { element.getBoundingClientRect = () => boxes[index] as DOMRect; });
     resize(); pending();
@@ -58,13 +59,17 @@ it("keeps pane and center blur independent, tracks resizing, and respects reduce
     const top = { x: 0.2, y: 0, width: 0.6, height: 0.125 };
     const terminal = { x: 0.2, y: 0.625, width: 0.6, height: 0.325 };
     const status = { x: 0.2, y: 0.95, width: 0.6, height: 0.05 };
+    const tabs = { x: 0.2, y: 0.125, width: 0.3, height: 0.05 };
     const right = { x: 0.8, y: 0, width: 0.2, height: 1 };
-    expect(regions()).toEqual([left, right, top, terminal, status]);
+    expect(regions()).toEqual([left, right, top, terminal, status, tabs]);
     await render(true, false);
     expect(regions()).toEqual([middle]);
     await render(true, true);
-    expect(regions()).toEqual([left, middle, right, top, terminal, status]);
+    expect(regions()).toEqual([left, middle, right, top, terminal, status, tabs]);
     boxes[0].width = 0;
+    resize(); pending();
+    expect(regions()).toEqual([middle, right, top, terminal, status, tabs]);
+    boxes[6].height = 0; // Hidden tab strips must not leave a native blur rectangle.
     resize(); pending();
     expect(regions()).toEqual([middle, right, top, terminal, status]);
     preference.matches = true;

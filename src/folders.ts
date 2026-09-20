@@ -1,4 +1,5 @@
-import type { NoteTab } from "./tabs";
+import { tabId, type NoteTab } from "./tabs";
+import { parsePaneLayout, type PaneNode } from "./paneLayout";
 import type { Workspace } from "./model";
 export type FolderPreference = Pick<Workspace, "root" | "name" | "collapsed" | "closedDirectories">;
 export type EditorMode = "source" | "edit" | "read";
@@ -7,6 +8,7 @@ export type ExplorerPreferences = {
   active: { root: string; path: string } | null;
   mode: EditorMode;
   tabs?: NoteTab[];
+  panes?: PaneNode;
 };
 export function addFolders(
   current: Workspace[],
@@ -60,6 +62,7 @@ export function parsePreferences(value: unknown): ExplorerPreferences | null {
       !!t && typeof t.root === "string" && typeof t.path === "string" && unique.some(f => f.root === t.root))
       .map(t => ({ root: t.root, path: t.path, pinned: !!t.pinned }))
       .filter((t, i, all) => all.findIndex(other => other.root === t.root && other.path === t.path) === i) } : {}),
+    ...(v.panes ? { panes: parsePaneLayout(v.panes, (Array.isArray(v.tabs) ? v.tabs : []).filter(t => t && typeof t.root === "string" && typeof t.path === "string").map(tabId)) } : {}),
     mode: v.mode === "source" || v.mode === "read" ? v.mode : "edit",
   };
 }

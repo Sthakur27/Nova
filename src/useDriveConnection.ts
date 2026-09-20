@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { driveSupported } from "./platform";
-export type DriveStatus = { connected: boolean; email: string | null; configured: boolean; error?: string | null };
+export type DriveStatus = { account?: string | null; connected: boolean; email: string | null; configured: boolean; error?: string | null };
 export function useDriveConnection() {
   const [status, setStatus] = useState<DriveStatus>({ connected: false, email: null, configured: false });
   const [busy, setBusy] = useState(false);

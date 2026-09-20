@@ -1,12 +1,84 @@
 //! Reconcile a complete Drive listing before uploading. Missing files never imply
 //! permission to delete the other copy or to recreate a deleted file.
 use super::*;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub(super) struct Remote {
     pub path: String,
     pub file: Value,
 }
+// The frequent focused-file poll needs only metadata when both copies still
+// match the last receipt. Full reconciliation remains responsible for discovery.
+pub(super) fn focused_unchanged(
+    drive: &Drive, root: &Path, account: &str, path: &str,
+    data_dir: &Path, protected: &[String],
+) -> Result<bool, String> {
+    let registry = crate::read_registry(root)?;
+    let identity = &registry["driveFiles"][account][path];
+    if protected.iter().any(|p| p == path) || saved_draft(data_dir, root, path)?
+        || !allowed(root, path)? || identity["deleted"] == true
+        || registry["driveWorkspace"]["account"].as_str() != Some(account)
+        || identity["remotePath"].as_str() != Some(path)
+        || !identity["version"].is_string() || !identity["modifiedTime"].is_string()
+    { return Ok(false); }
+    let file_id = id(identity)?;
+    let metadata: Value = checked(drive.client.get(format!("{}/{file_id}", drive.api))
+        .query(&[("fields","id,version,modifiedTime,trashed")])
+        .bearer_auth(&drive.token).send().map_err(network)?)?.json().map_err(network)?;
+    if metadata["id"] != identity["id"] || metadata["trashed"] != false
+        || metadata["version"] != identity["version"]
+        || metadata["modifiedTime"] != identity["modifiedTime"]
+    { return Ok(false); }
+    // A remote no-op must never hide a local edit, rename or deletion.
+    Ok(read_local(&local_target(root, path)?)?.is_some_and(|bytes|
+        registry["driveReceipts"][account][path].as_str() == Some(crate::revision(&bytes).as_str())))
+}
+
+// A folder timestamp is not a receipt for its descendants. Compare the complete
+// metadata listing and the local file set before skipping full reconciliation.
+pub(super) fn workspace_unchanged(
+    root: &Path, account: &str, remote: &[Remote], data_dir: &Path, protected: &[String],
+) -> Result<bool, String> {
+    if !protected.is_empty() { return Ok(false); }
+    let registry = crate::read_registry(root)?;
+    if registry["driveWorkspace"]["account"].as_str() != Some(account) { return Ok(false); }
+    let policy = crate::sync_policy::read(&registry)?;
+    let included = |path: &str| policy.included(path) && registry["syncDeletedPaths"][path] != true;
+    let tracked = &registry["driveFiles"][account];
+    let by_path: HashMap<_, _> = remote.iter().map(|entry| (entry.path.as_str(), &entry.file)).collect();
+    // Check both directions: remote removals and new local notes need work too.
+    for file in crate::files_in(root)? {
+        if included(&file.path) && tracked[&file.path]["deleted"] != true
+            && !by_path.get(file.path.as_str()).is_some_and(|metadata| metadata["id"] == tracked[&file.path]["id"])
+        { return Ok(false); }
+    }
+    for field in ["driveFiles", "driveReceipts"] {
+        if let Some(entries) = registry[field][account].as_object() {
+            for path in entries.keys() {
+                if included(path) && tracked[path]["deleted"] != true
+                    && !by_path.get(path.as_str()).is_some_and(|metadata| metadata["id"] == tracked[path]["id"])
+                { return Ok(false); }
+            }
+        }
+    }
+    for entry in remote {
+        let path = &entry.path;
+        if !included(path) { continue; }
+        let identity = &tracked[path];
+        // Conservatively reconcile tombstones/renames rather than hiding them.
+        if identity["deleted"] == true || identity["id"] != entry.file["id"]
+            || identity["remotePath"].as_str() != Some(path.as_str())
+            || !identity["version"].is_string() || identity["version"] != entry.file["version"]
+            || !identity["modifiedTime"].is_string() || identity["modifiedTime"] != entry.file["modifiedTime"]
+            || saved_draft(data_dir, root, path)?
+        { return Ok(false); }
+        if !read_local(&local_target(root, path)?)?.is_some_and(|bytes|
+            registry["driveReceipts"][account][path].as_str() == Some(crate::revision(&bytes).as_str()))
+        { return Ok(false); }
+    }
+    Ok(true)
+}
+
 pub(super) fn remote_tree(drive: &Drive, folder: &str) -> Result<Vec<Remote>, String> {
     fn walk(
         drive: &Drive,
@@ -144,7 +216,7 @@ fn record(
     hash: &str,
 ) -> Result<(), String> {
     registry["driveFiles"][account][path] =
-        json!({"id":id(&entry.file)?,"remotePath":entry.path,"version":entry.file["version"]});
+        json!({"id":id(&entry.file)?,"remotePath":entry.path,"version":entry.file["version"],"modifiedTime":entry.file["modifiedTime"]});
     registry["driveReceipts"][account][path] = json!(hash);
     Ok(())
 }
@@ -161,9 +233,11 @@ pub(super) fn pull(
     remote: &[Remote],
     protected: &[String],
     report: &mut Report,
+    only_path: Option<&str>,
 ) -> Result<HashSet<String>, String> {
     let access = app.state::<Access>();
     let data_dir = app.path().app_data_dir().map_err(crate::err)?;
+    let root_id = report.root.clone();
     pull_local(
         &data_dir,
         &access.writes,
@@ -173,6 +247,10 @@ pub(super) fn pull(
         remote,
         protected,
         report,
+        only_path,
+        &|path| { let _ = app.emit("drive-upload-progress", json!({
+            "root":root_id,"path":path,"state":"uploading","message":"Receiving changes from Google Drive…"
+        })); },
     )
 }
 fn pull_local(
@@ -184,6 +262,8 @@ fn pull_local(
     remote: &[Remote],
     protected: &[String],
     report: &mut Report,
+    only_path: Option<&str>,
+    on_change: &dyn Fn(&str),
 ) -> Result<HashSet<String>, String> {
     let initial = {
         let _lock = writes.lock().map_err(crate::err)?;
@@ -195,6 +275,7 @@ fn pull_local(
             .cloned()
             .unwrap_or_default();
         for path in receipts.keys() {
+            if only_path.is_some_and(|selected| selected != path) { continue; }
             if registry["driveFiles"][account][path]["id"].is_string() {
                 continue;
             }
@@ -222,6 +303,7 @@ fn pull_local(
     let mut handled = HashSet::new();
     if let Some(receipts) = initial["driveReceipts"][account].as_object() {
         for path in receipts.keys() {
+            if only_path.is_some_and(|selected| selected != path) { continue; }
             if !tracked.contains_key(path) && allowed(root, path)? {
                 blocked.insert(path.clone());
                 report.items.push(Item {path:path.clone(),state:"error".into(),message:"Previously synced Drive file is missing. Local copy retained; restore it in Drive before resuming.".into()});
@@ -230,6 +312,7 @@ fn pull_local(
     }
     // IDs that disappeared from a complete listing are not recreated by upload.
     for (path, identity) in &tracked {
+        if only_path.is_some_and(|selected| selected != path) { continue; }
         if identity["deleted"] == true {
             continue;
         }
@@ -250,6 +333,7 @@ fn pull_local(
         let path = matched
             .map(|(path, _)| path.clone())
             .unwrap_or_else(|| entry.path.clone());
+        if only_path.is_some_and(|selected| selected != path) { continue; }
         if !handled.insert(path.clone()) {
             return Err("Several Drive files map to one local path. Sync paused.".into());
         }
@@ -362,6 +446,7 @@ fn pull_local(
             } else {
                 path.as_str()
             };
+            if decision == Action::Download || remote_renamed { on_change(destination); }
             if destination != path {
                 // A destination-specific opt-out must not be overridden by a rename.
                 if registry["syncPolicy"]["rules"][destination] == false {
@@ -620,12 +705,16 @@ mod integration_tests {
             fixture
         }
         fn run(&self, path: Option<&str>, protected: &[String]) -> Report {
+            self.run_scoped(path, protected, None)
+        }
+        fn run_scoped(&self, path: Option<&str>, protected: &[String], only_path: Option<&str>) -> Report {
             let files=path.map(|path|vec![Remote {path:path.into(),file:json!({"id":"stable-id","name":path,"parents":["parent"],"appProperties":{"novaKey":crate::revision(b"old.txt")},"version":"2"})}]).unwrap_or_default();
             let mut report = Report {
                 root: self.root.path().to_string_lossy().into(),
                 folder_url: String::new(),
                 items: vec![],
                 changes: vec![],
+                uploaded: false,
             };
             pull_local(
                 self.data.path(),
@@ -636,6 +725,8 @@ mod integration_tests {
                 &files,
                 protected,
                 &mut report,
+                only_path,
+                &|_| {},
             )
             .unwrap();
             report
@@ -643,6 +734,124 @@ mod integration_tests {
         fn registry(&self) -> Value {
             crate::read_registry(self.root.path()).unwrap()
         }
+    }
+    #[test]
+    fn full_sync_metadata_gate_detects_remote_and_local_deltas() {
+        let f = Fixture::new("baseline", "baseline");
+        let mut registry = f.registry();
+        registry["driveWorkspace"] = json!({"account":"account","id":"workspace"});
+        registry["driveFiles"]["account"]["old.txt"]["version"] = json!("2");
+        registry["driveFiles"]["account"]["old.txt"]["modifiedTime"] = json!("time");
+        persist(f.root.path(), registry).unwrap();
+        let mut remote = vec![Remote {path:"old.txt".into(),file:json!({"id":"stable-id","version":"2","modifiedTime":"time"})}];
+        let unchanged = |files: &[Remote]| workspace_unchanged(f.root.path(), "account", files, f.data.path(), &[]).unwrap();
+        assert!(unchanged(&remote));
+        assert!(f.server.requests.lock().unwrap().is_empty());
+        assert!(!workspace_unchanged(f.root.path(), "account", &remote, f.data.path(), &["old.txt".into()]).unwrap());
+        remote[0].file["version"] = json!("3");
+        assert!(!unchanged(&remote));
+        remote[0].file["version"] = json!("2");
+        remote[0].file["modifiedTime"] = json!("later");
+        assert!(!unchanged(&remote));
+        remote[0].file["modifiedTime"] = json!("time");
+        assert!(!unchanged(&[])); // Remote removal.
+        remote[0].path = "renamed.txt".into();
+        assert!(!unchanged(&remote));
+        remote[0].path = "old.txt".into();
+        fs::write(f.root.path().join("old.txt"), "local edit").unwrap();
+        assert!(!unchanged(&remote));
+        fs::remove_file(f.root.path().join("old.txt")).unwrap();
+        assert!(!unchanged(&remote));
+        fs::write(f.root.path().join("old.txt"), "baseline").unwrap();
+        let mut registry = f.registry();
+        registry["syncPolicy"]["rules"][""] = json!(true);
+        persist(f.root.path(), registry).unwrap();
+        fs::write(f.root.path().join("new.txt"), "new local note").unwrap();
+        assert!(!unchanged(&remote));
+        fs::remove_file(f.root.path().join("new.txt")).unwrap();
+        remote.push(Remote {path:"new.txt".into(),file:json!({"id":"new-id","version":"1","modifiedTime":"time"})});
+        assert!(!unchanged(&remote));
+    }
+    #[test]
+    fn focused_metadata_check_exits_after_one_read_only_request() {
+        let f = Fixture::new("baseline", r#"{"id":"stable-id","version":"2","modifiedTime":"2026-09-20T18:00:00Z","trashed":false}"#);
+        let mut registry = f.registry();
+        registry["driveWorkspace"] = json!({"account":"account","id":"workspace"});
+        registry["driveFiles"]["account"]["old.txt"]["version"] = json!("2");
+        registry["driveFiles"]["account"]["old.txt"]["modifiedTime"] = json!("2026-09-20T18:00:00Z");
+        persist(f.root.path(), registry).unwrap();
+        let before = fs::read(f.root.path().join(".nova")).unwrap();
+        assert!(focused_unchanged(&f.server.drive(), f.root.path(), "account", "old.txt", f.data.path(), &[]).unwrap());
+        let requests = f.server.requests.lock().unwrap();
+        assert_eq!(requests.len(), 1);
+        assert!(requests[0].starts_with("GET /v3/stable-id?"));
+        assert!(requests[0].contains("modifiedTime"));
+        assert!(!requests[0].contains("alt=media"));
+        drop(requests);
+        assert_eq!(fs::read(f.root.path().join(".nova")).unwrap(), before);
+        fs::write(f.root.path().join("old.txt"), "local edit").unwrap();
+        assert!(!focused_unchanged(&f.server.drive(), f.root.path(), "account", "old.txt", f.data.path(), &[]).unwrap());
+        fs::remove_file(f.root.path().join("old.txt")).unwrap();
+        assert!(!focused_unchanged(&f.server.drive(), f.root.path(), "account", "old.txt", f.data.path(), &[]).unwrap());
+    }
+    #[test]
+    fn focused_metadata_changes_require_full_reconciliation() {
+        for metadata in [
+            r#"{"id":"stable-id","version":"3","modifiedTime":"old","trashed":false}"#,
+            r#"{"id":"stable-id","version":"2","modifiedTime":"new","trashed":false}"#,
+            r#"{"id":"stable-id","version":"2","modifiedTime":"old","trashed":true}"#,
+            r#"{"id":"stable-id","modifiedTime":"old","trashed":false}"#,
+        ] {
+            let f = Fixture::new("baseline", metadata);
+            let mut registry = f.registry();
+            registry["driveWorkspace"] = json!({"account":"account","id":"workspace"});
+            registry["driveFiles"]["account"]["old.txt"]["version"] = json!("2");
+            registry["driveFiles"]["account"]["old.txt"]["modifiedTime"] = json!("old");
+            persist(f.root.path(), registry).unwrap();
+            assert!(!focused_unchanged(&f.server.drive(), f.root.path(), "account", "old.txt", f.data.path(), &[]).unwrap());
+        }
+    }
+    #[cfg(unix)]
+    #[test]
+    fn unchanged_poll_has_no_downloads_or_disk_writes() {
+        use std::os::unix::fs::MetadataExt;
+        let f = Fixture::new("baseline", "baseline");
+        f.run(Some("old.txt"), &[]);
+        let registry = fs::metadata(f.root.path().join(".nova")).unwrap();
+        let note = fs::metadata(f.root.path().join("old.txt")).unwrap();
+        f.server.requests.lock().unwrap().clear();
+        let report = f.run_scoped(Some("old.txt"), &[], Some("old.txt"));
+        assert!(report.changes.is_empty());
+        assert!(f.server.requests.lock().unwrap().is_empty());
+        let after = fs::metadata(f.root.path().join(".nova")).unwrap();
+        assert_eq!(registry.ino(), after.ino());
+        assert_eq!(registry.modified().unwrap(), after.modified().unwrap());
+        assert_eq!(note.ino(), fs::metadata(f.root.path().join("old.txt")).unwrap().ino());
+    }
+    #[test]
+    fn current_container_name_does_not_trigger_remote_write() {
+        let server = Server::new(r#"{"files":[{"id":"base","name":".nova","mimeType":"application/vnd.google-apps.folder"}]}"#);
+        // This server's novaKey lookup returns an empty list; use a path without
+        // its fixture-specific /v3 routing to return the existing container.
+        let mut drive = server.drive();
+        drive.api = format!("{}/files", server.url);
+        assert_eq!(base_folder(&drive).unwrap(), "base");
+        let requests = server.requests.lock().unwrap();
+        assert_eq!(requests.len(), 1);
+        assert!(requests[0].starts_with("GET "));
+    }
+    #[test]
+    fn focused_sync_leaves_other_files_and_missing_identities_alone() {
+        let f = Fixture::new("baseline", "other PC edit");
+        let report = f.run_scoped(Some("old.txt"), &[], Some("focused.txt"));
+        assert!(report.items.is_empty());
+        assert!(report.changes.is_empty());
+        assert!(f.server.requests.lock().unwrap().is_empty());
+        assert_eq!(fs::read_to_string(f.root.path().join("old.txt")).unwrap(), "baseline");
+        assert!(f.run_scoped(None, &[], Some("focused.txt")).items.is_empty());
+        let report = f.run_scoped(Some("renamed.txt"), &[], Some("old.txt"));
+        assert_eq!(report.changes[0].path, "renamed.txt");
+        assert_eq!(fs::read_to_string(f.root.path().join("renamed.txt")).unwrap(), "other PC edit");
     }
     #[test]
     fn remote_edit_downloads_and_conflicting_local_edit_is_preserved() {
@@ -721,6 +930,7 @@ mod integration_tests {
             folder_url: String::new(),
             items: vec![],
             changes: vec![],
+            uploaded: false,
         };
         pull_local(
             f.data.path(),
@@ -731,6 +941,8 @@ mod integration_tests {
             &files,
             &[],
             &mut report,
+            None,
+            &|_| {},
         )
         .unwrap();
         assert!(report.changes.is_empty());

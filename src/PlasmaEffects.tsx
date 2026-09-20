@@ -3,7 +3,7 @@ import { EditorView } from "@codemirror/view";
 import { overflowClip } from "./overflowClip";
 
 const SUPERNOVA_DURATION = 3000;
-const targets = "button:not(:disabled), a, summary, select, input, .bookmark-card, .note-tab, .file-row";
+const targets = "button:not(:disabled), a, summary, select, input, .bookmark-card, .note-tab, .file-row, .root-header";
 type Edge = { x: number; y: number; width: number; height: number; radius?: number; selected?: boolean; burst?: number; clip?: ReturnType<typeof overflowClip> };
 type SelectedLine = { kind: "reader"; element: Element; row: number } | { kind: "editor"; element: HTMLElement };
 
@@ -201,10 +201,12 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
       const edges: Edge[] = [];
       const elements = new Set<Element>();
       const addControl = (element: Element) => {
-        const group = element.closest(".note-tab, .file-row");
+        const group = element.closest(".root-menu > div")
+          ? null
+          : element.closest(".note-tab, .file-row, .root-header");
         // Keep the full row rim, with a second rim for its secondary controls.
         elements.add(group ?? element);
-        if (group && element.matches(".tab-close, .file-star, .file-edit")) elements.add(element);
+        if (group && element.matches(".tab-close, .file-star, .file-edit, .root-menu > summary")) elements.add(element);
       };
       if (active && hover?.matches(":hover")) addControl(hover);
       if (active && focus?.matches(":focus-visible")) addControl(focus);

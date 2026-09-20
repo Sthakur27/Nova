@@ -10,6 +10,7 @@ export type Bookmark = {
 };
 export type NoteFile = { path: string; name: string };
 export type Workspace = {
+  cloudSpace?: { id: string; name: string; account: string };
   name: string;
   root: string;
   files: NoteFile[];

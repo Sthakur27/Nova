@@ -5,10 +5,10 @@ Nova now builds and runs as an installed iPhone/iPad app: a Tauri native shell w
 ## Included
 
 - Native mobile entry point and iOS window configuration.
-- A private **On this device** workspace plus separately restored Google Drive workspaces, stored as files in the app data directory.
-- Editing, reading, search, stars, bookmarks, rename, deletion, explicit Save, and native recovery drafts using the existing note engine.
+- A Cloud-only setup gate and automatically discovered Google Drive spaces, with offline copies in private app storage.
+- Editing, reading, search, stars, bookmarks, rename, device-only deletion, Cloud autosave, and native recovery drafts using the existing note engine.
 - Touch navigation, safe-area spacing, horizontally scrolling formatting controls, and keyboard-aware viewport sizing. iPad uses the same touch layout. The mode switch uses larger icon controls; bottom navigation hides while editing, and the scroll canvas stays stable as the keyboard resizes.
-- Stable `mobile` workspace identity and relative bookmark identities, so an iOS container path change does not invalidate saved tabs, drafts, or bookmarks.
+- Stable `mobile-sync/<hash>` workspace identity and relative bookmark identities, so an iOS container path change does not invalidate saved tabs, drafts, or bookmarks.
 
 Desktop terminal, desktop voice engine, new windows, folder pickers, and file-location actions are excluded from the mobile interface. Use the system keyboard for dictation. External Files/iCloud folder integration and general import/export are not implemented. Google Drive foreground sync is implemented for iOS; see [sync.md](sync.md) for setup and live verification results. Uninstalling the app removes its private notes. This is a development preview, not a production release.
 
@@ -36,6 +36,8 @@ For development on a paired physical device, keep the Tauri dev process running 
 ```sh
 npm run ios:dev -- --open --host
 ```
+
+`./runios.sh` is a shortcut for this command that first stops existing desktop or iOS development sessions in this checkout. Additional arguments are passed through to the iOS launcher.
 
 Choose your personal/development team under **Signing & Capabilities**, select your iPhone as the run destination, and click Run. Keep the phone and Mac on the same network for live updates. The checked-in Xcode build phase uses `scripts/ios-xcode.sh` to find Rust and Node even when Xcode was launched outside a terminal; it supports standard Cargo, Homebrew, and nvm installations. If `ios:init` regenerates the Xcode project, restore that build-phase wrapper if the generator replaces it.
 

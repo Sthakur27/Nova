@@ -1,3 +1,4 @@
+import { usePreference } from "./preferences";
 import { mobile } from "./platform";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from "react";
@@ -157,6 +158,8 @@ type Props = {
   onChange: (folders: Workspace[]) => void;
   onRemove: (root: string) => void;
   onRefresh: (root: string) => void;
+  onNew?: (folder: Workspace) => void;
+  onCloudMove?: (folder: Workspace, path: string) => void;
   onSync?: (folder: Workspace) => void;
   onToggleSync?: (folder: Workspace, path: string) => void;
   syncBusy?: boolean;
@@ -175,7 +178,7 @@ export default function Explorer({
   onRemove,
   onRefresh,
   onAdd,
-  onSync,
+  onSync, onCloudMove, onNew,
   onToggleSync, syncBusy = false,
   externalDrag,
 }: Props) {
@@ -192,6 +195,8 @@ export default function Explorer({
     window.addEventListener("scroll", close, true);
     return () => { window.removeEventListener("pointerdown", outside); window.removeEventListener("resize", close); window.removeEventListener("blur", close); window.removeEventListener("scroll", close, true); };
   }, [menu]);
+  const [cloudCollapsed, setCloudCollapsed] = usePreference<boolean>("explorer-cloud-collapsed", false);
+  const [localCollapsed, setLocalCollapsed] = usePreference<boolean>("explorer-local-collapsed", false);
   const [starredOnly, setStarredOnly] = useState(false);
   const [syncOnly, setSyncOnly] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null),
@@ -201,6 +206,7 @@ export default function Explorer({
     null,
   );
   const move = (source: string, destination: string) => {
+    if (!!folders.find(f => f.root === source)?.cloudSpace !== !!folders.find(f => f.root === destination)?.cloudSpace) return;
     onChange(reorderFolders(folders, source, destination));
     setAnnouncement("Folder order updated.");
   };
@@ -247,6 +253,7 @@ export default function Explorer({
         </button>
         <button
           className="icon-button sync-toggle"
+          hidden={!onToggleSync}
           onClick={() => setSyncOnly(value => !value)}
           title={syncOnly ? "Clear sync filter" : "Show files selected for sync only"}
           aria-label="Show files selected for sync only"
@@ -271,7 +278,24 @@ export default function Explorer({
         }
         aria-label="Folders and files"
       >
-        {folders.map((folder, index) => {
+        {(["Cloud", "Local"] as const).map(kind => {
+          const isCloud = kind === "Cloud";
+          const ordered = folders.filter(folder => !!folder.cloudSpace === isCloud);
+          if ((isCloud && !ordered.length) || (!isCloud && mobile)) return null;
+          const collapsed = isCloud ? cloudCollapsed : localCollapsed;
+          const toggle = isCloud ? setCloudCollapsed : setLocalCollapsed;
+          const createTarget = ordered.find(folder => folder.root === activeRoot && !folder.error)
+            ?? ordered.find(folder => !folder.error);
+          return <section className="explorer-section" key={kind} aria-label={`${kind} notes`}>
+            <div className="explorer-section-header">
+              <h2><button className="explorer-section-toggle" aria-expanded={!collapsed} aria-controls={`explorer-${kind.toLowerCase()}`} onClick={() => toggle(!collapsed)}>
+                {collapsed ? <ChevronRight size={14}/> : <ChevronDown size={14}/>}
+                {isCloud ? <Cloud size={14}/> : <Folder size={14}/>}<span>{kind}</span>
+              </button></h2>
+              {isCloud && onNew && <button className="explorer-new-cloud" aria-label="New Cloud note" title={`New Cloud note${createTarget ? ` in ${createTarget.name}` : ""}`} disabled={!createTarget} onClick={() => { toggle(false); if (createTarget) onNew(createTarget); }}><Plus size={14}/><span>New note</span></button>}
+            </div>
+            <div id={`explorer-${kind.toLowerCase()}`} hidden={collapsed}>
+        {ordered.map((folder, index) => {
           const starred = new Set(folder.starred ?? []);
           const collapsed = folder.collapsed ?? true;
           const closed = closedDirectories(folder);
@@ -307,7 +331,7 @@ export default function Explorer({
                   if (e.key === "ArrowUp" || e.key === "ArrowDown") {
                     e.preventDefault();
                     const next =
-                      folders[index + (e.key === "ArrowUp" ? -1 : 1)];
+                      ordered[index + (e.key === "ArrowUp" ? -1 : 1)];
                     if (next) move(folder.root, next.root);
                   }
                 }}
@@ -316,7 +340,7 @@ export default function Explorer({
               </button>
               <button
                 className="root-title"
-                title={folder.root === "demo" ? "Sample notes" : folder.root}
+                title={folder.cloudSpace ? `Cloud / ${folder.name}` : folder.root === "demo" ? "Sample notes" : folder.root}
                 aria-label={`${folder.name} folder`}
                 aria-expanded={!collapsed}
                 onClick={() =>
@@ -339,32 +363,34 @@ export default function Explorer({
               </button>
               <details className="root-menu">
                 <summary
+                  className="icon-button"
                   aria-label={`Options for ${folder.name}`}
                   title="Folder options"
                 >
-                  ···
+                  <MoreHorizontal size={16} aria-hidden="true" />
                 </summary>
                 <div>
-                  {onSync && <button onClick={event => { event.currentTarget.closest("details")?.removeAttribute("open"); onSync(folder); }}>Sync selection…</button>}
+                  {onNew && <button onClick={event => { event.currentTarget.closest("details")?.removeAttribute("open"); onNew(folder); }}><Plus size={13} />New note</button>}
+                  {onSync && folder.cloudSpace && <button onClick={event => { event.currentTarget.closest("details")?.removeAttribute("open"); onSync(folder); }}>Cloud settings…</button>}
                   <button onClick={() => onRefresh(folder.root)}>
                     <RefreshCw size={13} />
                     Refresh
                   </button>
                   <button
-                    disabled={index === 0}
-                    onClick={() => move(folder.root, folders[index - 1].root)}
+                    disabled={index === 0 || !!ordered[index-1].cloudSpace !== !!folder.cloudSpace}
+                    onClick={() => move(folder.root, ordered[index - 1].root)}
                   >
                     <ArrowUp size={13} />
                     Move up
                   </button>
                   <button
-                    disabled={index === folders.length - 1}
-                    onClick={() => move(folder.root, folders[index + 1].root)}
+                    disabled={index === ordered.length - 1 || !!ordered[index+1].cloudSpace !== !!folder.cloudSpace}
+                    onClick={() => move(folder.root, ordered[index + 1].root)}
                   >
                     <ArrowDown size={13} />
                     Move down
                   </button>
-                  <button hidden={mobile} onClick={() => onRemove(folder.root)}>
+                  <button hidden={mobile || !!folder.cloudSpace} onClick={() => onRemove(folder.root)}>
                     <X size={13} />
                     Remove from explorer
                   </button>
@@ -409,6 +435,10 @@ export default function Explorer({
             )}
           </section>
         );})}
+              {!ordered.length && <button className="explorer-add-local" onClick={onAdd}><Plus size={14}/>Add a local folder</button>}
+            </div>
+          </section>;
+        })}
         {!folders.length && (
           <div className="explorer-empty">
             <FolderOpen size={24} />
@@ -427,6 +457,7 @@ export default function Explorer({
         if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) { event.preventDefault(); buttons[event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length]?.focus(); }
         if (event.key === "Escape" || event.key === "Tab") { event.preventDefault(); menu.trigger.focus(); setMenu(null); }
       }}>
+        {onCloudMove && !menu.folder.cloudSpace && menu.folder.root !== "demo" && <button role="menuitem" onClick={()=>{setMenu(null);onCloudMove(menu.folder,menu.path);}}>Move to Cloud…</button>}
         <button role="menuitem" onClick={() => { menu.trigger.focus(); setMenu(null); onRename(menu.folder, menu.path); }}>Rename…</button>
         <button role="menuitem" onClick={() => { menu.trigger.focus(); setMenu(null); onFileAction(menu.folder, menu.path, "move"); }}>Move…</button>
         <button hidden={mobile} role="menuitem" disabled={menu.folder.root === "demo"} title={menu.folder.root === "demo" ? "Sample notes have no file location" : undefined} onClick={() => { menu.trigger.focus(); setMenu(null); onFileAction(menu.folder, menu.path, "reveal"); }}>Open in File Location</button>

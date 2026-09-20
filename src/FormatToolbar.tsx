@@ -14,7 +14,9 @@ const controls = [
   { action: "task", Icon: ListTodo, label: "Task list" },
   { action: "quote", Icon: Quote, label: "Quote" },
 ] as const;
-export default function FormatToolbar({ onFormat, style, onUndo, onRedo, active = [] }: {
+export default function FormatToolbar({ onFormat, style, onUndo, onRedo, active = [], formattingDisabled = false, disabled = false }: {
+  formattingDisabled?: boolean;
+  disabled?: boolean;
   active?: FormatAction[];
   onFormat: (action: FormatAction) => void;
   style: FormatAction;
@@ -23,12 +25,12 @@ export default function FormatToolbar({ onFormat, style, onUndo, onRedo, active 
 }) {
   return (
     <div className="format-toolbar" role="toolbar" aria-label="Markdown formatting">
-      <button type="button" aria-label="Undo" title={`Undo (${shortcut("Mod-z")})`}
+      <button type="button" disabled={disabled} aria-label="Undo" title={`Undo (${shortcut("Mod-z")})`}
         onMouseDown={e => e.preventDefault()} onClick={onUndo}><Undo2 size={15} /></button>
-      <button type="button" aria-label="Redo" title={`Redo (${shortcut("Mod-Shift-z")})`}
+      <button type="button" disabled={disabled} aria-label="Redo" title={`Redo (${shortcut("Mod-Shift-z")})`}
         onMouseDown={e => e.preventDefault()} onClick={onRedo}><Redo2 size={15} /></button>
       <div className="format-divider" aria-hidden="true" />
-      <select aria-label="Paragraph style" title={`Heading style (${shortcut("Mod-Alt-0")}–6)`}
+      <select disabled={formattingDisabled || disabled} aria-label="Paragraph style" title={formattingDisabled ? "Select a Markdown pane to format text" : `Heading style (${shortcut("Mod-Alt-0")}–6)`}
         value={style} onChange={e => onFormat(e.target.value as FormatAction)}>
         <option value="paragraph">Normal text</option>
         {[1, 2, 3, 4, 5, 6].map(level => <option key={level} value={`h${level}`}>Heading {level}</option>)}
@@ -36,7 +38,7 @@ export default function FormatToolbar({ onFormat, style, onUndo, onRedo, active 
       <div className="format-divider" aria-hidden="true" />
       {controls.map(({ action, Icon, label }) => {
         const key = formatShortcuts.find(binding => binding.action === action)?.key;
-        return <button type="button" key={action} title={key ? `${label} (${shortcut(key)})` : label}
+        return <button type="button" key={action} disabled={formattingDisabled || disabled} title={formattingDisabled ? "Select a Markdown pane to format text" : key ? `${label} (${shortcut(key)})` : label}
           aria-pressed={active.includes(action)} aria-label={label} onMouseDown={e => e.preventDefault()} onClick={() => onFormat(action)}>
           <Icon size={15} />
         </button>;

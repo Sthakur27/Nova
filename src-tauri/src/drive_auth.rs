@@ -18,7 +18,7 @@ const SCOPE: &str = "https://www.googleapis.com/auth/drive.file";
 pub struct DriveAuth { active: Arc<AtomicBool>, cancelled: Arc<AtomicBool> }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Status { connected: bool, email: Option<String>, configured: bool, error: Option<String> }
+pub struct Status { account: Option<String>, connected: bool, email: Option<String>, configured: bool, error: Option<String> }
 #[derive(Clone, Serialize, Deserialize)]
 struct Credential { refresh_token: String, email: String }
 fn entry() -> Result<keyring::Entry, String> {
@@ -60,7 +60,7 @@ fn cached_credential() -> Result<Option<Credential>, String> {
     })
 }
 fn connection_status(credential: Option<Credential>) -> Status {
-    Status { connected: credential.is_some(), email: credential.map(|c| c.email), configured: configured(), error: None }
+    Status { account: credential.as_ref().map(|c| crate::revision(c.email.to_lowercase().as_bytes())), connected: credential.is_some(), email: credential.map(|c| c.email), configured: configured(), error: None }
 }
 fn status() -> Result<Status, String> {
     if !configured() { return Ok(connection_status(None)); }

@@ -49,6 +49,12 @@ See [all releases and release notes](https://github.com/Sthakur27/Nova/releases/
 
 ## Make yourself at home
 
+### Two notes, room for both
+
+Keep two notes open side by side, with your desktop showing through the translucent writing surface. A work reminder and an everyday list can share the same space.
+
+![Nova on Mac with Work and Groceries notes side by side, writing controls visible, and a purple desktop backdrop showing through the editor](docs/screenshots/desktop-split-view.png)
+
 ### A little glow, or a quieter view
 
 Turn **Galaxy mode** on for translucent surfaces and glowing edges, or off for a simple, solid background. Your notes and bookmarks stay right where they are.
@@ -75,9 +81,19 @@ Open **Settings** using the gear in the lower-left corner to adjust text size, s
 
 Enter **focus mode** to hide the folders, bookmarks, and toolbars. Choose your preferred text width first, then settle into the page. Press **⌘ G** on Mac or **Ctrl G** on Windows to bring all the panels back.
 
-![Focus mode with a centered note and the surrounding panels hidden](docs/screenshots/focus-mode.jpg)
+![Nova on Mac in focus mode with two notes side by side, toolbars hidden, and a warm desktop backdrop showing through the window](docs/screenshots/desktop-focus-view.png)
 
-*The opening showcase shows the desktop app. The other screenshots show sample notes in the browser preview. The Galaxy comparison uses a soft blue-purple backdrop to show the editor's translucency. Open your own folders and use voice typing in the desktop app.*
+*The opening showcase, side-by-side notes, and focus view show the desktop app. The other screenshots show sample notes in the browser preview. The Galaxy comparison uses a soft blue-purple backdrop to show the editor's translucency. Open your own folders and use voice typing in the desktop app.*
+
+## A little space, wherever you go
+
+Nova for **iPhone and iPad is in development**. The same quiet writing space is taking shape on mobile, with touch-friendly controls, offline copies of your Cloud notes, and Google Drive sync to carry your words between devices.
+
+<p align="center">
+  <img src="docs/screenshots/mobile-preview.jpg" alt="Nova's iPhone development preview with a Work note, Cloud sync status, and touch navigation" width="320" />
+</p>
+
+*An early look at Nova on iPhone. Mobile is a development preview; a public release is still ahead. Follow the [mobile development guide](docs/mobile.md) for progress and setup.*
 
 ## Your first few minutes
 
@@ -112,14 +128,14 @@ Your audio stays on your computer and isn't uploaded. Voice typing requires the 
 
 ## A few things to know
 
-Nova is still a prototype. Alongside plain text and Markdown notes, it offers basic code editing for Python, TypeScript/JavaScript (including JSX/TSX), Java, JSON, HTML, and CSS. Open a file with the corresponding extension to get syntax highlighting, completion suggestions, basic syntax diagnostics, bracket matching, indentation, and folding. See [code editing](docs/user-guide.md#code-editing) for shortcuts and limits. Image attachments are not available yet. Configured desktop and iOS builds can connect Google Drive to sync selected saved notes and restore a workspace onto another device. Selected workspaces check for incoming changes every minute while active; iOS resumes checks when the app returns to the foreground. Conflicting edits pause for review; automatic merging is not available. See the [Google Drive guide](docs/sync.md). If you change files in another app, refresh the folder and reopen the note to pick up the changes.
+Nova is still a prototype. Alongside plain text and Markdown notes, it offers basic code editing for Python, TypeScript/JavaScript (including JSX/TSX), Java, JSON, HTML, and CSS. Open a file with the corresponding extension to get syntax highlighting, completion suggestions, basic syntax diagnostics, bracket matching, indentation, and folding. See [code editing](docs/user-guide.md#code-editing) for shortcuts and limits. Image attachments are not available yet. Configured desktop builds separate Local folders from autosaving Cloud spaces. iOS uses Cloud only. Connecting Google Drive automatically discovers and downloads Cloud spaces; checks run every minute while active and on return to the foreground. Conflicting edits pause for review; automatic merging is not available. See the [Google Drive guide](docs/sync.md). If you change files in another app, refresh the folder and reopen the note to pick up the changes.
 
 Recovery drafts help you return to unfinished work, but **Save** writes changes to your original files. Keep a separate backup of important notes. If a file changes outside Nova while you're editing, Nova stops the save so you can reconcile the two versions.
 
 ## Explore further
 
 - **[Reference guide](docs/user-guide.md)** — detailed controls, bookmarks, tabs, saving, and current limits.
-- **[Google Drive](docs/sync.md)** — connect, choose uploads, download a workspace, and understand current limits.
+- **[Google Drive](docs/sync.md)** — connect, use Local and Cloud spaces, and understand autosave and current limits.
 - **[iPhone and iPad](docs/mobile.md)** — native development setup, mobile storage, and sync verification.
 - **[Developer guide](docs/development.md)** — run from source, build installers, and run checks.
 - **[Release notes](https://github.com/Sthakur27/Nova/releases/latest)** — available downloads and changes.

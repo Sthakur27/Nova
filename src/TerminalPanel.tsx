@@ -87,9 +87,12 @@ export default function TerminalPanel({ open, root, onOpenChange, onStorageError
     data-open={open} data-snap-collapse={draft === 0} style={{ height: actualHeight }}>
     <div className="panel-toggle-zone panel-toggle-terminal" data-expanded={open} data-edge-hover={hoveredEdge}>
       <button className="panel-toggle" aria-label={open ? "Collapse bottom panel" : "Expand bottom panel"}
-        title={open ? "Collapse bottom panel" : "Expand bottom panel"} aria-expanded={open} aria-controls="terminal-body"
+        aria-describedby="bottom-panel-tooltip" aria-expanded={open} aria-controls="terminal-body"
         onClick={() => onOpenChange(!open)}>
         {open ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
+        <span className="focus-tooltip" id="bottom-panel-tooltip" role="tooltip">
+          <span>{open ? "Collapse" : "Expand"} bottom panel</span>
+        </span>
       </button>
     </div>
     <div className="terminal-resizer" data-panel-drag="bottom" role="separator" tabIndex={0}

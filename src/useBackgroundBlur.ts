@@ -6,14 +6,14 @@ export function useBackgroundBlur(
   galaxy: boolean,
   center: boolean,
   panes: boolean,
-  layout: { compact: boolean; mobileView: string; navigation: boolean; rail: boolean; focusMode: boolean; topBars: boolean; statusBar: boolean; terminalStarted: boolean },
+  layout: { compact: boolean; mobileView: string; navigation: boolean; rail: boolean; focusMode: boolean; topBars: boolean; statusBar: boolean; terminalStarted: boolean; editorLayout?: string },
   onError: (message: string) => void,
 ) {
-  const { compact, mobileView, navigation, rail, focusMode, topBars, statusBar, terminalStarted } = layout;
+  const { compact, mobileView, navigation, rail, focusMode, topBars, statusBar, terminalStarted, editorLayout } = layout;
   useEffect(() => {
     if (!desktop) return;
     const preference = window.matchMedia("(prefers-reduced-transparency: reduce)");
-    const elements = [...document.querySelectorAll<HTMLElement>(".document-area, .sidebar, .bookmark-rail, .top-bars, .terminal-panel, .status-bar")];
+    const elements = [...document.querySelectorAll<HTMLElement>(".document-area, .sidebar, .bookmark-rail, .top-bars, .editor-group .note-tabs, .terminal-panel, .status-bar")];
     let frame = 0;
     let disposed = false;
     const sync = () => {
@@ -45,5 +45,5 @@ export function useBackgroundBlur(
       window.removeEventListener("resize", schedule);
       preference.removeEventListener("change", schedule);
     };
-  }, [galaxy, center, panes, compact, mobileView, navigation, rail, focusMode, topBars, statusBar, terminalStarted, onError]);
+  }, [galaxy, center, panes, compact, mobileView, navigation, rail, focusMode, topBars, statusBar, terminalStarted, editorLayout, onError]);
 }
