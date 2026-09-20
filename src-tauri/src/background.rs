@@ -98,16 +98,8 @@ pub fn set_background_blur(
             })
             .map_err(|e| e.to_string())?;
     }
-    #[cfg(target_os = "windows")]
-    {
-        // Windows exposes blur at window scope rather than per native view.
-        if regions.is_empty() {
-            window_vibrancy::clear_blur(&window).map_err(|e| e.to_string())?;
-        } else {
-            window_vibrancy::apply_blur(&window, None).map_err(|e| e.to_string())?;
-        }
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    // Windows window-wide blur cannot implement independent frosted surfaces.
+    #[cfg(not(target_os = "macos"))]
     let _ = window;
     Ok(())
 }

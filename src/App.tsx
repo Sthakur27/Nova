@@ -7,7 +7,7 @@ import CloseTabDialog, { type CloseTabChoice } from "./CloseTabDialog";
 import { installTabCloseShortcut } from "./tabShortcuts";
 import ReadFind from "./ReadFind";
 import FileTitle from "./FileTitle";
-import { mobile } from "./platform";
+import { mobile, supportsFrosted } from "./platform";
 import { useCompactLayout } from "./useCompactLayout";
 import SyncSettings from "./SyncSettings";
 import { useDriveUploads } from "./useDriveUploads";
@@ -116,6 +116,7 @@ const mod = navigator.platform.toLowerCase().includes("mac") ? "⌘" : "Ctrl";
 const supportsTranslucency = !mobile;
 // Retain the existing on/off storage values when adding the third mode.
 const backgroundModes = ["on", "off", "frosted"] as const;
+const availableBackgroundModes: readonly typeof backgroundModes[number][] = supportsFrosted ? backgroundModes : backgroundModes.filter(mode => mode !== "frosted");
 const backgroundLabels = { on: "Translucent", off: "Black", frosted: "Frosted" };
 function BlackHoleIcon() {
   return (
@@ -157,9 +158,10 @@ export default function App() {
   const [renameTarget, setRenameTarget] = useState<{ folder: Workspace; path: string } | null>(null);
   const [readControls, setReadControls] = useState<HTMLDivElement | null>(null);
   const [galaxyMode, setGalaxyMode, galaxyError] = usePreference<boolean>("galaxy", true);
-  const [backgroundMode, setBackgroundMode, translucencyError] = usePreference<typeof backgroundModes[number]>("translucent", "on", backgroundModes);
+  const [savedBackgroundMode, setBackgroundMode, translucencyError] = usePreference<typeof backgroundModes[number]>("translucent", "on", backgroundModes);
+  const backgroundMode = !supportsFrosted && savedBackgroundMode === "frosted" ? "off" : savedBackgroundMode;
   const [frostedPanes, setFrostedPanes, frostedPanesError] = usePreference<boolean>("frosted-panes", false);
-  const nextBackgroundMode = backgroundModes[(backgroundModes.indexOf(backgroundMode) + 1) % backgroundModes.length];
+  const nextBackgroundMode = availableBackgroundModes[(availableBackgroundModes.indexOf(backgroundMode) + 1) % availableBackgroundModes.length];
   const [supernova, setSupernova] = useState(0);
   const [showLineNumbers, setShowLineNumbers, numbersError] = usePreference<boolean>("line-numbers", true);
   const [showLineHighlight, setShowLineHighlight, highlightError] = usePreference<boolean>("line-highlight", false);
@@ -1572,7 +1574,7 @@ export default function App() {
     ? `Last synced at ${new Date(lastSyncedAt).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"})}`
     : "Not synced this session";
   return (
-    <div className="app-shell" data-compact={compact} data-mobile={mobile} data-mobile-view={mobileView} data-top-bars={compact || topBars} data-focus-mode={!compact && focusMode} data-window-focused={windowFocused} data-galaxy={galaxyMode} data-background={supportsTranslucency ? backgroundMode : "off"} data-frosted-panes={supportsTranslucency && frostedPanes} data-editor-size={fontSize} data-editor-font={editorFont} data-text-width={textWidth} data-line-spacing={lineSpacing}
+    <div className="app-shell" data-compact={compact} data-mobile={mobile} data-mobile-view={mobileView} data-top-bars={compact || topBars} data-focus-mode={!compact && focusMode} data-window-focused={windowFocused} data-galaxy={galaxyMode} data-background={supportsTranslucency ? backgroundMode : "off"} data-frosted-panes={supportsFrosted && frostedPanes} data-editor-size={fontSize} data-editor-font={editorFont} data-text-width={textWidth} data-line-spacing={lineSpacing}
       onPointerMove={(event) => {
         if (event.pointerType === "touch") return;
         const bounds = event.currentTarget.getBoundingClientRect();
@@ -1778,7 +1780,7 @@ export default function App() {
               Click for {backgroundLabels[nextBackgroundMode].toLowerCase()}
             </span>
           </button>}
-          {galaxyMode && supportsTranslucency && <button
+          {galaxyMode && supportsFrosted && <button
             className="icon-button toolbar-icon focus-toggle"
             aria-label="Frosted panels"
             aria-pressed={frostedPanes}

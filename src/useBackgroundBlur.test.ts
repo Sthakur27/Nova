@@ -5,7 +5,7 @@ import { expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { useBackgroundBlur } from "./useBackgroundBlur";
 
-vi.mock("./platform", () => ({ desktop: true }));
+vi.mock("./platform", () => ({ desktop: true, supportsFrosted: true }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn().mockResolvedValue(undefined) }));
 
 it("keeps pane and center blur independent, tracks resizing, and respects reduced transparency", async () => {

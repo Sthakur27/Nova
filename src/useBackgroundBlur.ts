@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { desktop } from "./platform";
+import { desktop, supportsFrosted } from "./platform";
 
 export function useBackgroundBlur(
   galaxy: boolean,
@@ -11,7 +11,7 @@ export function useBackgroundBlur(
 ) {
   const { compact, mobileView, navigation, rail, focusMode, topBars, statusBar, terminalStarted, editorLayout } = layout;
   useEffect(() => {
-    if (!desktop) return;
+    if (!desktop || !supportsFrosted) return;
     const preference = window.matchMedia("(prefers-reduced-transparency: reduce)");
     const elements = [...document.querySelectorAll<HTMLElement>(".document-area, .sidebar, .bookmark-rail, .top-bars, .editor-group .note-tabs, .terminal-panel, .status-bar")];
     let frame = 0;
