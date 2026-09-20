@@ -27,6 +27,13 @@ export default function FileTitle({ path, onRename }: { path: string; onRename?:
     input.current.style.height = `${input.current.scrollHeight}px`;
   }, [editing, draft]);
 
+  function beginEditing() {
+    cancelled.current = false;
+    setDraft(name);
+    setError("");
+    setEditing(true);
+  }
+
   async function commit() {
     if (pending.current || cancelled.current || !onRename) return;
     const next = draft.trim();
@@ -74,12 +81,15 @@ export default function FileTitle({ path, onRename }: { path: string; onRename?:
         }} />
       {error && <p id={errorId} className="file-title-error" role="alert">{error}</p>}
     </> : <h1 className="file-title" title={name} dir="auto">
-      {onRename ? <button className="file-title-button" aria-label={`Rename ${name}`} onClick={() => {
-        cancelled.current = false;
-        setDraft(name);
-        setError("");
-        setEditing(true);
-      }}>{name}</button> : name}
+      {onRename ? <button type="button" className="file-title-button" aria-label={`Rename ${name}`}
+        onPointerDown={event => {
+          // Enter editing before the browser starts selecting heading text.
+          // Touch still uses click so dragging the page does not start a rename.
+          if (event.button !== 0 || event.pointerType === "touch") return;
+          event.preventDefault();
+          beginEditing();
+        }}
+        onClick={beginEditing}>{name}</button> : name}
     </h1>}
   </header>;
 }

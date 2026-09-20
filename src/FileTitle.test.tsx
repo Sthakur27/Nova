@@ -107,3 +107,29 @@ it("keeps dotfiles extensionless", async () => {
   await key(input, "Enter");
   expect(rename).toHaveBeenCalledExactlyOnceWith(".settings");
 });
+
+it("opens a plain-text Read title on a single mouse press before text selection", async () => {
+  const rename = vi.fn();
+  await act(async () => root.render(<div className="read-pane"><article className="prose">
+    <FileTitle path="Notes/Scratchpad.txt" onRename={rename} />
+  </article></div>));
+  const button = container.querySelector("button")!;
+  const press = new MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 });
+  Object.defineProperty(press, "pointerType", { value: "mouse" });
+  await act(async () => button.dispatchEvent(press));
+  expect(press.defaultPrevented).toBe(true);
+  const input = container.querySelector("textarea")!;
+  expect(document.activeElement).toBe(input);
+  expect(input.value).toBe("Scratchpad");
+  expect([input.selectionStart, input.selectionEnd]).toEqual([0, 10]);
+  expect(rename).not.toHaveBeenCalled();
+});
+
+it.each([["mouse", 2], ["touch", 0]])("does not edit on %s pointer button %s", async (pointerType, button) => {
+  await act(async () => root.render(<FileTitle path="Scratchpad.txt" onRename={vi.fn()} />));
+  const press = new MouseEvent("pointerdown", { bubbles: true, cancelable: true, button });
+  Object.defineProperty(press, "pointerType", { value: pointerType });
+  await act(async () => container.querySelector("button")!.dispatchEvent(press));
+  expect(press.defaultPrevented).toBe(false);
+  expect(container.querySelector("textarea")).toBeNull();
+});
