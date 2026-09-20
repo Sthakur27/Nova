@@ -705,7 +705,18 @@ fn new_window(app: tauri::AppHandle) -> Result<(), String> {
     static WINDOW_ID: AtomicU64 = AtomicU64::new(1);
     let mut config = app.config().app.windows[0].clone();
     config.label = format!("nova-{}", WINDOW_ID.fetch_add(1, Ordering::Relaxed));
-    tauri::WebviewWindowBuilder::from_config(&app, &config).map_err(err)?.build().map_err(err)?;
+    let window = tauri::WebviewWindowBuilder::from_config(&app, &config).map_err(err)?.build().map_err(err)?;
+    configure_window_menu(&window).map_err(err)?;
+    Ok(())
+}
+
+fn configure_window_menu(window: &tauri::WebviewWindow) -> tauri::Result<()> {
+    // The Windows menu strip exposes the desktop on transparent windows.
+    // Hide only the strip, retaining the registered menu and its accelerators.
+    #[cfg(target_os = "windows")]
+    window.hide_menu()?;
+    #[cfg(not(target_os = "windows"))]
+    let _ = window;
     Ok(())
 }
 #[tauri::command]
@@ -715,6 +726,12 @@ fn quit_app(app: tauri::AppHandle, access: State<'_, Access>) {
 }
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            for window in app.webview_windows().values() {
+                configure_window_menu(window)?;
+            }
+            Ok(())
+        })
         .menu(|app| {
             Menu::with_items(
                 app,

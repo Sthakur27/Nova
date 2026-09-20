@@ -25,11 +25,11 @@ Quit the installed Nova before starting development: both use the same saved fol
 
 ### Native window backgrounds
 
-Windows uses an opaque dark window in `src-tauri/tauri.windows.conf.json`. Transparent decorated windows can expose the desktop through the native menu bar when maximized. Keep the native title bar and menus; CSS cannot paint this area outside the webview. Desktop translucency is therefore unavailable on Windows. macOS keeps the shared configuration's transparent window and native menus.
+Both Windows and macOS use the transparent window in `src-tauri/tauri.conf.json`, so Galaxy mode's Translucent background control remains available on both platforms.
 
-Tauri merges the platform configuration using JSON Merge Patch, which replaces the entire `app.windows` array. Keep the Windows window's title, dimensions, and other shared options in sync with `tauri.conf.json`. Additional windows inherit the merged configuration through `new_window`.
+On Windows, `configure_window_menu` hides only the native menu strip, which can expose the desktop when a transparent window is maximized. It keeps the native title bar and window controls, and retains the registered menu for keyboard accelerators. This runs for the startup window and additional windows created by `new_window`. macOS keeps its visible system menu unchanged. Do not disable window transparency to fix a menu-strip rendering issue.
 
-For native visual verification, maximize, restore, resize, minimize/restore, and enter/exit fullscreen with both Galaxy modes, then repeat in a newly opened window. On Windows, check that the title/menu area never exposes the desktop and that the menus and window controls work. On macOS, check the traffic lights, system menu, fullscreen transitions, and Galaxy translucency.
+For native visual verification, maximize, restore, resize, minimize/restore, and enter/exit fullscreen with both Galaxy modes, then repeat in a newly opened window. On Windows, check that no menu strip remains below the title bar, the window controls and Ctrl-Q/Ctrl-A/Ctrl-C/Ctrl-V/Ctrl-Z shortcuts work, and the translucency toggle visibly switches the editor between translucent and solid backgrounds. On macOS, check the traffic lights, system menu, fullscreen transitions, and Galaxy translucency.
 
 ### Generate installers
 
