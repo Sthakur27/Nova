@@ -1,0 +1,70 @@
+/* Also available in a narrow browser preview; native builds use this on iPad too. */
+.app-shell[data-compact="true"] {
+  min-width: 0;
+  height: var(--mobile-height, 100dvh);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) calc(64px + env(safe-area-inset-bottom)) env(safe-area-inset-left);
+  background: #18191c;
+  --editor-font-size: 16px;
+  --editor-visual-size: 16px;
+}
+.app-shell[data-compact="true"] [hidden] { display: none !important; }
+.mobile-navigation {
+  position: absolute;
+  z-index: 30;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-around;
+  padding: 6px env(safe-area-inset-right) calc(6px + env(safe-area-inset-bottom)) env(safe-area-inset-left);
+  border-top: 1px solid #ffffff12;
+  background: #1c1b22;
+}
+.mobile-navigation button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-width: 52px; min-height: 46px; font-size: 10px; color: #9992a6; }
+.mobile-navigation button[aria-pressed="true"] { color: #dfc7ff; background: #b89cdb14; border-radius: 10px; }
+.app-shell[data-compact="true"] :is(.sidebar, .bookmark-rail) { width: 100%; flex: 1; min-height: 0; border: 0; }
+.app-shell[data-compact="true"] .main-panel { width: 100%; }
+.app-shell[data-compact="true"] .brand { height: 66px; }
+.app-shell[data-compact="true"] .workspace-label { margin-top: 20px; }
+.app-shell[data-compact="true"] :is(.icon-button, .root-menu summary, .file-open, .directory-title, .root-title) { min-height: 44px; }
+.app-shell[data-compact="true"] .icon-button { min-width: 44px; }
+.app-shell[data-compact="true"] :is(.file-star, .file-edit) { opacity: 1; }
+.app-shell[data-compact="true"] :is(.folder-drag-handle, .sidebar-action.focus-toggle, .search-trigger kbd, .rail-footer, .bookmark-tip, .panel-toggle-zone, .status-terminal-controls, .terminal-panel) { display: none; }
+.app-shell[data-compact="true"] .tab-bar { height: 50px; padding: 0 6px; }
+.app-shell[data-compact="true"] .note-tabs { min-width: 0; }
+.app-shell[data-compact="true"] .note-tab { min-width: 100px; max-width: 180px; }
+.app-shell[data-compact="true"] .note-tab > button { min-height: 44px; }
+.app-shell[data-compact="true"] .note-tab .tab-close { min-width: 36px; opacity: 1; }
+.app-shell[data-compact="true"] .document-toolbar { gap: 6px; padding: 0 10px; height: 52px; }
+.app-shell[data-compact="true"] .document-toolbar > :is(.toolbar-preference, .line-numbers-toggle, .toolbar-icon, .voice-control) { display: none; }
+.app-shell[data-compact="true"] .document-toolbar > :not(.breadcrumbs, .view-switch, .read-controls, [aria-label="Save note"]) { display: none; }
+.app-shell[data-compact="true"] .breadcrumbs > :not(:last-child) { display: none; }
+.app-shell[data-compact="true"] .view-switch button { min-height: 36px; padding: 5px 7px; }
+.app-shell[data-compact="true"] .view-switch svg { display: none; }
+.app-shell[data-compact="true"] .format-toolbar { overflow-x: auto; flex-wrap: nowrap; padding: 3px 8px; min-height: 46px; }
+.app-shell[data-compact="true"] .format-toolbar > * { flex-shrink: 0; }
+.app-shell[data-compact="true"] .format-toolbar button { min-width: 40px; min-height: 38px; }
+.app-shell[data-compact="true"] .format-toolbar > span { display: none; }
+.app-shell[data-compact="true"] .prose { padding-left: 22px; padding-right: 22px; }
+.app-shell[data-compact="true"] .cm-editor .cm-content { padding-left: 12px; padding-right: 16px; }
+.app-shell[data-compact="true"] .status-bar { padding: 0 12px; gap: 8px; }
+.app-shell[data-compact="true"] .status-bar > span:not(:first-child) { display: none; }
+.app-shell[data-compact="true"] .empty-editor { padding: 24px; text-align: center; }
+.app-shell[data-compact="true"] .empty-editor .primary { min-height: 44px; }
+.app-shell[data-compact="true"] .bookmark-rail > header { height: 60px; }
+.app-shell[data-compact="true"] .bookmark-actions { opacity: 1; }
+.app-shell[data-compact="true"] .add-bookmark { min-height: 48px; }
+.app-shell[data-compact="true"] .overlay { padding: max(16px, env(safe-area-inset-top)) 12px; align-items: center; }
+.app-shell[data-compact="true"] .overlay > * { max-width: 100%; max-height: calc(var(--mobile-height, 100dvh) - 40px); overflow-y: auto; }
+.app-shell[data-compact="true"] :is(input, textarea, select) { font-size: 16px; }
+.app-shell[data-compact="true"] .toast { left: 12px; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); max-width: none; }
+.app-shell[data-compact="true"] .settings-dialog { width: calc(100% - 24px); max-height: calc(var(--mobile-height, 100dvh) - 40px); }
+.app-shell[data-compact="true"] .settings-content { padding: 16px; }
+.app-shell[data-compact="true"] .palette-footer { flex-wrap: wrap; }
+.app-shell[data-mobile="true"] .folder-grip { display: none; }
+@media (pointer: coarse) { .file-context-menu button { min-height: 44px; } }
+
+/* Desktop's extra scroll canvas moves the caret when the iOS keyboard resizes. */
+.app-shell[data-mobile="true"] .cm-editor .cm-content { padding-top: 24px; padding-bottom: 80px; }
+.app-shell[data-mobile="true"] .start-mark { height: 24px; padding: 0; }
+.app-shell[data-mobile="true"] :is(.read-pane, .document-pane) > .prose { padding-bottom: 80px; }

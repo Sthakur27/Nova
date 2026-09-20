@@ -4,13 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1 --port 1420",
+    "dev": "vite --port 1420",
     "desktop": "node scripts/dev-desktop.mjs",
     "build": "tsc -b && vite build",
     "package": "node scripts/package-desktop.mjs",
     "preview": "vite preview --port 1420",
     "tauri": "tauri",
-    "test": "vitest run"
+    "test": "vitest run",
+    "ios:init": "node scripts/ios.mjs init",
+    "ios:dev": "node scripts/ios.mjs dev",
+    "ios:build": "node scripts/ios.mjs build"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",
@@ -56,6 +59,7 @@
     "@tauri-apps/cli": "^2.8.0",
     "@types/hast": "^3.0.5",
     "@types/mdast": "^4.0.4",
+    "@types/node": "^26.6.2",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^4.7.0",

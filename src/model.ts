@@ -1,3 +1,4 @@
+import type { SyncPolicy } from "./syncPolicy";
 export type Bookmark = {
   id: string;
   name: string;
@@ -14,6 +15,8 @@ export type Workspace = {
   files: NoteFile[];
   starred?: string[];
   starsError?: string;
+  syncPolicy?: SyncPolicy;
+  syncError?: string;
   collapsed?: boolean;
   closedDirectories?: string[];
   error?: string;

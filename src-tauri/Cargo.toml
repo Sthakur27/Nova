@@ -19,6 +19,7 @@ serde_json = "1"
 walkdir = "2"
 blake3 = "1"
 tempfile = "3"
+[target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
 whisper-rs = "0.16"
 cpal = "0.16"
 sha2 = "0.10"
@@ -27,3 +28,7 @@ portable-pty = "0.9"
 
 [dev-dependencies]
 hound = "3"
+
+# Backport iOS scene lifecycle fixes while the Tauri 2 dependency pins Tao 0.35.
+[patch.crates-io]
+tao = { path = "vendor/tao" }

@@ -81,3 +81,7 @@ cargo test --manifest-path src-tauri/Cargo.toml actual_whisper_transcription -- 
 ```
 
 Set `NOVA_SPEECH_TEST_MODEL` to an existing tiny.en model file to skip the model download; the fixture is still downloaded. This test checks partial decoding, final transcription, and cancellation, not microphone capture or desktop permissions.
+
+## iPhone and iPad
+
+See [the iOS port guide](mobile.md) for the mobile scope, prerequisites, simulator commands, and outstanding device checks.

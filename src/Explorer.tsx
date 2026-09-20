@@ -1,3 +1,4 @@
+import { mobile } from "./platform";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import {
@@ -11,6 +12,7 @@ import {
   GripVertical,
   Plus,
   Pencil,
+  MoreHorizontal,
   RefreshCw,
   X,
 } from "lucide-react";
@@ -117,11 +119,11 @@ function FileTree({
           </button>
           <button
             className="icon-button file-edit"
-            aria-label={`Rename ${path}`}
-            title="Rename file"
-            onClick={() => onRename(path)}
+            aria-label={mobile ? `Actions for ${path}` : `Rename ${path}`}
+            title={mobile ? "Note actions" : "Rename file"}
+            onClick={event => mobile ? onContextMenu(event, path) : onRename(path)}
           >
-            <Pencil size={14} />
+            {mobile ? <MoreHorizontal size={18} /> : <Pencil size={14} />}
           </button>
         </div>
       ))}
@@ -139,6 +141,7 @@ type Props = {
   onChange: (folders: Workspace[]) => void;
   onRemove: (root: string) => void;
   onRefresh: (root: string) => void;
+  onSync?: (folder: Workspace) => void;
   onAdd: () => void;
   externalDrag: boolean;
 };
@@ -154,6 +157,7 @@ export default function Explorer({
   onRemove,
   onRefresh,
   onAdd,
+  onSync,
   externalDrag,
 }: Props) {
   const [menu, setMenu] = useState<{ folder: Workspace; path: string; x: number; y: number; trigger: HTMLElement } | null>(null);
@@ -223,6 +227,7 @@ export default function Explorer({
         </button>
         <button
           className="icon-button"
+          hidden={mobile}
           onClick={onAdd}
           title="Add folders"
           aria-label="Add folders"
@@ -309,6 +314,7 @@ export default function Explorer({
                   ···
                 </summary>
                 <div>
+                  {onSync && <button onClick={event => { event.currentTarget.closest("details")?.removeAttribute("open"); onSync(folder); }}>Sync selection…</button>}
                   <button onClick={() => onRefresh(folder.root)}>
                     <RefreshCw size={13} />
                     Refresh
@@ -327,7 +333,7 @@ export default function Explorer({
                     <ArrowDown size={13} />
                     Move down
                   </button>
-                  <button onClick={() => onRemove(folder.root)}>
+                  <button hidden={mobile} onClick={() => onRemove(folder.root)}>
                     <X size={13} />
                     Remove from explorer
                   </button>
@@ -356,7 +362,7 @@ export default function Explorer({
                     active={folder.root === activeRoot ? activePath : ""}
                     onOpen={(path) => onOpen(folder, path)}
                     onRename={(path) => onRename(folder, path)}
-                    onContextMenu={(event, path) => { event.preventDefault(); const trigger = event.currentTarget.querySelector<HTMLElement>(".file-open")!; const rect = trigger.getBoundingClientRect(); setMenu({ folder, path, trigger, x: Math.max(8, Math.min(event.clientX || rect.left, window.innerWidth - 228)), y: Math.max(8, Math.min(event.clientY || rect.bottom, window.innerHeight - 170)) }); }}
+                    onContextMenu={(event, path) => { event.preventDefault(); const trigger = event.currentTarget.closest(".file-row")!.querySelector<HTMLElement>(".file-open")!; const rect = trigger.getBoundingClientRect(); setMenu({ folder, path, trigger, x: Math.max(8, Math.min(event.clientX || rect.left, window.innerWidth - 228)), y: Math.max(8, Math.min(event.clientY || rect.bottom, window.innerHeight - 170)) }); }}
                     starred={starred}
                     onStar={(path, value) => onStar(folder, path, value)}
                   />
@@ -387,7 +393,7 @@ export default function Explorer({
       }}>
         <button role="menuitem" onClick={() => { menu.trigger.focus(); setMenu(null); onRename(menu.folder, menu.path); }}>Rename…</button>
         <button role="menuitem" onClick={() => { menu.trigger.focus(); setMenu(null); onFileAction(menu.folder, menu.path, "move"); }}>Move…</button>
-        <button role="menuitem" disabled={menu.folder.root === "demo"} title={menu.folder.root === "demo" ? "Sample notes have no file location" : undefined} onClick={() => { menu.trigger.focus(); setMenu(null); onFileAction(menu.folder, menu.path, "reveal"); }}>Open in File Location</button>
+        <button hidden={mobile} role="menuitem" disabled={menu.folder.root === "demo"} title={menu.folder.root === "demo" ? "Sample notes have no file location" : undefined} onClick={() => { menu.trigger.focus(); setMenu(null); onFileAction(menu.folder, menu.path, "reveal"); }}>Open in File Location</button>
         <button role="menuitem" className="danger" onClick={() => { menu.trigger.focus(); setMenu(null); onFileAction(menu.folder, menu.path, "delete"); }}>Delete…</button>
       </div>, document.body)}
       <span role="status" className="sr-only">

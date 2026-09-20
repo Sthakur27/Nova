@@ -1,3 +1,4 @@
+import { mobile } from "./platform";
 import { editorSearch } from "./editorSearch";
 import { codeExtensions, codeLanguage } from "./codeLanguages";
 import { DocumentEditor } from "./DocumentEditor";
@@ -394,7 +395,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
     // A source editor can mount hidden behind Read mode. Wait until it has a
     // viewport before positioning the first line below the space above it.
     const positionSource = () => {
-      v.scrollDOM.scrollTop = p.snapshot?.scrollTop ?? v.scrollDOM.clientHeight;
+      v.scrollDOM.scrollTop = p.snapshot?.scrollTop ?? (mobile ? 0 : v.scrollDOM.clientHeight);
     };
     let openingObserver: ResizeObserver | undefined;
     if (v.scrollDOM.clientHeight) positionSource();
@@ -447,7 +448,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
           documentPane.current.style.setProperty("--extra-scroll-before", props.snapshot.scrollSpace.before);
           documentPane.current.style.setProperty("--extra-scroll-after", props.snapshot.scrollSpace.after);
         }
-        documentPane.current.scrollTop = props.snapshot?.scrollTop ?? documentPane.current.clientHeight;
+        documentPane.current.scrollTop = props.snapshot?.scrollTop ?? (mobile ? 0 : documentPane.current.clientHeight);
       }
       documentEditor.current.setBookmarks(latest.current.bookmarks);
     }

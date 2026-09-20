@@ -1,4 +1,7 @@
+#[cfg(desktop)]
 mod speech;
+mod sync_policy;
+#[cfg(desktop)]
 mod terminal;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -7,12 +10,17 @@ use std::{
     io::{BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicU64, Ordering},
         Arc, Mutex,
     },
 };
+#[cfg(desktop)]
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
-use tauri::{Emitter, Manager, State};
+#[cfg(desktop)]
+use std::sync::atomic::AtomicBool;
+#[cfg(desktop)]
+use tauri::Emitter;
+use tauri::{Manager, State};
 use walkdir::WalkDir;
 
 const MAX_FILE: u64 = 32 * 1024 * 1024;
@@ -21,7 +29,10 @@ struct Access {
     roots: Mutex<HashSet<PathBuf>>,
     writes: Mutex<()>,
     search_generation: Arc<AtomicU64>,
+    #[cfg(desktop)]
     quitting: AtomicBool,
+    #[cfg(mobile)]
+    mobile_root: Mutex<Option<PathBuf>>,
 }
 #[derive(Serialize)]
 struct NoteFile {
@@ -34,6 +45,10 @@ struct Workspace {
     name: String,
     files: Vec<NoteFile>,
     starred: Vec<String>,
+    #[serde(rename = "syncPolicy")]
+    sync_policy: sync_policy::SyncPolicy,
+    #[serde(rename = "syncError", skip_serializing_if = "Option::is_none")]
+    sync_error: Option<String>,
     #[serde(rename = "starsError", skip_serializing_if = "Option::is_none")]
     stars_error: Option<String>,
 }
@@ -100,11 +115,20 @@ fn normalize_extension(value: &str) -> Result<String, String> {
     Ok(format!(".{extension}"))
 }
 fn root_path(access: &Access, root: &str) -> Result<PathBuf, String> {
-    let path = fs::canonicalize(root).map_err(err)?;
-    if !access.roots.lock().map_err(err)?.contains(&path) {
-        return Err("Open this folder first.".into());
+    #[cfg(mobile)]
+    {
+        if root != "mobile" { return Err("Only on-device notes are available on mobile.".into()); }
+        return access.mobile_root.lock().map_err(err)?.clone().ok_or("Notes storage is not ready.".into());
     }
-    Ok(path)
+    #[cfg(desktop)]
+    let path = fs::canonicalize(root).map_err(err)?;
+    #[cfg(desktop)]
+    {
+        if !access.roots.lock().map_err(err)?.contains(&path) {
+            return Err("Open this folder first.".into());
+        }
+        Ok(path)
+    }
 }
 fn scoped_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
     let relative = Path::new(relative);
@@ -162,10 +186,11 @@ fn files_in(root: &Path) -> Result<Vec<NoteFile>, String> {
 fn metadata_path(app: &tauri::AppHandle, path: &Path) -> Result<PathBuf, String> {
     let dir = app.path().app_data_dir().map_err(err)?.join("bookmarks");
     fs::create_dir_all(&dir).map_err(err)?;
-    Ok(dir.join(format!(
-        "{}.json",
-        revision(path.to_string_lossy().as_bytes())
-    )))
+    #[cfg(mobile)]
+    let storage_root = fs::canonicalize(app.path().app_data_dir().map_err(err)?.join("Notes")).map_err(err)?;
+    #[cfg(mobile)]
+    let path = path.strip_prefix(&storage_root).map_err(err)?;
+    Ok(dir.join(format!("{}.json", revision(path.to_string_lossy().as_bytes()))))
 }
 fn atomic_write(path: &Path, data: &[u8]) -> Result<(), String> {
     let mut temp = tempfile::NamedTempFile::new_in(path.parent().ok_or("Missing parent folder")?)
@@ -241,8 +266,16 @@ fn set_file_star(root: String, path: String, starred: bool, access: State<'_, Ac
     update_star(&root_path(&access, &root)?, &path, starred)
 }
 #[tauri::command]
+fn set_sync_choice(root: String, path: String, choice: String, access: State<'_, Access>) -> Result<sync_policy::SyncPolicy, String> {
+    let _guard = access.writes.lock().map_err(err)?;
+    sync_policy::update(&root_path(&access, &root)?, &path, &choice)
+}
+#[tauri::command]
 async fn open_workspace(root: String, access: State<'_, Access>) -> Result<Workspace, String> {
+    #[cfg(desktop)]
     let path = fs::canonicalize(&root).map_err(err)?;
+    #[cfg(mobile)]
+    let path = root_path(&access, &root)?;
     if !path.is_dir() {
         return Err("Choose a folder.".into());
     }
@@ -255,10 +288,22 @@ async fn open_workspace(root: String, access: State<'_, Access>) -> Result<Works
         Ok(stars) => (stars, None),
         Err(error) => (Vec::new(), Some(error)),
     };
+    let (sync_policy, sync_error) = match read_registry(&path).and_then(|value| sync_policy::read(&value)) {
+        Ok(policy) => (policy, None),
+        Err(error) => (sync_policy::SyncPolicy::default(), Some(error)),
+    };
     Ok(Workspace {
+        sync_policy,
+        sync_error,
         starred,
         stars_error,
+        #[cfg(mobile)]
+        root: "mobile".into(),
+        #[cfg(mobile)]
+        name: "On this device".into(),
+        #[cfg(desktop)]
         root: path.to_string_lossy().into_owned(),
+        #[cfg(desktop)]
         name: path
             .file_name()
             .unwrap_or_default()
@@ -390,6 +435,11 @@ fn scan_search(
                 Ok(path) => path,
                 Err(_) => continue,
             };
+            #[cfg(mobile)]
+            let canonical = match canonical.strip_prefix(&root) {
+                Ok(path) => path.to_path_buf(),
+                Err(_) => continue,
+            };
             let metadata = metadata_dir.join(format!(
                 "{}.json",
                 revision(canonical.to_string_lossy().as_bytes())
@@ -484,6 +534,11 @@ async fn search_notes(
     })
     .await
     .map_err(err)?;
+    #[cfg(mobile)]
+    {
+        for hit in &mut response.hits { hit.root = "mobile".into(); }
+        for hit in &mut response.bookmarks { hit.root = "mobile".into(); }
+    }
     response.warnings.extend(warnings);
     Ok(response)
 }
@@ -586,18 +641,19 @@ fn rename_file(source: &Path, name: &str) -> Result<PathBuf, String> {
     Ok(target)
 }
 fn rename_starred_file(root: &Path, source: &Path, name: &str) -> Result<PathBuf, String> {
-    let registry = read_registry(root)?;
+    let mut registry = read_registry(root)?;
+    sync_policy::read(&registry)?;
     let mut stars = registry_stars(&registry)?;
     let old = source.strip_prefix(root).map_err(err)?.to_string_lossy().replace('\\', "/");
     let target = rename_file(source, name)?;
     if target == source { return Ok(target); }
-    if stars.iter().any(|star| star == &old) {
-        let next = target.strip_prefix(root).map_err(err)?.to_string_lossy().replace('\\', "/");
-        for star in &mut stars { if star == &old { *star = next.clone(); } }
-        if let Err(error) = write_registry(root, registry, &stars) {
-            fs::rename(&target, source).map_err(err)?;
-            return Err(error);
-        }
+    let next = target.strip_prefix(root).map_err(err)?.to_string_lossy().replace('\\', "/");
+    for star in &mut stars { if star == &old { *star = next.clone(); } }
+    let result = sync_policy::relocate(&mut registry, &old, Some(&next))
+        .and_then(|_| write_registry(root, registry, &stars));
+    if let Err(error) = result {
+        fs::rename(&target, source).map_err(err)?;
+        return Err(error);
     }
     Ok(target)
 }
@@ -637,12 +693,14 @@ fn move_note(root: String, path: String, directory: String, access: State<'_, Ac
     let registry = read_registry(&root)?;
     let stars = registry_stars(&registry)?;
     let updated: Vec<String> = stars.iter().map(|p| if p == &path { next.clone() } else { p.clone() }).collect();
+    let mut next_registry = registry.clone();
+    sync_policy::relocate(&mut next_registry, &path, Some(&next))?;
     let old_meta = metadata_path(&app, &source)?;
     let new_meta = metadata_path(&app, &target)?;
     fs::hard_link(&source, &target).map_err(err)?;
     let result = (|| {
         if old_meta.exists() { atomic_write(&new_meta, &fs::read(&old_meta).map_err(err)?)?; }
-        write_registry(&root, registry.clone(), &updated)?;
+        write_registry(&root, next_registry, &updated)?;
         fs::remove_file(&source).map_err(err)
     })();
     if let Err(error) = result {
@@ -680,7 +738,9 @@ fn delete_note(root: String, path: String, only_empty_untitled: Option<bool>, ac
     let registry = read_registry(&root)?;
     let stars = registry_stars(&registry)?;
     let updated: Vec<String> = stars.iter().filter(|p| *p != &path).cloned().collect();
-    write_registry(&root, registry.clone(), &updated)?;
+    let mut next_registry = registry.clone();
+    sync_policy::relocate(&mut next_registry, &path, None)?;
+    write_registry(&root, next_registry, &updated)?;
     if let Err(error) = fs::remove_file(source) {
         let _ = write_registry(&root, registry, &stars);
         return Err(err(error));
@@ -688,6 +748,7 @@ fn delete_note(root: String, path: String, only_empty_untitled: Option<bool>, ac
     let _ = fs::remove_file(metadata);
     Ok(true)
 }
+#[cfg(desktop)]
 #[tauri::command]
 fn reveal_note(root: String, path: String, access: State<'_, Access>) -> Result<(), String> {
     let source = scoped_path(&root_path(&access, &root)?, &path)?;
@@ -700,6 +761,7 @@ fn reveal_note(root: String, path: String, access: State<'_, Access>) -> Result<
     if !status.success() { return Err("Could not open the file location.".into()); }
     Ok(())
 }
+#[cfg(desktop)]
 #[tauri::command]
 fn new_window(app: tauri::AppHandle) -> Result<(), String> {
     static WINDOW_ID: AtomicU64 = AtomicU64::new(1);
@@ -719,11 +781,13 @@ fn configure_window_menu(window: &tauri::WebviewWindow) -> tauri::Result<()> {
     let _ = window;
     Ok(())
 }
+#[cfg(desktop)]
 #[tauri::command]
 fn quit_app(app: tauri::AppHandle, access: State<'_, Access>) {
     access.quitting.store(true, Ordering::Relaxed);
     app.exit(0);
 }
+#[cfg(desktop)]
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
@@ -800,6 +864,7 @@ pub fn run() {
             terminal::terminal_close,
             open_workspace,
             set_file_star,
+            set_sync_choice,
             read_note,
             save_note,
             save_bookmarks,
@@ -837,6 +902,28 @@ pub fn run() {
             }
         });
 }
+// Mobile shares the file engine, with a stable workspace identity and no shell,
+// desktop menus, multi-window handling, or microphone dependencies.
+#[cfg(mobile)]
+#[tauri::mobile_entry_point]
+pub fn run() {
+    tauri::Builder::default()
+        .manage(Access::default())
+        .setup(|app| {
+            let root = app.path().app_data_dir()?.join("Notes");
+            fs::create_dir_all(&root)?;
+            *app.state::<Access>().mobile_root.lock().map_err(|_| "Notes storage lock failed")? = Some(fs::canonicalize(root)?);
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            open_workspace, set_file_star, set_sync_choice, read_note, save_note,
+            save_bookmarks, search_notes, load_draft, save_draft, load_explorer,
+            save_explorer, create_note, rename_note, move_note, delete_note
+        ])
+        .run(tauri::generate_context!())
+        .expect("Unable to run Nova");
+}
+
 #[cfg(test)]
 mod tests {
     #[test]

@@ -1,3 +1,6 @@
+import { mobile } from "./platform";
+import { useCompactLayout } from "./useCompactLayout";
+import SyncSettings from "./SyncSettings";
 import LineSpacingControl, { lineSpacings, type LineSpacing } from "./LineSpacingControl";
 import { loadDraft, storeDraft, clearDraft, moveDraft } from "./drafts";
 import Settings from "./Settings";
@@ -87,6 +90,7 @@ import type { LargeReadHandle } from "./LargeRead";
 const LargeRead = lazy(() => import("./LargeRead"));
 const Markdown = lazy(() => import("./Markdown"));
 const mod = navigator.platform.toLowerCase().includes("mac") ? "⌘" : "Ctrl";
+const supportsTranslucency = !mobile;
 function BlackHoleIcon() {
   return (
     <svg className="black-hole-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -107,11 +111,14 @@ async function readRecoverableNote(root: string, path: string) {
 }
 
 export default function App() {
+  const compact = useCompactLayout();
+  const [mobileView, setMobileView] = useState<"notes" | "editor" | "bookmarks">("editor");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [defaultExtension, setDefaultExtension, extensionError] = usePreference<string>("default-extension", ".txt");
   const starQueue = useRef(Promise.resolve());
   const createdNotes = useRef(new Map<string, { root: string; path: string }>());
   const [fileAction, setFileAction] = useState<{ folder: Workspace; path: string; action: "move" | "delete" } | null>(null);
+  const [syncFolder, setSyncFolder] = useState<Workspace | null>(null);
   const [renameTarget, setRenameTarget] = useState<{ folder: Workspace; path: string } | null>(null);
   const [readControls, setReadControls] = useState<HTMLDivElement | null>(null);
   const [galaxyMode, setGalaxyMode, galaxyError] = usePreference<boolean>("galaxy", true);
@@ -194,7 +201,7 @@ export default function App() {
   const [bookmarksBusy, setBookmarksBusy] = useState(false);
   const [bookmarksError, setBookmarksError] = useState("");
   useEffect(() => {
-    if (!rail || bookmarkScope !== "everywhere") {
+    if ((!rail && !compact) || bookmarkScope !== "everywhere") {
       setBookmarksBusy(false);
       return;
     }
@@ -211,7 +218,7 @@ export default function App() {
       if (!cancelled) setBookmarksBusy(false);
     });
     return () => { cancelled = true; };
-  }, [rail, bookmarkScope, folders, path, workspace.root]);
+  }, [rail, compact, bookmarkScope, folders, path, workspace.root]);
   const currentBookmarks = data ? bookmarks.map((bookmark) => ({ root: workspace.root, path, bookmark })) : [];
   const visibleBookmarks = bookmarkScope === "current" ? currentBookmarks : [
     ...currentBookmarks,
@@ -245,7 +252,7 @@ export default function App() {
   const previewElement = useRef<HTMLDivElement>(null);
   const attachPreview = useCallback((element: HTMLDivElement | null) => {
     previewElement.current = element;
-    if (element) element.scrollTo({ top: element.clientHeight, behavior: "instant" });
+    if (element) element.scrollTo({ top: mobile ? 0 : element.clientHeight, behavior: "instant" });
   }, []);
   const largeRead = useRef<LargeReadHandle>(null);
   const revision = useRef("");
@@ -458,6 +465,14 @@ export default function App() {
       saveInFlight.current = null;
     }
   }, [preserveDraft]);
+  useEffect(() => {
+    if (!mobile) return;
+    const preserve = () => { if (document.hidden) void preserveDraft(); };
+    const flush = () => { void preserveDraft(); };
+    document.addEventListener("visibilitychange", preserve);
+    window.addEventListener("pagehide", flush);
+    return () => { document.removeEventListener("visibilitychange", preserve); window.removeEventListener("pagehide", flush); };
+  }, [preserveDraft]);
   const jump = useCallback((from: number, to = from) => {
     editor.current?.jump(from, to);
     const text = editor.current?.text() ?? "";
@@ -487,6 +502,7 @@ export default function App() {
       bookmarkId?: string,
       pinned = false,
     ) => {
+      setMobileView("editor");
       const requested = nextWorkspace ?? current.current.workspace;
       if (pinned) {
         pendingPins.current.add(
@@ -863,7 +879,7 @@ export default function App() {
     setFocusMode(focused);
   }, [setFocusMode, setNavigation, setRail, setTopBars, setStatusBar]);
   useEffect(() => {
-    if (settingsOpen || palette || bookmarkDraft || renameTarget || fileAction) return;
+    if (compact || syncFolder || settingsOpen || palette || bookmarkDraft || renameTarget || fileAction) return;
     return installPanelShortcuts(window, mod === "⌘", panel => {
       if (focusMode) setFocusMode(false);
       if (panel === "left") setNavigation(focusMode || !navigation);
@@ -871,32 +887,34 @@ export default function App() {
       else if (panel === "top") setTopBars(focusMode || !topBars);
       else { setTerminalStarted(true); setTerminalOpen(open => focusMode || !open); }
     });
-  }, [settingsOpen, palette, bookmarkDraft, renameTarget, fileAction, focusMode, navigation, rail, topBars, setFocusMode, setNavigation, setRail, setTopBars]);
+  }, [compact, syncFolder, settingsOpen, palette, bookmarkDraft, renameTarget, fileAction, focusMode, navigation, rail, topBars, setFocusMode, setNavigation, setRail, setTopBars]);
   useEffect(() => {
     const toggleFocus = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "g" || event.isComposing) return;
       event.preventDefault();
       event.stopPropagation();
-      if (!event.repeat && !settingsOpen && !palette && !bookmarkDraft && !renameTarget && !fileAction) changeFocusMode(!focusMode);
+      if (!event.repeat && !syncFolder && !settingsOpen && !palette && !bookmarkDraft && !renameTarget && !fileAction) changeFocusMode(!focusMode);
     };
     window.addEventListener("keydown", toggleFocus, { capture: true });
     return () => window.removeEventListener("keydown", toggleFocus, { capture: true });
-  }, [focusMode, changeFocusMode, settingsOpen, palette, bookmarkDraft, renameTarget, fileAction]);
+  }, [focusMode, changeFocusMode, syncFolder, settingsOpen, palette, bookmarkDraft, renameTarget, fileAction]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
+      if (syncFolder) return;
       if (e.target instanceof Element && e.target.closest("#terminal-panel")) return;
       if (!(e.metaKey || e.ctrlKey)) return;
       if (!e.altKey && !e.shiftKey && (e.key.toLowerCase() === "n" || e.key.toLowerCase() === "t")) {
         e.preventDefault();
         if (e.repeat) return;
-        if (e.key.toLowerCase() === "n") {
+        if (mobile) { void newTab(); }
+        else if (e.key.toLowerCase() === "n") {
           if (desktop) void invoke("new_window").catch(error => setNotice(String(error)));
           else {
             const url = new URL(window.location.href);
             url.searchParams.set("new-window", "true");
             window.open(url.href, "_blank", "noopener");
           }
-        } else if (!settingsOpen && !palette && !bookmarkDraft && !renameTarget && !fileAction) void newTab();
+        } else if (!syncFolder && !settingsOpen && !palette && !bookmarkDraft && !renameTarget && !fileAction) void newTab();
         return;
       }
       if (e.key === ",") {
@@ -920,7 +938,7 @@ export default function App() {
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [save, beginBookmark, settingsOpen, palette, bookmarkDraft, renameTarget, fileAction, newTab]);
+  }, [save, beginBookmark, syncFolder, settingsOpen, palette, bookmarkDraft, renameTarget, fileAction, newTab]);
   useEffect(() => {
     const preserveSession = async () => {
       const c = current.current;
@@ -1014,7 +1032,7 @@ export default function App() {
     setPreview(editor.current?.text() ?? "");
   };
   return (
-    <div className="app-shell" data-focus-mode={focusMode} data-window-focused={windowFocused} data-galaxy={galaxyMode} data-translucent={translucent} data-editor-size={fontSize} data-text-width={textWidth} data-line-spacing={lineSpacing}
+    <div className="app-shell" data-compact={compact} data-mobile={mobile} data-mobile-view={mobileView} data-focus-mode={!compact && focusMode} data-window-focused={windowFocused} data-galaxy={galaxyMode} data-translucent={supportsTranslucency && translucent} data-editor-size={fontSize} data-text-width={textWidth} data-line-spacing={lineSpacing}
       onPointerMove={(event) => {
         if (event.pointerType === "touch") return;
         const bounds = event.currentTarget.getBoundingClientRect();
@@ -1023,10 +1041,10 @@ export default function App() {
         setHoveredEdge(x <= edgeWidth ? "left" : x >= bounds.width - edgeWidth ? "right" : null);
       }}
       onPointerLeave={() => setHoveredEdge(null)}>
-      <SidePanelControls navigation={navigation} bookmarks={rail} hoveredEdge={hoveredEdge}
+      {!compact && <SidePanelControls navigation={navigation} bookmarks={rail} hoveredEdge={hoveredEdge}
         onNavigation={() => setNavigation(!navigation)} onBookmarks={() => setRail(!rail)}
-        onStorageError={() => setNotice("Panel widths changed, but could not be saved on this device.")} />
-      {focusMode && (
+        onStorageError={() => setNotice("Panel widths changed, but could not be saved on this device.")} />}
+      {!compact && focusMode && (
         <button className="sidebar-action focus-toggle focus-mode-exit" aria-label="Exit focus mode" aria-pressed={true}
           aria-describedby="exit-focus-tooltip" aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+G`} onClick={() => changeFocusMode(false)}>
           <BlackHoleIcon />
@@ -1035,8 +1053,15 @@ export default function App() {
           </span>
         </button>
       )}
-      <PlasmaEffects active={galaxyMode && windowFocused} supernova={supernova} dirty={dirty} lineHighlight={showLineHighlight} />
-      <aside id="global-navigation" className="sidebar" hidden={!navigation}>
+      <PlasmaEffects active={!compact && galaxyMode && windowFocused} supernova={supernova} dirty={dirty} lineHighlight={showLineHighlight} />
+      {compact && <nav className="mobile-navigation" aria-label="Main navigation">
+        <button aria-label="Your notes" aria-pressed={mobileView === "notes"} onClick={() => setMobileView("notes")}><FolderOpen size={20} /><span>Notes</span></button>
+        <button aria-label="Write note" aria-pressed={mobileView === "editor"} onClick={() => setMobileView("editor")}><Pencil size={20} /><span>Write</span></button>
+        <button aria-label="Your bookmarks" aria-pressed={mobileView === "bookmarks"} onClick={() => setMobileView("bookmarks")}><BookmarkIcon size={20} /><span>Bookmarks</span></button>
+        <button aria-label="Search notes" onClick={() => setPalette(true)}><Search size={20} /><span>Search</span></button>
+        <button aria-label="Mobile settings" onClick={() => setSettingsOpen(true)}><SettingsIcon size={20} /><span>Settings</span></button>
+      </nav>}
+      <aside id="global-navigation" className="sidebar" hidden={compact ? mobileView !== "notes" : !navigation}>
         <div className="brand">
           <button
             className="brand-emblem"
@@ -1074,6 +1099,7 @@ export default function App() {
             if (action === "reveal") void revealNote(folder.root, path).catch(error => setNotice(String(error)));
             else setFileAction({ folder, path, action });
           }}
+          onSync={mobile ? undefined : setSyncFolder}
           onStar={starFile}
           onRename={(folder, path) => setRenameTarget({ folder, path })}
           onChange={changeFolders}
@@ -1088,9 +1114,9 @@ export default function App() {
             {folders.length} {folders.length === 1 ? "folder" : "folders"} ·
             stored locally
           </div>
-          <p>Drag folder handles to organize your space.</p>
+          <p>{mobile ? "Notes stay on this device. Sync is not connected." : "Drag folder handles to organize your space."}</p>
           <div className="sidebar-actions">
-            <button className="sidebar-action" aria-label="Add folders" title="Add folders" onClick={openFolder}>
+            <button className="sidebar-action" hidden={mobile} aria-label="Add folders" title="Add folders" onClick={openFolder}>
               <Plus size={17} aria-hidden="true" />
             </button>
             <button className="sidebar-action" aria-label="Settings" title={`Settings (${mod} ,)`}
@@ -1107,7 +1133,7 @@ export default function App() {
           </div>
         </div>
       </aside>
-      <main className="main-panel"
+      <main className="main-panel" hidden={compact && mobileView !== "editor"}
         onPointerMove={(event) => {
           if (event.pointerType === "touch") return;
           const bounds = event.currentTarget.getBoundingClientRect();
@@ -1119,7 +1145,7 @@ export default function App() {
         }}
         onPointerLeave={() => { setHoveredTop(false); setHoveredBottom(false); }}>
         <div className="top-bars-container">
-        <div id="top-bars" className="top-bars" hidden={!topBars}>
+        <div id="top-bars" className="top-bars" hidden={!compact && !topBars}>
         <header className="tab-bar">
           <div className="note-tabs" role="tablist" aria-label="Open notes">
             {tabs.map((tab) => {
@@ -1173,12 +1199,12 @@ export default function App() {
           </div>
           <button className="icon-button new-tab-button" onClick={() => void newTab()} aria-label="New tab" title="New tab (Ctrl T)"><Plus size={16} /></button>
           <div className="tab-bar-space" />
-          <button className="icon-button" onClick={toggleTerminal}
+          <button hidden={compact} className="icon-button" onClick={toggleTerminal}
             aria-label={terminalOpen ? "Collapse terminal" : "Open terminal"} title={`Toggle terminal (${mod}↓)`} aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+ArrowDown`}
             aria-expanded={terminalOpen} aria-controls="terminal-panel"><TerminalSquare size={17} /></button>
           <button
             className="icon-button"
-            onClick={() => setRail(!rail)}
+            onClick={() => compact ? setMobileView("bookmarks") : setRail(!rail)}
             aria-label="Toggle bookmarks"
             title={`Toggle bookmarks (${mod}→)`} aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+ArrowRight`}
           >
@@ -1232,7 +1258,7 @@ export default function App() {
               Translucent background · {translucent ? "On" : "Off"}
             </span>
           </button>}
-          <VoiceControl
+          {!mobile && <VoiceControl
             disabled={!data || loading || saving}
             onBegin={() => {
               setMode((old) =>
@@ -1252,7 +1278,7 @@ export default function App() {
               voiceBusy.current = busy;
             }}
             onError={(error) => setNotice(error)}
-          />
+          />}
           <div className="view-switch">
             {isMarkdown && (
               <button
@@ -1303,7 +1329,7 @@ export default function App() {
           </button>
         </div>
         </div>
-        <div className="document-area" onWheelCapture={extendScrollSpace}>
+        <div className="document-area" onWheelCapture={mobile ? undefined : extendScrollSpace}>
           {loading && <div className="loading">Opening your note…</div>}
           {data && (
             <div className={"write-pane " + (mode === "read" && !documentView ? "hidden" : "")}>
@@ -1361,16 +1387,16 @@ export default function App() {
           {!data && !loading && (
             <div className="empty-editor">
               <FolderOpen size={32} />
-              <h2>A folder is all you need.</h2>
-              <p>Open a folder with Markdown or text files.</p>
-              <button className="primary" onClick={openFolder}>
-                Open folder
+              <h2>{mobile ? "A little space to think." : "A folder is all you need."}</h2>
+              <p>{mobile ? "Start your first note. Your words stay on this device." : "Open a folder with Markdown or text files."}</p>
+              <button className="primary" onClick={mobile ? () => void newTab() : openFolder}>
+                {mobile ? "Create a note" : "Open folder"}
               </button>
             </div>
           )}
         </div>
-        <TerminalPanel hoveredEdge={hoveredBottom} started={terminalStarted} open={terminalOpen && statusBar} root={workspace.root} controlsContainer={terminalControls}
-          onOpenChange={(open) => { if (open) { setTerminalStarted(true); setStatusBar(true); } setTerminalOpen(open); }} onStorageError={() => setNotice("Terminal height changed, but could not be saved on this device.")} />
+        {!mobile && <TerminalPanel hoveredEdge={hoveredBottom} started={terminalStarted} open={terminalOpen && statusBar} root={workspace.root} controlsContainer={terminalControls}
+          onOpenChange={(open) => { if (open) { setTerminalStarted(true); setStatusBar(true); } setTerminalOpen(open); }} onStorageError={() => setNotice("Terminal height changed, but could not be saved on this device.")} />}
         <div className="status-bar-container">
         <footer id="status-bar" className="status-bar" hidden={!statusBar}>
           <span>
@@ -1394,7 +1420,7 @@ export default function App() {
         </footer>
         </div>
       </main>
-      {rail && (
+      {(compact ? mobileView === "bookmarks" : rail) && (
         <aside id="bookmarks-panel" className="bookmark-rail">
           <header>
             <BookmarkIcon size={16} />
@@ -1429,8 +1455,9 @@ export default function App() {
                   title={b.quote}
                   onClick={() => {
                     if (isCurrent) {
+                      setMobileView("editor");
                       setActiveMark(b.id);
-                      jump(b.from, b.to);
+                      requestAnimationFrame(() => jump(b.from, b.to));
                     } else {
                       const folder = folders.find((f) => f.root === root);
                       if (folder) void openNote(bookmarkPath, undefined, folder, b.id);
@@ -1528,7 +1555,7 @@ export default function App() {
           onScopeChange={setSearchScope}
           activeNote={data?{root:workspace.root,path,bookmarks:marksRef.current}:null}
           getActiveText={() => editor.current?.text() ?? data?.text ?? ""}
-          onNavigateCurrent={(from,to)=>{if(from!==undefined){setMode('source');requestAnimationFrame(()=>jump(from,to));}else editor.current?.jump(editor.current.selection().from);}}
+          onNavigateCurrent={(from,to)=>{setMobileView("editor");if(from!==undefined){setMode('source');requestAnimationFrame(()=>jump(from,to));}else editor.current?.jump(editor.current.selection().from);}}
           onClose={() => {
             setPalette(false);
             if (mode !== "read")
@@ -1561,6 +1588,8 @@ export default function App() {
           }
         } finally { operation.current = false; }
       }} />}
+      {syncFolder && <SyncSettings key={syncFolder.root} folder={syncFolder} onClose={() => setSyncFolder(null)}
+        onSaved={policy => setFolders(old => old.map(folder => folder.root === syncFolder.root ? { ...folder, syncPolicy: policy, syncError: undefined } : folder))} />}
       {renameTarget && (
         <RenameDialog
           path={renameTarget.path}

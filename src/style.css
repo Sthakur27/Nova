@@ -2142,3 +2142,16 @@ kbd {
 /* Keep the floating collapse control clear of terminal tabs and their actions. */
 /* Account for the terminal panel’s 1px top border. */
 .panel-toggle-terminal[data-expanded="true"] { top: -23px; }
+
+.sync-dialog { width: min(720px, calc(100vw - 32px)); }
+.sync-intro { padding: 16px 24px 8px; font-size: 13px; line-height: 1.6; }
+.sync-intro strong { color: #d7c5ef; font-weight: 500; }
+.sync-intro p { color: #aaa2b6; margin: 8px 0; }
+.sync-list { overflow: auto; min-height: 80px; max-height: 48vh; padding: 8px 12px; }
+.sync-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-bottom: 1px solid #ffffff09; content-visibility: auto; contain-intrinsic-size: auto 58px; }
+.sync-row > svg { flex-shrink: 0; color: #aaa2b6; }
+.sync-name { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+.sync-name > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sync-name small { font-size: 11px; color: #aaa2b6; }
+.sync-row select { max-width: 48%; padding: 7px; border-radius: 6px; border: 1px solid #ffffff20; background: #242329; color: #ded7e9; font: inherit; font-size: 12px; }
+.sync-row select:focus-visible { outline: 2px solid #a98bdd; outline-offset: 2px; }

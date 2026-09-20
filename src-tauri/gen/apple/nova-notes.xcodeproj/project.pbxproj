@@ -1,0 +1,466 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0114979C579EB518ADFAE519 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = CB8616EF06F61073459DDD33 /* MetalKit.framework */; };
+		06116B418E33968E450029DB /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = 2C6D5CBB8987A3A35728BA94 /* main.mm */; };
+		10929C6ADC214A70768D8791 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = FB31CEC71DB98ED57B530C1C /* Metal.framework */; };
+		185C7DD481437ABFD86F5833 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 60A43E952588E866909E33F7 /* WebKit.framework */; };
+		29C195DAC2BC653D045058BF /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C12233CDA6E1163152928A43 /* QuartzCore.framework */; };
+		307E78F9D92477F4D8038077 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 30FE1C3867D411ED705812C4 /* Security.framework */; };
+		4EC7DD212CB460C83B5B0CB4 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 016942492483D271AB884900 /* CoreGraphics.framework */; };
+		5BEF6234F8856E5A00B2FF32 /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4D399117C281E4CF1C8BE989 /* UIKit.framework */; };
+		5E886D1EF795F77DF3988115 /* assets in Resources */ = {isa = PBXBuildFile; fileRef = A13D821105C0BE82B7A4C049 /* assets */; };
+		64621910025A1CFFC9C02DD5 /* libapp.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 41997D02C2C57E153572D1AF /* libapp.a */; };
+		6D7F038DFCC5E10B7E457595 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 59ABBE924C8FCC9DD6707B45 /* LaunchScreen.storyboard */; };
+		F485C2827298FB2607CE493D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 1BB819184DEE743836A5F0EF /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		016942492483D271AB884900 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
+		07CC5809E6728A3BB2228FCF /* sync_policy.rs */ = {isa = PBXFileReference; path = sync_policy.rs; sourceTree = "<group>"; };
+		114F33A9A8AA1679D33C407C /* bindings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = bindings.h; sourceTree = "<group>"; };
+		1BB819184DEE743836A5F0EF /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		2C6D5CBB8987A3A35728BA94 /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
+		30FE1C3867D411ED705812C4 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
+		37B200F00D006083C73AA63C /* speech.rs */ = {isa = PBXFileReference; path = speech.rs; sourceTree = "<group>"; };
+		41997D02C2C57E153572D1AF /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
+		4AE297172A5B2F48ECF4FCE4 /* lib.rs */ = {isa = PBXFileReference; path = lib.rs; sourceTree = "<group>"; };
+		4D399117C281E4CF1C8BE989 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
+		58D2ABDA07165040C8EC7D5B /* terminal.rs */ = {isa = PBXFileReference; path = terminal.rs; sourceTree = "<group>"; };
+		59ABBE924C8FCC9DD6707B45 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		60A43E952588E866909E33F7 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
+		6BFECC57C1F45918E8E8AC05 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		A13D821105C0BE82B7A4C049 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = assets; sourceTree = SOURCE_ROOT; };
+		C12233CDA6E1163152928A43 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
+		CB8616EF06F61073459DDD33 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
+		DE8C0B87BB5DC3B6FDCF1C95 /* main.rs */ = {isa = PBXFileReference; path = main.rs; sourceTree = "<group>"; };
+		DFA3F9976D97348C62082DCA /* nova-notes_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "nova-notes_iOS.entitlements"; sourceTree = "<group>"; };
+		F83611D333DFF495816D790D /* nova-notes_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "nova-notes_iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		FB31CEC71DB98ED57B530C1C /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A69518A6CED5FD583400DDD4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				64621910025A1CFFC9C02DD5 /* libapp.a in Frameworks */,
+				4EC7DD212CB460C83B5B0CB4 /* CoreGraphics.framework in Frameworks */,
+				10929C6ADC214A70768D8791 /* Metal.framework in Frameworks */,
+				0114979C579EB518ADFAE519 /* MetalKit.framework in Frameworks */,
+				29C195DAC2BC653D045058BF /* QuartzCore.framework in Frameworks */,
+				307E78F9D92477F4D8038077 /* Security.framework in Frameworks */,
+				5BEF6234F8856E5A00B2FF32 /* UIKit.framework in Frameworks */,
+				185C7DD481437ABFD86F5833 /* WebKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0E73DEA5AA7C114711E6AAE2 /* bindings */ = {
+			isa = PBXGroup;
+			children = (
+				114F33A9A8AA1679D33C407C /* bindings.h */,
+			);
+			path = bindings;
+			sourceTree = "<group>";
+		};
+		3505301B829818CCCDF2F11B = {
+			isa = PBXGroup;
+			children = (
+				A13D821105C0BE82B7A4C049 /* assets */,
+				1BB819184DEE743836A5F0EF /* Assets.xcassets */,
+				59ABBE924C8FCC9DD6707B45 /* LaunchScreen.storyboard */,
+				C30BDA733E394943E076B627 /* Externals */,
+				4F0E697E156F25E3EAC63DFF /* nova-notes_iOS */,
+				C50361D910FF632273E53A71 /* Sources */,
+				6BD837842AE216788E95E810 /* src */,
+				8A569CA2D4B738327CA244DE /* Frameworks */,
+				E4559542832F8D961BCEB234 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		4F0E697E156F25E3EAC63DFF /* nova-notes_iOS */ = {
+			isa = PBXGroup;
+			children = (
+				6BFECC57C1F45918E8E8AC05 /* Info.plist */,
+				DFA3F9976D97348C62082DCA /* nova-notes_iOS.entitlements */,
+			);
+			path = "nova-notes_iOS";
+			sourceTree = "<group>";
+		};
+		6BD837842AE216788E95E810 /* src */ = {
+			isa = PBXGroup;
+			children = (
+				4AE297172A5B2F48ECF4FCE4 /* lib.rs */,
+				DE8C0B87BB5DC3B6FDCF1C95 /* main.rs */,
+				37B200F00D006083C73AA63C /* speech.rs */,
+				07CC5809E6728A3BB2228FCF /* sync_policy.rs */,
+				58D2ABDA07165040C8EC7D5B /* terminal.rs */,
+			);
+			name = src;
+			path = ../../src;
+			sourceTree = "<group>";
+		};
+		6D61587D830032A2B50E98C8 /* nova-notes */ = {
+			isa = PBXGroup;
+			children = (
+				2C6D5CBB8987A3A35728BA94 /* main.mm */,
+				0E73DEA5AA7C114711E6AAE2 /* bindings */,
+			);
+			path = "nova-notes";
+			sourceTree = "<group>";
+		};
+		8A569CA2D4B738327CA244DE /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				016942492483D271AB884900 /* CoreGraphics.framework */,
+				41997D02C2C57E153572D1AF /* libapp.a */,
+				FB31CEC71DB98ED57B530C1C /* Metal.framework */,
+				CB8616EF06F61073459DDD33 /* MetalKit.framework */,
+				C12233CDA6E1163152928A43 /* QuartzCore.framework */,
+				30FE1C3867D411ED705812C4 /* Security.framework */,
+				4D399117C281E4CF1C8BE989 /* UIKit.framework */,
+				60A43E952588E866909E33F7 /* WebKit.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		C30BDA733E394943E076B627 /* Externals */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Externals;
+			sourceTree = "<group>";
+		};
+		C50361D910FF632273E53A71 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				6D61587D830032A2B50E98C8 /* nova-notes */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		E4559542832F8D961BCEB234 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				F83611D333DFF495816D790D /* nova-notes_iOS.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		B5D33046A56A12F02286974F /* nova-notes_iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 55E502BFC16C310D6DEA9096 /* Build configuration list for PBXNativeTarget "nova-notes_iOS" */;
+			buildPhases = (
+				C6C5B072960CFA38D2FF7BB5 /* Build Rust Code */,
+				0CC8DDD87B7929E1F4003E2B /* Sources */,
+				30BF404DBAB48EE2A6F57E04 /* Resources */,
+				A69518A6CED5FD583400DDD4 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = "nova-notes_iOS";
+			packageProductDependencies = (
+			);
+			productName = "nova-notes_iOS";
+			productReference = F83611D333DFF495816D790D /* nova-notes_iOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		5811AE1588348B0CDA0AF6BF /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = 414C6EBBE852577C4F0D5B43 /* Build configuration list for PBXProject "nova-notes" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 3505301B829818CCCDF2F11B;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = E4559542832F8D961BCEB234 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B5D33046A56A12F02286974F /* nova-notes_iOS */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		30BF404DBAB48EE2A6F57E04 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F485C2827298FB2607CE493D /* Assets.xcassets in Resources */,
+				6D7F038DFCC5E10B7E457595 /* LaunchScreen.storyboard in Resources */,
+				5E886D1EF795F77DF3988115 /* assets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		C6C5B072960CFA38D2FF7BB5 /* Build Rust Code */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Build Rust Code";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/Externals/x86_64/${CONFIGURATION}/libapp.a",
+				"$(SRCROOT)/Externals/arm64/${CONFIGURATION}/libapp.a",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "npm run -- tauri ios xcode-script -v --platform ${PLATFORM_DISPLAY_NAME:?} --sdk-root ${SDKROOT:?} --framework-search-paths \"${FRAMEWORK_SEARCH_PATHS:?}\" --header-search-paths \"${HEADER_SEARCH_PATHS:?}\" --gcc-preprocessor-definitions \"${GCC_PREPROCESSOR_DEFINITIONS:-}\" --configuration ${CONFIGURATION:?} ${FORCE_COLOR} ${ARCHS:?}";
+		};
+/* End PBXShellScriptBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		0CC8DDD87B7929E1F4003E2B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				06116B418E33968E450029DB /* main.mm in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		3AF72A6229CED68669119D56 /* release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = release;
+		};
+		8DDF010826BFE02341894E95 /* debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = debug;
+		};
+		CE0ED25AE2D5AA478B39AC0D /* release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				ARCHS = (
+					arm64,
+				);
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "nova-notes_iOS/nova-notes_iOS.entitlements";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				ENABLE_BITCODE = NO;
+				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\".\"",
+				);
+				INFOPLIST_FILE = "nova-notes_iOS/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.nova.notes.prototype;
+				PRODUCT_NAME = "Nova";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALID_ARCHS = arm64;
+			};
+			name = release;
+		};
+		D811707B93BBCBF9998D9A6B /* debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				ARCHS = (
+					arm64,
+				);
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_ENTITLEMENTS = "nova-notes_iOS/nova-notes_iOS.entitlements";
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				ENABLE_BITCODE = NO;
+				"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"\".\"",
+				);
+				INFOPLIST_FILE = "nova-notes_iOS/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.nova.notes.prototype;
+				PRODUCT_NAME = "Nova";
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALID_ARCHS = arm64;
+			};
+			name = debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		414C6EBBE852577C4F0D5B43 /* Build configuration list for PBXProject "nova-notes" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8DDF010826BFE02341894E95 /* debug */,
+				3AF72A6229CED68669119D56 /* release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = debug;
+		};
+		55E502BFC16C310D6DEA9096 /* Build configuration list for PBXNativeTarget "nova-notes_iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D811707B93BBCBF9998D9A6B /* debug */,
+				CE0ED25AE2D5AA478B39AC0D /* release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 5811AE1588348B0CDA0AF6BF /* Project object */;
+}

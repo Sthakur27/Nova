@@ -1,0 +1,14 @@
+{
+  "identifier": "mobile",
+  "description": "On-device note editing",
+  "platforms": [
+    "iOS",
+    "android"
+  ],
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default"
+  ]
+}

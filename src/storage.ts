@@ -1,5 +1,6 @@
+import { parseSyncPolicy, setSyncChoice, type SyncChoice, type SyncPolicy } from "./syncPolicy";
 import { normalizeExtension, isUntitled } from "./fileExtensions";
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { demoFiles } from "./demo";
 import { parsePreferences, type ExplorerPreferences } from "./folders";
@@ -10,7 +11,8 @@ import {
   type SearchHit,
   type Workspace,
 } from "./model";
-export const desktop = isTauri();
+import { native, mobile, desktop } from "./platform";
+export { desktop } from "./platform";
 const prefix = "nova-demo-v1:";
 function demoPaths(): string[] {
   try {
@@ -32,6 +34,8 @@ const textFor = (path: string) =>
   localStorage.getItem(prefix + path) ?? demoFiles[path] ?? "";
 export async function openWorkspace(root: string): Promise<Workspace> {
   if (root === "demo") {
+    try { demoWorkspace.syncPolicy = loadDemoSyncPolicy(); demoWorkspace.syncError = undefined; }
+    catch (error) { demoWorkspace.syncPolicy = undefined; demoWorkspace.syncError = String(error); }
     demoWorkspace.starred = JSON.parse(localStorage.getItem("nova-demo-stars-v1") ?? "[]");
     return { ...demoWorkspace };
   }
@@ -48,6 +52,7 @@ export async function setFileStar(root: string, path: string, starred: boolean):
   return result;
 }
 export async function chooseWorkspaces(): Promise<Workspace[]> {
+  if (mobile) return [await openWorkspace("mobile")];
   if (!desktop) throw new Error("Add local folders in the Nova desktop app.");
   const selected = await open({
     directory: true,
@@ -80,7 +85,17 @@ export async function loadFolders(
   return results;
 }
 export async function loadExplorer(): Promise<ExplorerPreferences | null> {
-  if (desktop) return parsePreferences(await invoke("load_explorer"));
+  if (native) {
+    const saved = parsePreferences(await invoke("load_explorer"));
+    if (!mobile) return saved;
+    // Stable virtual root survives iOS changing the app container's absolute path.
+    return {
+      folders: [{ root: "mobile", name: "On this device", collapsed: false }],
+      active: saved?.active?.root === "mobile" ? saved.active : null,
+      mode: saved?.mode ?? "edit",
+      tabs: saved?.tabs?.filter(tab => tab.root === "mobile") ?? [],
+    };
+  }
   return parsePreferences(JSON.parse(localStorage.getItem("nova-explorer-v1") ?? "null"));
 }
 
@@ -89,11 +104,11 @@ export function saveExplorer(preferences: ExplorerPreferences): Promise<void> {
   const payload = JSON.parse(JSON.stringify(preferences));
   // Synchronous recovery survives reload/quit before native writes complete.
   try { localStorage.setItem("nova-explorer-v1", JSON.stringify(payload)); }
-  catch (error) { if (!desktop) return Promise.reject(error); }
+  catch (error) { if (!native) return Promise.reject(error); }
   const pending = preferenceQueue
     .catch(() => {})
     .then(async () => {
-      if (desktop) await invoke("save_explorer", { preferences: payload });
+      if (native) await invoke("save_explorer", { preferences: payload });
       else localStorage.setItem("nova-explorer-v1", JSON.stringify(payload));
     });
   preferenceQueue = pending;
@@ -235,6 +250,7 @@ export async function renameNote(root: string, path: string, name: string): Prom
     localStorage.setItem("nova-demo-stars-v1", JSON.stringify(renamed));
     demoWorkspace.starred = renamed;
   }
+  relocateDemoSync(path, next);
   localStorage.setItem(prefix + next, note.text);
   localStorage.setItem(prefix + next + ":bookmarks", JSON.stringify(note.bookmarks));
   demoWorkspace.files = demoWorkspace.files.map(f => f.path === path ? { path: next, name } : f);
@@ -253,6 +269,7 @@ export async function moveNote(root: string, path: string, directory: string): P
   if (next === path) return path;
   if (demoWorkspace.files.some(f => f.path === next)) throw new Error("A file with that name already exists.");
   const note = await readNote(root, path);
+  relocateDemoSync(path, next);
   localStorage.setItem(prefix + next, note.text);
   localStorage.setItem(prefix + next + ":bookmarks", JSON.stringify(note.bookmarks));
   const stars: string[] = JSON.parse(localStorage.getItem("nova-demo-stars-v1") ?? "[]");
@@ -273,6 +290,7 @@ export async function discardEmptyUntitled(root: string, path: string): Promise<
 }
 export async function deleteNote(root: string, path: string): Promise<void> {
   if (root !== "demo") return invoke("delete_note", { root, path });
+  relocateDemoSync(path);
   await setFileStar(root, path, false);
   demoWorkspace.files = demoWorkspace.files.filter(f => f.path !== path);
   persistDemoFiles();
@@ -281,4 +299,23 @@ export async function deleteNote(root: string, path: string): Promise<void> {
 }
 export async function revealNote(root: string, path: string): Promise<void> {
   return invoke("reveal_note", { root, path });
+}
+
+function loadDemoSyncPolicy(): SyncPolicy {
+  return parseSyncPolicy(JSON.parse(localStorage.getItem("nova-demo-sync-v1") ?? '{"version":1,"rules":{}}'));
+}
+export async function setWorkspaceSyncChoice(root: string, path: string, choice: SyncChoice): Promise<SyncPolicy> {
+  if (root !== "demo") return invoke("set_sync_choice", { root, path, choice });
+  const next = setSyncChoice(loadDemoSyncPolicy(), path, choice);
+  localStorage.setItem("nova-demo-sync-v1", JSON.stringify(next));
+  demoWorkspace.syncPolicy = next;
+  return next;
+}
+function relocateDemoSync(old: string, next?: string) {
+  const policy = loadDemoSyncPolicy();
+  const rule = policy.rules[old];
+  delete policy.rules[old];
+  if (next && typeof rule === "boolean") policy.rules[next] = rule;
+  localStorage.setItem("nova-demo-sync-v1", JSON.stringify(policy));
+  demoWorkspace.syncPolicy = policy;
 }
