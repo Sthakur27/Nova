@@ -117,6 +117,9 @@ export class DocumentEditor {
             if (state.selection instanceof AllSelection) {
               state.doc.forEach((node, pos) => selected.push(Decoration.node(pos, pos + node.nodeSize, { class: "document-all-selected" })));
             }
+            if (owner.editor && !owner.editor.isEditable && !state.selection.empty && !(state.selection instanceof AllSelection)) {
+              selected.push(Decoration.inline(state.selection.from, state.selection.to, { class: "read-search-selection" }));
+            }
             if (!owner.bookmarks.length || !owner.editor) return DecorationSet.create(state.doc, selected);
             const mapping = documentPositions(state.doc, owner.source);
             return DecorationSet.create(state.doc, [...selected, ...owner.bookmarks.flatMap(mark => {
@@ -272,6 +275,18 @@ export class DocumentEditor {
     const clamp = (offset: number) => Math.max(0, Math.min(doc.content.size, mapping.toDocument(offset)));
     this.editor.view.dispatch(this.editor.state.tr.setSelection(TextSelection.between(doc.resolve(clamp(from)), doc.resolve(clamp(to)))).scrollIntoView());
     if (focus && this.editor.isEditable) this.editor.view.focus();
+  }
+  scrollSelectionIntoView() {
+    // ProseMirror's scrollIntoView ignores selections when the Find input has
+    // focus. Use document coordinates to move the actual reading viewport.
+    const pane = this.editor.view.dom.closest<HTMLElement>(".document-pane");
+    if (!pane) return;
+    const match = this.editor.view.coordsAtPos(this.editor.state.selection.from);
+    const bounds = pane.getBoundingClientRect();
+    pane.scrollTo({
+      top: pane.scrollTop + match.top - bounds.top - pane.clientTop - (pane.clientHeight - (match.bottom - match.top)) / 2,
+      behavior: "instant",
+    });
   }
   format(action: FormatAction) {
     if (!this.editor.isEditable) return;

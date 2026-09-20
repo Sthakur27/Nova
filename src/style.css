@@ -2155,3 +2155,6 @@ kbd {
 .sync-name small { font-size: 11px; color: #aaa2b6; }
 .sync-row select { max-width: 48%; padding: 7px; border-radius: 6px; border: 1px solid #ffffff20; background: #242329; color: #ded7e9; font: inherit; font-size: 12px; }
 .sync-row select:focus-visible { outline: 2px solid #a98bdd; outline-offset: 2px; }
+
+.read-find { flex-shrink: 0; border-bottom: 1px solid #ffffff12; }
+.app-shell:has(.read-find[data-match="true"]) .read-search-selection { background: #bda0ed55; outline: 1px solid #bda0ed80; }

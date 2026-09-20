@@ -1,3 +1,4 @@
+import ReadFind from "./ReadFind";
 import { mobile } from "./platform";
 import { useCompactLayout } from "./useCompactLayout";
 import SyncSettings from "./SyncSettings";
@@ -1329,6 +1330,12 @@ export default function App() {
           </button>
         </div>
         </div>
+        {data && mode === "read" && <ReadFind
+          key={JSON.stringify([workspace.root, path, data.revision])}
+          text={preview}
+          disabled={!!(syncFolder || settingsOpen || palette || bookmarkDraft || renameTarget || fileAction)}
+          onJump={jump}
+        />}
         <div className="document-area" onWheelCapture={mobile ? undefined : extendScrollSpace}>
           {loading && <div className="loading">Opening your note…</div>}
           {data && (

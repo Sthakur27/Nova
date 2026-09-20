@@ -269,7 +269,10 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
           selection: { anchor: clamp(from), head: clamp(to) },
           effects: EditorView.scrollIntoView(clamp(from), { y: "center" }),
         });
-        if (latest.current.documentMode) documentEditor.current?.select(clamp(from), clamp(to));
+        if (latest.current.documentMode) {
+          documentEditor.current?.select(clamp(from), clamp(to));
+          documentEditor.current?.scrollSelectionIntoView();
+        }
         else v.focus();
       },
     }),

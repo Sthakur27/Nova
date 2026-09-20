@@ -29,7 +29,7 @@ Use the + in the bookmark sidebar or press Command-Shift-B. Your bookmark gets a
 | Find a file or phrase | ⌘ / Ctrl K |
 | Bookmark a passage | ⌘ / Ctrl Shift B |
 | Save your changes | ⌘ / Ctrl S |
-| Find in this file | ⌘ / Ctrl F, in Write mode |
+| Find in this file | ⌘ / Ctrl F |
 
 ## Start with a thought
 

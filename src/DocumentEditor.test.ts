@@ -211,3 +211,37 @@ it.each([
   mount.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click();
   expect(editor.source).toBe(source.replace("[ ]", "[x]"));
 });
+
+
+it("keeps a read-mode search selection decorated while the find input has focus", () => {
+  const { editor, mount, change } = create("A **needle** here.");
+  editor.setEditable(false, false);
+  editor.select(4, 10, false);
+  const input = document.createElement("input");
+  document.body.append(input);
+  input.focus();
+  expect(mount.querySelector(".read-search-selection")?.textContent).toBe("needle");
+  expect(change).not.toHaveBeenCalled();
+});
+
+
+it("scrolls the reading pane to a match even when Find owns focus", () => {
+  const { editor, mount, change } = create("First needle.\n\nLast needle.");
+  const pane = document.createElement("div");
+  pane.className = "document-pane";
+  mount.before(pane);
+  pane.append(mount);
+  Object.defineProperty(pane, "clientHeight", { value: 400 });
+  vi.spyOn(pane, "getBoundingClientRect").mockReturnValue({ top: 100 } as DOMRect);
+  pane.scrollTo = vi.fn();
+  editor.setEditable(false, false);
+  const input = document.createElement("input");
+  document.body.append(input);
+  input.focus();
+  editor.select(20, 26, false);
+  vi.spyOn(editor.editor.view, "coordsAtPos").mockReturnValue({ top: 1500, bottom: 1520, left: 0, right: 20 });
+  editor.scrollSelectionIntoView();
+  expect(pane.scrollTo).toHaveBeenLastCalledWith({ top: 1210, behavior: "instant" });
+  expect(document.activeElement).toBe(input);
+  expect(change).not.toHaveBeenCalled();
+});
