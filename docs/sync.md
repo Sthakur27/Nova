@@ -80,6 +80,35 @@ in the managed Cloud sync loop.
 - Other backup applications can still upload files in their own watched folders.
 - Browser previews and Android cannot connect to Drive.
 
+## Windows and macOS configuration
+
+Windows uses the same Cloud sync engine as macOS: system-browser sign-in with
+PKCE and a temporary `127.0.0.1` callback. Windows saves refresh credentials in
+Windows Credential Manager. Access tokens remain in the native process.
+
+For a local build, copy `.env.example` to `.env.local` in the repository root and
+set `NOVA_GOOGLE_CLIENT_SECRET` to the secret for the Desktop OAuth client ID in
+`src-tauri/src/drive_auth.rs`. Rebuild with `npm run desktop` or `npm run package`.
+The client must belong to the same Google Cloud project as the other Nova clients
+so its `drive.file` access can discover Nova's existing Cloud spaces. Enable the
+Drive API and add the signing-in account as a test user if the consent app is in
+testing mode. Users of a configured installer need no environment variables.
+
+For GitHub releases, set the repository Actions secret
+`NOVA_GOOGLE_CLIENT_SECRET`. The installer workflow supplies it to both desktop
+platforms and blocks publishing from main when it is missing. Pull-request builds
+without access to secrets can still build and test, but cannot connect to Drive.
+
+On Windows, rename Drive files that use reserved device names (such as `CON.txt`
+or `NUL.md`), forbidden filename characters, or names ending in a dot or space.
+Sync rejects these names before opening a local file; it retains the Drive copy.
+
+Windows verification: connect, confirm existing Cloud notes download, edit a new
+test note and check it on another device, restart Nova to check the saved login,
+then edit offline and reconnect to check retry. Disconnect should remove the
+saved login while retaining downloaded notes. These live checks require a
+configured build and Google sign-in.
+
 ## iOS configuration
 
 Google sign-in uses ASWebAuthenticationSession with a state-checked PKCE callback.

@@ -55,6 +55,10 @@ jobs:
             echo "The updater signing secret must be configured before publishing a release."
             exit 1
           fi
+          if [[ "$GITHUB_REF" == refs/heads/main && -z "$NOVA_GOOGLE_CLIENT_SECRET" ]]; then
+            echo "Configure NOVA_GOOGLE_CLIENT_SECRET before publishing installers with Google Drive sync."
+            exit 1
+          fi
           npm run package -- --target ${{ matrix.target }}
       - name: Verify packaged Mac signature
         if: runner.os == 'macOS'

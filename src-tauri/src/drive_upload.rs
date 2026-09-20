@@ -342,7 +342,29 @@ pub async fn drive_workspaces(auth: State<'_,DriveAuth>) -> Result<Vec<CloudWork
     }).await.map_err(crate::err)?
 }
 fn safe_name(name: &str) -> bool {
+    #[cfg(target_os = "windows")]
+    if !windows_name(name) { return false; }
     !name.is_empty() && name != "." && name != ".." && name != ".nova" && !name.contains(['/', '\\', ':']) && !name.chars().any(char::is_control)
+}
+// Drive permits names that Win32 aliases or cannot materialize as ordinary files.
+// Reject them before opening anything, including device names with extensions.
+#[cfg(any(target_os = "windows", test))]
+fn windows_name(name: &str) -> bool {
+    if name.contains(['<', '>', '"', '|', '?', '*']) || name.ends_with(['.', ' ']) {
+        return false;
+    }
+    let stem = name.split('.').next().unwrap_or("").trim_end_matches(' ').to_uppercase();
+    if matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL" | "CONIN$" | "CONOUT$") {
+        return false;
+    }
+    for prefix in ["COM", "LPT"] {
+        if let Some(number) = stem.strip_prefix(prefix) {
+            if matches!(number, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³") {
+                return false;
+            }
+        }
+    }
+    true
 }
 fn restore_tree(drive: &Drive, remote: &str, destination: &Path, prefix: &str, rules: &mut serde_json::Map<String,Value>, budget: &mut u64, depth: usize) -> Result<(),String> {
     if depth > 32 { return Err("Drive folders are nested too deeply.".into()); }
@@ -426,6 +448,17 @@ mod tests {
     fn restore_names_stay_inside_the_new_folder() {
         for name in ["", ".", "..", ".nova", "../secret", "/absolute", "a\\b", "C:drive", "line\nfeed"] { assert!(!safe_name(name), "{name}"); }
         assert!(safe_name("Personal.txt")); assert!(safe_name("Notes & ideas"));
+    }
+    #[test]
+    fn windows_download_names_reject_devices_and_aliases() {
+        for name in ["CON", "nul.txt", "Aux.md", "PRN.notes.txt", "COM1.txt", "lpt9.md", "COM¹.txt", "LPT².md", "CON .txt", "CONIN$", "CONOUT$", "note.", "note.txt ", "a<b.txt", "a>b.txt", "a\"b.txt", "a|b.txt", "a?b.txt", "a*b.txt"] {
+            assert!(!windows_name(name), "{name}");
+            #[cfg(target_os = "windows")]
+            assert!(!safe_name(name), "{name}");
+        }
+        for name in ["Notes.txt", "Résumé.md", "COM10.txt", "console.md", "Notes & ideas"] {
+            assert!(windows_name(name), "{name}");
+        }
     }
     #[test]
     fn drive_ids_cannot_inject_paths_or_queries() {
