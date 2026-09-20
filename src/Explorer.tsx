@@ -43,7 +43,7 @@ function FileTree({
 }: {
   paths: string[];
   active: string;
-  onOpen: (path: string) => void;
+  onOpen: (path: string, pinned?: boolean) => void;
   onRename: (path: string) => void;
   onContextMenu: (event: MouseEvent, path: string) => void;
   starred: Set<string>;
@@ -111,6 +111,7 @@ function FileTree({
             className="file-open"
             title={path}
             onClick={event => { if (event.detail <= 1) onOpen(path); }}
+            onDoubleClick={() => onOpen(path, true)}
           >
             <FileText size={14} />
             <span>{path.slice(prefix.length)}</span>
@@ -149,7 +150,7 @@ type Props = {
   folders: Workspace[];
   activeRoot: string;
   activePath: string;
-  onOpen: (folder: Workspace, path: string) => void;
+  onOpen: (folder: Workspace, path: string, pinned?: boolean) => void;
   onRename: (folder: Workspace, path: string) => void;
   onStar: (folder: Workspace, path: string, starred: boolean) => void;
   onFileAction: (folder: Workspace, path: string, action: "move" | "delete" | "reveal") => void;
@@ -192,6 +193,7 @@ export default function Explorer({
     return () => { window.removeEventListener("pointerdown", outside); window.removeEventListener("resize", close); window.removeEventListener("blur", close); window.removeEventListener("scroll", close, true); };
   }, [menu]);
   const [starredOnly, setStarredOnly] = useState(false);
+  const [syncOnly, setSyncOnly] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null),
     [target, setTarget] = useState<string | null>(null),
     [announcement, setAnnouncement] = useState("");
@@ -237,11 +239,20 @@ export default function Explorer({
         <button
           className="icon-button stars-toggle"
           onClick={() => setStarredOnly(value => !value)}
-          title={starredOnly ? "Show all files" : "Show starred files only"}
+          title={starredOnly ? "Clear starred filter" : "Show starred files only"}
           aria-label="Show starred files only"
           aria-pressed={starredOnly}
         >
           <NovaStar size={17} />
+        </button>
+        <button
+          className="icon-button sync-toggle"
+          onClick={() => setSyncOnly(value => !value)}
+          title={syncOnly ? "Clear sync filter" : "Show files selected for sync only"}
+          aria-label="Show files selected for sync only"
+          aria-pressed={syncOnly}
+        >
+          <Cloud size={17} />
         </button>
         <button
           className="icon-button"
@@ -264,7 +275,9 @@ export default function Explorer({
           const starred = new Set(folder.starred ?? []);
           const collapsed = folder.collapsed ?? true;
           const closed = closedDirectories(folder);
-          const files = folder.files.filter(file => !starredOnly || starred.has(file.path));
+          const files = folder.files.filter(file =>
+            (!starredOnly || starred.has(file.path)) &&
+            (!syncOnly || (!folder.syncError && syncIncluded(folder.syncPolicy, file.path))));
           return (
           <section
             key={folder.root}
@@ -378,7 +391,7 @@ export default function Explorer({
                     }))}
                     paths={files.map((f) => f.path)}
                     active={folder.root === activeRoot ? activePath : ""}
-                    onOpen={(path) => onOpen(folder, path)}
+                    onOpen={(path, pinned) => onOpen(folder, path, pinned)}
                     onRename={(path) => onRename(folder, path)}
                     onContextMenu={(event, path) => { event.preventDefault(); const trigger = event.currentTarget.closest(".file-row")!.querySelector<HTMLElement>(".file-open")!; const rect = trigger.getBoundingClientRect(); setMenu({ folder, path, trigger, x: Math.max(8, Math.min(event.clientX || rect.left, window.innerWidth - 228)), y: Math.max(8, Math.min(event.clientY || rect.bottom, window.innerHeight - 170)) }); }}
                     syncPolicy={folder.syncError ? undefined : folder.syncPolicy}
@@ -388,7 +401,9 @@ export default function Explorer({
                     onStar={(path, value) => onStar(folder, path, value)}
                   />
                 ) : (
-                  <p className="folder-empty">{starredOnly ? "No starred files in this folder." : "No text or Markdown files."}</p>
+                  <p className="folder-empty">{syncOnly
+                    ? folder.syncError ? "Sync selection unavailable." : starredOnly ? "No starred files selected for sync in this folder." : "No files selected for sync in this folder."
+                    : starredOnly ? "No starred files in this folder." : "No text or Markdown files."}</p>
                 )}
               </div>
             )}

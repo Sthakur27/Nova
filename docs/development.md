@@ -95,7 +95,9 @@ from users’ refresh tokens, which are stored through the native credential sto
 Ordinary native tests cover callback validation, credential caching, selection
 inheritance, and restore name/ID validation without contacting Google. Frontend
 tests cover connection state, queued uploads, restore controls, tab-close prompts
-and shortcuts, and formatting state. Live Drive tests are explicitly ignored:
+and shortcuts, and formatting state. Additional tests cover explorer double-click
+promotion, click-position title editing, and confirmation before disabling
+effective sync, including inherited folder defaults. Live Drive tests are explicitly ignored:
 `live_selected_upload` requires `NOVA_DRIVE_TEST_ROOT` and a JSON array in
 `NOVA_DRIVE_TEST_FILES`, uploads those selected root-level notes, and leaves them
 in Drive. `live_update_and_conflict_guard` creates a generated test folder,

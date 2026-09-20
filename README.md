@@ -61,7 +61,7 @@ Let a little of your background show through the page with **Translucent backgro
 
 ### Comfortable controls, close at hand
 
-Give a long paragraph more breathing room with **Line spacing**, or choose a comfortable reading width with **Text width**. Both controls are right above your note. Drag the side-panel dividers to resize them, and use the arrows around the edges to tuck panels away.
+Give a long paragraph more breathing room with **Line spacing**, or choose a comfortable reading width with **Text width**. These controls, along with **Font** and **Text size**, are right above your note. Drag the side-panel dividers to resize them, and use the arrows around the edges to tuck panels away.
 
 ![Nova's writing view with the line-spacing menu open, formatting toolbar, and panel controls](docs/screenshots/ergonomic-controls.jpg)
 

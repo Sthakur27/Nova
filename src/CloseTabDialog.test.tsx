@@ -18,6 +18,7 @@ it("offers save, discard, and cancel; Escape cancels and closing restores focus"
   try {
     await act(async () => root.render(<CloseTabDialog path="notes/Draft.md" onChoose={choose} />));
     expect(container.textContent).toContain("Draft.md");
+    expect(document.activeElement).toBe(container.querySelector("h2"));
     for (const button of container.querySelectorAll("button")) {
       await act(async () => button.click());
       expect(choose).toHaveBeenLastCalledWith(button.textContent!.toLowerCase());

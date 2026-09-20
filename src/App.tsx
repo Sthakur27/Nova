@@ -1,3 +1,4 @@
+import { confirmSyncOff } from "./confirmSyncOff";
 import CloseTabDialog, { type CloseTabChoice } from "./CloseTabDialog";
 import { installTabCloseShortcut } from "./tabShortcuts";
 import ReadFind from "./ReadFind";
@@ -66,6 +67,7 @@ import Explorer from "./Explorer";
 import FileActionDialog from "./FileActionDialog";
 import RenameDialog from "./RenameDialog";
 import FormatToolbar from "./FormatToolbar";
+import { FontControl, TextSizeControl, editorFonts, textSizes, type EditorFont } from "./TypographyControls";
 import type { FormatAction } from "./richMarkdown";
 import { addFolders, type EditorMode } from "./folders";
 import VoiceControl from "./VoiceControl";
@@ -141,8 +143,9 @@ export default function App() {
     syncPending.current = true;
     setSyncBusy(true);
     try {
-      const policy = await setWorkspaceSyncChoice(folder.root, notePath,
-        syncIncluded(folder.syncPolicy, notePath) ? "exclude" : "include");
+      const included = syncIncluded(folder.syncPolicy, notePath);
+      if (included && !await confirmSyncOff(notePath)) return;
+      const policy = await setWorkspaceSyncChoice(folder.root, notePath, included ? "exclude" : "include");
       setFolders(old => old.map(item => item.root === folder.root ? { ...item, syncPolicy: policy } : item));
       setWorkspace(old => old.root === folder.root ? { ...old, syncPolicy: policy } : old);
       uploads.schedule(folder.root);
@@ -162,7 +165,8 @@ export default function App() {
   const [showLineHighlight, setShowLineHighlight, highlightError] = usePreference<boolean>("line-highlight", false);
   const [wordWrap, setWordWrap, wrapError] = usePreference<boolean>("word-wrap", true);
   const [spellcheck, setSpellcheck, spellingError] = usePreference<boolean>("spellcheck", true);
-  const [fontSize, setFontSize, fontError] = usePreference<string>("editor-size", "default", ["small", "default", "large", "extra-large"]);
+  const [fontSize, setFontSize, fontError] = usePreference<string>("editor-size", "default", textSizes);
+  const [editorFont, setEditorFont, editorFontError] = usePreference<EditorFont>("editor-font", "default", editorFonts);
   const [textWidth, setTextWidth, widthError] = usePreference<TextWidth>("text-width", "default", textWidths);
   const [lineSpacing, setLineSpacing, spacingError] = usePreference<LineSpacing>("line-spacing", "default", lineSpacings);
   const toggleGalaxy = () => setGalaxyMode(!galaxyMode);
@@ -1125,7 +1129,7 @@ export default function App() {
     setPreview(editor.current?.text() ?? "");
   };
   return (
-    <div className="app-shell" data-compact={compact} data-mobile={mobile} data-mobile-view={mobileView} data-focus-mode={!compact && focusMode} data-window-focused={windowFocused} data-galaxy={galaxyMode} data-translucent={supportsTranslucency && translucent} data-editor-size={fontSize} data-text-width={textWidth} data-line-spacing={lineSpacing}
+    <div className="app-shell" data-compact={compact} data-mobile={mobile} data-mobile-view={mobileView} data-focus-mode={!compact && focusMode} data-window-focused={windowFocused} data-galaxy={galaxyMode} data-translucent={supportsTranslucency && translucent} data-editor-size={fontSize} data-editor-font={editorFont} data-text-width={textWidth} data-line-spacing={lineSpacing}
       onPointerMove={(event) => {
         if (event.pointerType === "touch") return;
         const bounds = event.currentTarget.getBoundingClientRect();
@@ -1182,11 +1186,8 @@ export default function App() {
           folders={folders}
           activeRoot={workspace.root}
           activePath={path}
-          onOpen={(folder, path) => {
-            const active = current.current;
-            const focusedFlex = active.hasDocument && tabsRef.current.some(tab =>
-              !tab.pinned && tab.root === active.workspace.root && tab.path === active.path);
-            void openNote(path, undefined, folder, undefined, tabsRef.current.length > 0 && !focusedFlex);
+          onOpen={(folder, path, pinned = false) => {
+            void openNote(path, undefined, folder, undefined, pinned);
           }}
           onFileAction={(folder, path, action) => {
             if (action === "reveal") void revealNote(folder.root, path).catch(error => setNotice(String(error)));
@@ -1228,9 +1229,6 @@ export default function App() {
               aria-haspopup="dialog" onClick={() => showSync(workspace)}>
               <Cloud size={17} aria-hidden="true" />
             </button>
-            {drive.status.connected && <button className="sidebar-action" aria-label="Open workspace in Google Drive"
-              title="Open workspace in Google Drive" disabled={!!uploads.activeRoot || workspace.root === "demo"}
-              onClick={() => void uploads.openFolder(workspace.root)}><ExternalLink size={17} aria-hidden="true" /></button>}
             <button className="sidebar-action focus-toggle" aria-label="Enter focus mode" aria-pressed={focusMode}
               aria-describedby="enter-focus-tooltip" aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+G`} onClick={() => changeFocusMode(true)}>
               <BlackHoleIcon />
@@ -1317,10 +1315,12 @@ export default function App() {
           </div>
           <button className="icon-button new-tab-button" onClick={() => void newTab()} aria-label="New tab" title="New tab (Ctrl T)"><Plus size={16} /></button>
           <div className="tab-bar-space" />
-          {drive.status.connected && <button className="top-sync-button" aria-label={drive.status.connected ? "Sync settings · Google Drive connected" : "Connect Google Drive"}
+          {drive.status.connected && <div className="top-drive-actions"><button className="top-sync-button" aria-label={drive.status.connected ? "Sync settings · Google Drive connected" : "Connect Google Drive"}
             title={drive.status.connected ? `Connected as ${drive.status.email}` : "Connect Google Drive"} aria-haspopup="dialog" onClick={() => showSync(workspace)}>
             <Cloud size={16} aria-hidden="true" /><span>{uploads.activeRoot ? "Uploading…" : Object.values(uploads.errors).some(Boolean) ? "Sync needs attention" : "Drive connected"}</span>
-          </button>}
+          </button><button className="icon-button" aria-label="Open workspace in Google Drive"
+            title="Open workspace in Google Drive" disabled={!!uploads.activeRoot || workspace.root === "demo"}
+            onClick={() => void uploads.openFolder(workspace.root)}><ExternalLink size={15} aria-hidden="true" /></button></div>}
           <button hidden={compact} className="icon-button" onClick={toggleTerminal}
             aria-label={terminalOpen ? "Collapse terminal" : "Open terminal"} title={`Toggle terminal (${mod}↓)`} aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+ArrowDown`}
             aria-expanded={terminalOpen} aria-controls="terminal-panel"><TerminalSquare size={17} /></button>
@@ -1340,6 +1340,8 @@ export default function App() {
             <span>{path.split("/").at(-1)}</span>
           </div>
           <div className="read-controls" ref={setReadControls} />
+          <FontControl toolbar value={editorFont} onChange={setEditorFont} />
+          <TextSizeControl toolbar value={fontSize} onChange={setFontSize} />
           <TextWidthControl toolbar value={textWidth} onChange={setTextWidth} />
           <LineSpacingControl toolbar value={lineSpacing} onChange={setLineSpacing} />
           {!mobile && <button
@@ -1740,15 +1742,17 @@ export default function App() {
         />
       )}
       {settingsOpen && <Settings syncConnected={drive.status.connected} onSyncSetup={() => { setSettingsOpen(false); showSync(workspace); }} onClose={() => setSettingsOpen(false)}
+        onOpenDrive={() => void uploads.openFolder(workspace.root)} openDriveDisabled={!!uploads.activeRoot || workspace.root === "demo"}
         galaxy={galaxyMode} onGalaxy={setGalaxyMode}
         lineHighlight={showLineHighlight} onLineHighlight={setShowLineHighlight}
         lineNumbers={showLineNumbers} onLineNumbers={setShowLineNumbers} wordWrap={wordWrap} onWordWrap={setWordWrap}
         spellcheck={spellcheck} onSpellcheck={setSpellcheck} bookmarks={rail} onBookmarks={setRail}
         defaultExtension={defaultExtension} onDefaultExtension={setDefaultExtension}
         fontSize={fontSize} onFontSize={setFontSize}
+        editorFont={editorFont} onEditorFont={setEditorFont}
         textWidth={textWidth} onTextWidth={setTextWidth}
         lineSpacing={lineSpacing} onLineSpacing={setLineSpacing}
-        storageError={extensionError || spacingError || widthError || galaxyError || translucencyError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
+        storageError={editorFontError || extensionError || spacingError || widthError || galaxyError || translucencyError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
       {bookmarkDraft && (
         <div
           className="overlay"

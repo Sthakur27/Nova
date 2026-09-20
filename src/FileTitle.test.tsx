@@ -15,6 +15,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   container.remove();
+  Reflect.deleteProperty(document, "caretRangeFromPoint");
   vi.unstubAllGlobals();
 });
 async function edit(onRename: (name: string) => Promise<void>, path = "Notes/Original.md") {
@@ -114,6 +115,10 @@ it("opens a plain-text Read title on a single mouse press before text selection"
     <FileTitle path="Notes/Scratchpad.txt" onRename={rename} />
   </article></div>));
   const button = container.querySelector("button")!;
+  const caretRange = document.createRange();
+  caretRange.setStart(button.firstChild!, 4);
+  caretRange.collapse(true);
+  Object.defineProperty(document, "caretRangeFromPoint", { configurable: true, value: vi.fn(() => caretRange) });
   const press = new MouseEvent("pointerdown", { bubbles: true, cancelable: true, button: 0 });
   Object.defineProperty(press, "pointerType", { value: "mouse" });
   await act(async () => button.dispatchEvent(press));
@@ -121,7 +126,7 @@ it("opens a plain-text Read title on a single mouse press before text selection"
   const input = container.querySelector("textarea")!;
   expect(document.activeElement).toBe(input);
   expect(input.value).toBe("Scratchpad");
-  expect([input.selectionStart, input.selectionEnd]).toEqual([0, 10]);
+  expect([input.selectionStart, input.selectionEnd]).toEqual([4, 4]);
   expect(rename).not.toHaveBeenCalled();
 });
 

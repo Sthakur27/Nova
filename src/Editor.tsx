@@ -370,7 +370,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
             color: "#d4d4da",
           },
           ".cm-scroller": {
-            fontFamily: '"SFMono-Regular", Consolas, monospace',
+            fontFamily: 'var(--editor-font-family, "SFMono-Regular", Consolas, monospace)',
             fontSize: "var(--editor-font-size, 14px)",
             lineHeight: "var(--editor-line-height, 1.9)",
             overflow: "auto",

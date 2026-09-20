@@ -1,8 +1,9 @@
+import { FontControl, TextSizeControl, type EditorFont } from "./TypographyControls";
 import LineSpacingControl, { type LineSpacing } from "./LineSpacingControl";
 import { normalizeExtension } from "./fileExtensions";
 import { useEffect, useId, useRef, useState } from "react";
 import TextWidthControl, { type TextWidth } from "./TextWidthControl";
-import { Check, Settings2, X } from "lucide-react";
+import { Check, ExternalLink, Settings2, X } from "lucide-react";
 
 function Toggle({ title, description, checked, onChange }: {
   title: string; description: string; checked: boolean; onChange: (value: boolean) => void;
@@ -20,12 +21,14 @@ function Toggle({ title, description, checked, onChange }: {
 type Props = {
   onClose: () => void;
   syncConnected?: boolean; onSyncSetup?: () => void;
+  onOpenDrive?: () => void; openDriveDisabled?: boolean;
   galaxy: boolean; onGalaxy: (value: boolean) => void;
   lineHighlight: boolean; onLineHighlight: (value: boolean) => void;
   lineNumbers: boolean; onLineNumbers: (value: boolean) => void;
   wordWrap: boolean; onWordWrap: (value: boolean) => void;
   spellcheck: boolean; onSpellcheck: (value: boolean) => void;
   bookmarks: boolean; onBookmarks: (value: boolean) => void;
+  editorFont: EditorFont; onEditorFont: (value: EditorFont) => void;
   fontSize: string; onFontSize: (value: string) => void;
   lineSpacing: LineSpacing; onLineSpacing: (value: LineSpacing) => void;
   textWidth: TextWidth; onTextWidth: (value: TextWidth) => void;
@@ -59,10 +62,11 @@ export default function Settings(props: Props) {
         <Toggle title="Galaxy mode" description="A translucent backdrop with motion and glow around your workspace." checked={props.galaxy} onChange={props.onGalaxy} />
       </section>
       <section aria-labelledby="settings-editor"><h2 id="settings-editor">Editor</h2>
-        <div className="settings-row"><div><label htmlFor="settings-font-size">Text size</label><p>Adjust the text in Edit and Source modes.</p></div>
-          <select id="settings-font-size" value={props.fontSize} onChange={(e) => props.onFontSize(e.target.value)}>
-            <option value="small">Small</option><option value="default">Default</option><option value="large">Large</option><option value="extra-large">Extra large</option>
-          </select>
+        <div className="settings-row"><div><label htmlFor="settings-font">Font</label><p>Choose the text font. Default keeps the original typography.</p></div>
+          <FontControl id="settings-font" value={props.editorFont} onChange={props.onEditorFont} />
+        </div>
+        <div className="settings-row"><div><label htmlFor="settings-font-size">Text size</label><p>Adjust the text in Edit, Source, and Read modes.</p></div>
+          <TextSizeControl id="settings-font-size" value={props.fontSize} onChange={props.onFontSize} />
         </div>
         <div className="settings-row"><div><label htmlFor="settings-text-width">Text width</label><p>Set the text area in Edit, Source, and Read modes.</p></div>
           <TextWidthControl id="settings-text-width" value={props.textWidth} onChange={props.onTextWidth} />
@@ -79,6 +83,12 @@ export default function Settings(props: Props) {
         <div className="settings-row"><div><label>Optional sync</label><p>{props.syncConnected ? "Manage your connected account and file choices." : "Connect an account to enable sync controls in your workspace."}</p></div>
           <button onClick={props.onSyncSetup}>{props.syncConnected ? "Manage sync" : "Set up sync"}</button>
         </div>
+        {props.syncConnected && props.onOpenDrive && <div className="settings-row">
+          <div><label>Workspace folder</label><p>View this workspace’s files in Google Drive.</p></div>
+          <button className="settings-drive-link" disabled={props.openDriveDisabled} onClick={props.onOpenDrive}>
+            <ExternalLink size={15} aria-hidden="true" />Open in Drive
+          </button>
+        </div>}
       </section>}
       <section aria-labelledby="settings-workspace"><h2 id="settings-workspace">Workspace</h2>
         <div className="settings-row"><div><label htmlFor="settings-extension">Default file extension</label><p id="settings-extension-help">Use any extension for new text files. Default: .txt.</p>

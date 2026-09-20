@@ -404,8 +404,7 @@ kbd {
   padding: 0;
   border: 0;
   border-radius: 4px;
-  outline: 2px solid #b8a0ed;
-  outline-offset: 4px;
+  outline: none;
   background: transparent;
   color: #e3dfe9;
   font-family: "Lora", Georgia, serif;
@@ -452,7 +451,8 @@ kbd {
   padding: 30px 66px 50px;
   line-height: var(--editor-line-height, 1.95);
   color: #adadb8;
-  font-size: 13px;
+  font-size: var(--editor-visual-size, 13px);
+  font-family: var(--editor-font-family, "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
 }
 .document-eyebrow {
   font-size: 8px;
@@ -1409,7 +1409,7 @@ kbd {
   text-decoration: line-through;
 }
 .cm-editor.live-edit .cm-scroller {
-  font-family: "DM Sans", sans-serif;
+  font-family: var(--editor-font-family, "DM Sans", sans-serif);
   font-size: 15px;
   line-height: var(--editor-line-height, 1.85);
 }
@@ -2051,6 +2051,20 @@ kbd {
 .rename-error { color: #f99; font-size: 12px; line-height: 1.5; }
 .rename-dialog button:disabled { opacity: .5; cursor: default; }
 
+.close-tab-dialog h2 { margin: 0 0 12px; outline: none; }
+.close-tab-dialog > p { margin: 0 0 24px; color: #a8a6b4; font-size: 13px; line-height: 1.65; overflow-wrap: anywhere; }
+.close-tab-dialog .dialog-buttons { gap: 8px; flex-wrap: wrap; }
+.close-tab-dialog .dialog-buttons button {
+  min-height: 36px; padding: 8px 14px; border: 1px solid #ffffff0f; border-radius: 6px;
+  background: #ffffff04; color: #a8a6b4; font-size: 12px;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+.close-tab-dialog .dialog-buttons button:hover { background: #bda0ed0c; border-color: #bda0ed30; color: #e2d8ef; }
+.close-tab-dialog .dialog-buttons .close-tab-discard { background: #e0a6a608; border-color: #e0a6a62c; color: #e0a6a6; }
+.close-tab-dialog .dialog-buttons .close-tab-discard:hover { background: #e0a6a614; border-color: #e0a6a650; color: #f0baba; }
+.close-tab-dialog .dialog-buttons .close-tab-save { background: #b497dc19; border-color: #b497dc45; color: #d8c3f0; }
+.close-tab-dialog .dialog-buttons .close-tab-save:hover { background: #b497dc29; border-color: #b497dc70; color: #e2d8ef; }
+
 .explorer-actions { display: flex; gap: 3px; }
 .file-row { padding-top: 0; padding-bottom: 0; gap: 0; }
 .file-open { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; min-height: 34px; text-align: left; color: inherit; }
@@ -2079,7 +2093,7 @@ kbd {
   fill: #b580ff30;
   filter: drop-shadow(0 0 3px #b580ff99);
 }
-.stars-toggle[aria-pressed="true"] {
+.stars-toggle[aria-pressed="true"], .sync-toggle[aria-pressed="true"] {
   background: radial-gradient(ellipse at center, #b580ff25, #b580ff08);
   box-shadow: inset 0 0 0 1px #c39aff30, 0 0 10px #a36aff12;
 }
@@ -2277,6 +2291,8 @@ kbd {
   border: 1px solid #b497dc25; border-radius: 6px; margin: 0 5px;
   background: transparent; color: #c8b2e4; cursor: pointer; font: inherit; font-size: 12px;
 }
+.top-drive-actions { display: flex; align-items: center; flex-shrink: 0; margin-right: 5px; }
+.settings-drive-link { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .note-tab .tab-sync { display: flex; align-items: center; padding: 7px; border-radius: 4px; color: #82798e; }
 .note-tab .tab-sync[data-selected="true"] { color: #c8b2e4; }
 .note-tab .tab-sync:hover { background: #ffffff15; color: #e5d5fa; }
@@ -2309,10 +2325,10 @@ kbd {
   border-radius: 3px;
 }
 
-.file-sync { color: #9582ae; flex-shrink: 0; }
-.file-sync[aria-pressed="true"] { color: #cfacff; }
-.file-sync:hover { color: #dfcaff; background: #b58aff12; }
-.file-sync:focus-visible { outline: 1px solid #cfacff; outline-offset: 2px; }
+.file-sync, .sync-toggle { color: #9582ae; flex-shrink: 0; }
+.file-sync[aria-pressed="true"], .sync-toggle[aria-pressed="true"] { color: #cfacff; }
+.file-sync:hover, .sync-toggle:hover { color: #dfcaff; background: #b58aff12; }
+.file-sync:focus-visible, .sync-toggle:focus-visible { outline: 1px solid #cfacff; outline-offset: 2px; }
 .file-sync:disabled { cursor: wait; }
 
 .drive-connection { border: 1px solid #b497dc40; background: #b497dc0c; border-radius: 10px; padding: 16px; }
@@ -2416,3 +2432,15 @@ kbd {
   color: #e2d4ff;
   box-shadow: inset 0 0 0 1px #b8a0ed70;
 }
+
+/* Unset by default to preserve the original typography in each mode. */
+.app-shell[data-editor-font="dm-sans"] { --editor-font-family: "DM Sans", sans-serif; }
+.app-shell[data-editor-font="lora"] { --editor-font-family: "Lora", Georgia, serif; }
+.app-shell[data-editor-font="system"] { --editor-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.app-shell[data-editor-font="mono"] { --editor-font-family: "SFMono-Regular", Consolas, monospace; }
+
+.sync-off-dialog { max-width: 440px; padding: 24px; }
+.sync-off-dialog h2 { margin: 0 0 12px; font-size: 18px; }
+.sync-off-dialog p { line-height: 1.6; color: var(--muted); margin-bottom: 24px; }
+.sync-off-dialog > div { display: flex; justify-content: flex-end; gap: 10px; }
+.sync-off-dialog button { padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; }

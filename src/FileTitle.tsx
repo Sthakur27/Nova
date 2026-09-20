@@ -16,10 +16,14 @@ export default function FileTitle({ path, onRename }: { path: string; onRename?:
   const pending = useRef(false);
   const cancelled = useRef(false);
   const input = useRef<HTMLTextAreaElement>(null);
+  const initialCaret = useRef(0);
   const errorId = useId();
 
   useLayoutEffect(() => {
-    if (editing) { input.current?.focus(); input.current?.select(); }
+    if (editing && input.current) {
+      input.current.focus();
+      input.current.setSelectionRange(initialCaret.current, initialCaret.current);
+    }
   }, [editing]);
   useLayoutEffect(() => {
     if (!input.current) return;
@@ -27,7 +31,21 @@ export default function FileTitle({ path, onRename }: { path: string; onRename?:
     input.current.style.height = `${input.current.scrollHeight}px`;
   }, [editing, draft]);
 
-  function beginEditing() {
+  function beginEditing(element?: HTMLElement, x?: number, y?: number) {
+    initialCaret.current = name.length;
+    if (element && x !== undefined && y !== undefined) {
+      // Hit-test the rendered heading before replacing it with the text field.
+      const position = document.caretPositionFromPoint?.(x, y);
+      const range = position ? undefined : document.caretRangeFromPoint?.(x, y);
+      const node = position?.offsetNode ?? range?.startContainer;
+      const offset = position?.offset ?? range?.startOffset;
+      if (node && offset !== undefined && element.contains(node)) {
+        const prefix = document.createRange();
+        prefix.selectNodeContents(element);
+        prefix.setEnd(node, offset);
+        initialCaret.current = Math.min(name.length, prefix.toString().length);
+      }
+    }
     cancelled.current = false;
     setDraft(name);
     setError("");
@@ -87,9 +105,10 @@ export default function FileTitle({ path, onRename }: { path: string; onRename?:
           // Touch still uses click so dragging the page does not start a rename.
           if (event.button !== 0 || event.pointerType === "touch") return;
           event.preventDefault();
-          beginEditing();
+          beginEditing(event.currentTarget, event.clientX, event.clientY);
         }}
-        onClick={beginEditing}>{name}</button> : name}
+        onClick={event => beginEditing(event.currentTarget,
+          event.detail ? event.clientX : undefined, event.detail ? event.clientY : undefined)}>{name}</button> : name}
     </h1>}
   </header>;
 }

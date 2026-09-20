@@ -11,14 +11,17 @@ After connecting, **Sync** appears in the sidebar and top tab bar. A tab’s clo
 button focuses that file in the dialog; explorer cloud buttons toggle individual
 file choices. The workspace menu also opens sync settings. Switch workspaces or
 search paths in the dialog. Cloud icons show selection; per-file messages show
-upload results and errors.
+upload results and errors. Use the explorer header’s cloud filter to show only
+selected files, optionally combined with the star filter.
 
 ## Upload saved notes
 
 Selected notes upload after Save or a selection change, following a short delay.
 Only saved file contents upload; unsaved recovery drafts stay local. **Upload now**
 saves the active note first, then uploads selected saved files in the workspace
-chosen in the dialog. **Open in Drive** opens the workspace’s cloud folder.
+chosen in the dialog. **Open in Drive** opens the workspace’s cloud folder from
+the Sync dialog, the button beside the top-bar connection status, or
+**Settings → Google Drive → Workspace folder**.
 
 Nova creates a `.nova` folder in Google Drive with a folder for each workspace,
 preserving note subfolders. Uploads accept UTF-8 text up to 32 MiB per file.
@@ -68,6 +71,11 @@ bounded folder nesting. Google Docs documents are not converted to text.
   retry/backoff; save again or use **Upload now** after resolving an error.
 - Renames, moves, and deletions are not reconciled remotely. A renamed or moved
   file can create another cloud copy; old copies remain in Drive.
+- Changes that turn off effective sync, including inherited folder defaults, ask
+  for confirmation. **Keep syncing** or Escape cancels; **Turn off sync** applies
+  the change. Disconnect also asks for confirmation. Existing local and Drive
+  files remain, an upload already in progress may finish, and other devices keep
+  their own settings.
 - Excluding a file stops future selected uploads but retains existing cloud copies.
   Disconnect removes this device’s saved credential; it does not delete Drive
   files or revoke the Google account’s app authorization.

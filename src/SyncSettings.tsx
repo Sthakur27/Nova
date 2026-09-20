@@ -1,3 +1,4 @@
+import { confirmSyncOff, stopsSync } from "./confirmSyncOff";
 import DriveRestore from "./DriveRestore";
 import { useEffect, useRef, useState } from "react";
 import { Cloud, FileText, Folder, X, ExternalLink, Upload, LoaderCircle, CheckCircle2, AlertCircle } from "lucide-react";
@@ -37,6 +38,8 @@ export default function SyncSettings({ onRestored, uploads, onUpload, drive, fol
     pending.current = true;
     setBusy(true);
     try {
+      if (stopsSync(policy, path, choice, folder.files.map(file => file.path))
+        && !await confirmSyncOff(path || folder.name)) return;
       const next = await setWorkspaceSyncChoice(folder.root, path, choice);
       setPolicy(next); onSaved(next); setError("");
     } catch (error) { setError(String(error)); }
@@ -67,7 +70,7 @@ export default function SyncSettings({ onRestored, uploads, onUpload, drive, fol
       <div className={`drive-connection${drive.status.connected ? " drive-connected" : ""}`}>
         <div className="drive-account"><strong>{drive.checking ? "Checking Google Drive…" : drive.status.connected ? "Google Drive connected" : "Connect Google Drive"}</strong>{drive.status.connected && <p>{drive.status.email}</p>}</div>
         {drive.status.connected ? <>
-          <button disabled={drive.busy || !!uploads.activeRoot} title="Remove this device’s saved access. Your Drive files stay intact." onClick={() => void drive.disconnect()}>Disconnect</button>
+          <button disabled={drive.busy || !!uploads.activeRoot} title="Remove this device’s saved access. Your Drive files stay intact." onClick={async () => { if (await confirmSyncOff("this device")) await drive.disconnect(); }}>Disconnect</button>
         </> : <>
           <p>Sign in with Google in your browser, allow Nova’s Drive access, then return here. No server setup or payment is needed.</p>
           <button className="drive-connect" disabled={!drive.supported || drive.busy || drive.checking || !drive.status.configured}
