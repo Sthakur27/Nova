@@ -1,6 +1,6 @@
 import { EditorState } from "@codemirror/state";
-import { EditorView, runScopeHandlers, type Panel, type ViewUpdate } from "@codemirror/view";
-import { SearchCursor, SearchQuery, closeSearchPanel, findNext, findPrevious, getSearchQuery, replaceAll, replaceNext, search, selectMatches, setSearchQuery } from "@codemirror/search";
+import { EditorView, keymap, runScopeHandlers, type Panel, type ViewUpdate } from "@codemirror/view";
+import { SearchCursor, SearchQuery, closeSearchPanel, findNext, findPrevious, getSearchQuery, openSearchPanel, searchPanelOpen, replaceAll, replaceNext, search, selectMatches, setSearchQuery } from "@codemirror/search";
 
 type Match = { from: number; to: number };
 export function searchMatches(state: EditorState, query: SearchQuery): Match[] {
@@ -152,4 +152,11 @@ class FindPanel implements Panel {
     for (const el of [this.previous, this.next, ...this.replaceButtons]) el.disabled = !this.matches.length;
   }
 }
-export const editorSearch = search({ top: true, createPanel: view => new FindPanel(view) });
+export const editorSearch = [
+  search({ top: true, createPanel: view => new FindPanel(view) }),
+  keymap.of([{
+    key: "Mod-f",
+    scope: "editor search-panel",
+    run: view => searchPanelOpen(view.state) ? closeSearchPanel(view) : openSearchPanel(view),
+  }]),
+];

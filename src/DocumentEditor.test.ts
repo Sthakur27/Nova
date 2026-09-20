@@ -245,3 +245,27 @@ it("scrolls the reading pane to a match even when Find owns focus", () => {
   expect(document.activeElement).toBe(input);
   expect(change).not.toHaveBeenCalled();
 });
+
+it("tracks the selected visual line in Edit and Read and disables without modifying Markdown", async () => {
+  const source = "First paragraph.\n\nSecond paragraph.";
+  const { editor, change } = create(source);
+  const dom = editor.editor.view.dom;
+  vi.spyOn(dom, "getClientRects").mockReturnValue([new DOMRect(0, 0, 400, 100)] as unknown as DOMRectList);
+  vi.spyOn(dom, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 20, 400, 100));
+  const coords = vi.spyOn(editor.editor.view, "coordsAtPos").mockReturnValue({ top: 30, bottom: 50, left: 0, right: 0 });
+  const frame = () => new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+  editor.setLineHighlight(true);
+  await frame();
+  expect(dom.classList.contains("has-line-highlight")).toBe(true);
+  expect(dom.style.getPropertyValue("--active-line-top")).toBe("10px");
+  expect(dom.style.getPropertyValue("--active-line-height")).toBe("20px");
+  editor.setEditable(false, false);
+  coords.mockReturnValue({ top: 70, bottom: 90, left: 0, right: 0 });
+  editor.select(source.indexOf("Second"), undefined, false);
+  await frame();
+  expect(dom.style.getPropertyValue("--active-line-top")).toBe("50px");
+  editor.setLineHighlight(false);
+  expect(dom.classList.contains("has-line-highlight")).toBe(false);
+  expect(editor.source).toBe(source);
+  expect(change).not.toHaveBeenCalled();
+});

@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 import { act, createRef } from "react";
 import { createRoot } from "react-dom/client";
+import { EditorView, keymap, runScopeHandlers } from "@codemirror/view";
+import { searchKeymap } from "@codemirror/search";
+import { editorSearch } from "./editorSearch";
 import { EditorState } from "@codemirror/state";
 import { expect, it, vi } from "vitest";
 import Editor, { type EditorHandle } from "./Editor";
@@ -97,5 +100,34 @@ it("changes language on rename and preserves text and undo across restored tabs"
     await act(async () => root.unmount());
     container.remove();
     vi.unstubAllGlobals();
+  }
+});
+
+it("toggles Find from the editor and search field while preserving the query", () => {
+  const container = document.createElement("div");
+  document.body.append(container);
+  const view = new EditorView({ parent: container, doc: "needle", extensions: [editorSearch, keymap.of(searchKeymap)] });
+  const findEvent = () => new KeyboardEvent("keydown", { key: "f", ctrlKey: true, bubbles: true, cancelable: true });
+  try {
+    view.focus();
+    expect(runScopeHandlers(view, findEvent(), "editor")).toBe(true);
+    const input = container.querySelector<HTMLInputElement>('[main-field]')!;
+    expect(document.activeElement).toBe(input);
+    input.value = "needle";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    const closeEvent = findEvent();
+    input.dispatchEvent(closeEvent);
+    expect(closeEvent.defaultPrevented).toBe(true);
+    expect(container.querySelector('[main-field]')).toBeNull();
+    expect(view.hasFocus).toBe(true);
+    expect(runScopeHandlers(view, findEvent(), "editor")).toBe(true);
+    expect(container.querySelector<HTMLInputElement>('[main-field]')!.value).toBe("needle");
+    // Find also closes when focus has moved back into the editor.
+    view.focus();
+    expect(runScopeHandlers(view, findEvent(), "editor")).toBe(true);
+    expect(container.querySelector('[main-field]')).toBeNull();
+  } finally {
+    view.destroy();
+    container.remove();
   }
 });

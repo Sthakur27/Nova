@@ -3,6 +3,7 @@ import FileTitle from "./FileTitle";
 import { mobile } from "./platform";
 import { useCompactLayout } from "./useCompactLayout";
 import SyncSettings from "./SyncSettings";
+import { syncIncluded } from "./syncPolicy";
 import LineSpacingControl, { lineSpacings, type LineSpacing } from "./LineSpacingControl";
 import { loadDraft, storeDraft, clearDraft, moveDraft } from "./drafts";
 import Settings from "./Settings";
@@ -14,7 +15,8 @@ import TextWidthControl, { textWidths, type TextWidth } from "./TextWidthControl
 import { usePreference } from "./preferences";
 import ScopeToggle from "./ScopeToggle";
 import type {SearchScope} from "./currentSearch";
-import { openTab, pinTab, tabId, type NoteTab } from "./tabs";
+import { openTab, pinTab, reorderTab, tabId, type NoteTab } from "./tabs";
+import { useTabReorder } from "./useTabReorder";
 import {
   lazy,
   Suspense,
@@ -24,6 +26,8 @@ import {
   useState,
 } from "react";
 import {
+  Cloud,
+  CloudOff,
   Bookmark as BookmarkIcon,
   BookOpen,
   ChevronRight,
@@ -62,7 +66,7 @@ import { addFolders, type EditorMode } from "./folders";
 import VoiceControl from "./VoiceControl";
 import NovaMark from "./NovaMark";
 import GalaxyMark from "./GalaxyMark";
-import { extendScrollSpace } from "./scrollSpace";
+import { initialScrollTop } from "./scrollSpace";
 import { readFileMode, saveFileMode } from "./fileModes";
 import { RICH_DOCUMENT_LIMIT, supportsDocumentView } from "./documentLimits";
 import PlasmaEffects from "./PlasmaEffects";
@@ -121,13 +125,18 @@ export default function App() {
   const createdNotes = useRef(new Map<string, { root: string; path: string }>());
   const [fileAction, setFileAction] = useState<{ folder: Workspace; path: string; action: "move" | "delete" } | null>(null);
   const [syncFolder, setSyncFolder] = useState<Workspace | null>(null);
+  const [syncPath, setSyncPath] = useState<string | undefined>();
+  function showSync(folder: Workspace, notePath?: string) {
+    setSyncPath(notePath);
+    setSyncFolder(folders.find(item => item.root === folder.root) ?? folders[0] ?? folder);
+  }
   const [renameTarget, setRenameTarget] = useState<{ folder: Workspace; path: string } | null>(null);
   const [readControls, setReadControls] = useState<HTMLDivElement | null>(null);
   const [galaxyMode, setGalaxyMode, galaxyError] = usePreference<boolean>("galaxy", true);
   const [translucent, setTranslucent, translucencyError] = usePreference<boolean>("translucent", true);
   const [supernova, setSupernova] = useState(0);
   const [showLineNumbers, setShowLineNumbers, numbersError] = usePreference<boolean>("line-numbers", true);
-  const [showLineHighlight, setShowLineHighlight, highlightError] = usePreference<boolean>("line-highlight", true);
+  const [showLineHighlight, setShowLineHighlight, highlightError] = usePreference<boolean>("line-highlight", false);
   const [wordWrap, setWordWrap, wrapError] = usePreference<boolean>("word-wrap", true);
   const [spellcheck, setSpellcheck, spellingError] = usePreference<boolean>("spellcheck", true);
   const [fontSize, setFontSize, fontError] = usePreference<string>("editor-size", "default", ["small", "default", "large", "extra-large"]);
@@ -161,6 +170,10 @@ export default function App() {
     for (const key of snapshots.current.keys())
       if (!next.some((t) => tabId(t) === key)) snapshots.current.delete(key);
   }, []);
+  const reorderTabs = useCallback((id: string, beforeId: string | null) => {
+    updateTabs(reorderTab(tabsRef.current, id, beforeId));
+  }, [updateTabs]);
+  const tabStripRef = useTabReorder(reorderTabs);
   const pin = useCallback(
     (root: string, path: string) => {
       const id = tabId({ root, path });
@@ -254,7 +267,7 @@ export default function App() {
   const previewElement = useRef<HTMLDivElement>(null);
   const attachPreview = useCallback((element: HTMLDivElement | null) => {
     previewElement.current = element;
-    if (element) element.scrollTo({ top: mobile ? 0 : element.clientHeight, behavior: "instant" });
+    if (element) element.scrollTo({ top: initialScrollTop(element, mobile), behavior: "instant" });
   }, []);
   const largeRead = useRef<LargeReadHandle>(null);
   const revision = useRef("");
@@ -1101,7 +1114,7 @@ export default function App() {
             if (action === "reveal") void revealNote(folder.root, path).catch(error => setNotice(String(error)));
             else setFileAction({ folder, path, action });
           }}
-          onSync={mobile ? undefined : setSyncFolder}
+          onSync={folder => showSync(folder)}
           onStar={starFile}
           onRename={(folder, path) => setRenameTarget({ folder, path })}
           onChange={changeFolders}
@@ -1111,6 +1124,11 @@ export default function App() {
           externalDrag={externalDrag}
         />
         <div className="sidebar-bottom">
+          <button className="global-sync-button" aria-haspopup="dialog" onClick={() => showSync(workspace)}>
+            <Cloud size={18} aria-hidden="true" />
+            <span><strong>Sync</strong><small>Google Drive · Not connected</small></span>
+            <ChevronRight size={14} aria-hidden="true" />
+          </button>
           <div className="local-indicator">
             <span />
             {folders.length} {folders.length === 1 ? "folder" : "folders"} ·
@@ -1149,14 +1167,17 @@ export default function App() {
         <div className="top-bars-container">
         <div id="top-bars" className="top-bars" hidden={!compact && !topBars}>
         <header className="tab-bar">
-          <div className="note-tabs" role="tablist" aria-label="Open notes">
+          <div ref={tabStripRef} className="note-tabs" role="tablist" aria-label="Open notes">
             {tabs.map((tab) => {
               const active =
                 !!data && tab.root === workspace.root && tab.path === path;
               const name = tab.path.split("/").at(-1);
+              const tabFolder = folders.find(folder => folder.root === tab.root);
+              const selectedForSync = !tabFolder?.syncError && syncIncluded(tabFolder?.syncPolicy, tab.path);
               return (
                 <div
                   key={tabId(tab)}
+                  data-tab-id={tabId(tab)}
                   className={
                     "note-tab " +
                     (active ? "active " : "") +
@@ -1188,6 +1209,13 @@ export default function App() {
                     <span>{name}</span>
                     {active && dirty && <span className="dirty-dot" />}
                   </button>
+                  <button className="tab-sync" data-selected={selectedForSync}
+                    aria-label={`Sync settings for ${name}: ${selectedForSync ? "selected, not connected" : "local only"}`}
+                    title={selectedForSync ? "Selected for sync · Drive not connected" : "Local only · Choose sync settings"}
+                    aria-haspopup="dialog" disabled={!tabFolder}
+                    onClick={() => { if (tabFolder) showSync(tabFolder, tab.path); }}>
+                    {selectedForSync ? <Cloud size={13} /> : <CloudOff size={13} />}
+                  </button>
                   <button
                     className="tab-close"
                     aria-label={`Close ${name}`}
@@ -1201,6 +1229,10 @@ export default function App() {
           </div>
           <button className="icon-button new-tab-button" onClick={() => void newTab()} aria-label="New tab" title="New tab (Ctrl T)"><Plus size={16} /></button>
           <div className="tab-bar-space" />
+          <button className="top-sync-button" aria-label="Sync settings · Google Drive not connected"
+            title="Sync settings · Google Drive not connected" aria-haspopup="dialog" onClick={() => showSync(workspace)}>
+            <Cloud size={16} aria-hidden="true" /><span>Sync</span>
+          </button>
           <button hidden={compact} className="icon-button" onClick={toggleTerminal}
             aria-label={terminalOpen ? "Collapse terminal" : "Open terminal"} title={`Toggle terminal (${mod}↓)`} aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+ArrowDown`}
             aria-expanded={terminalOpen} aria-controls="terminal-panel"><TerminalSquare size={17} /></button>
@@ -1222,6 +1254,15 @@ export default function App() {
           <div className="read-controls" ref={setReadControls} />
           <TextWidthControl toolbar value={textWidth} onChange={setTextWidth} />
           <LineSpacingControl toolbar value={lineSpacing} onChange={setLineSpacing} />
+          {!mobile && <button
+            className="icon-button toolbar-icon"
+            aria-label="Open in File Location"
+            title={workspace.root === "demo" ? "Sample notes have no file location" : "Open in File Location"}
+            disabled={!desktop || !workspace.root || workspace.root === "demo" || !path}
+            onClick={() => void revealNote(workspace.root, path).catch(error => setNotice(String(error)))}
+          >
+            <FolderOpen size={17} aria-hidden="true" />
+          </button>}
           {mode !== "read" && !(documentView && mode === "edit") && (
             <button
               className="line-numbers-toggle"
@@ -1236,7 +1277,7 @@ export default function App() {
               </span>
             </button>
           )}
-          {!(documentView && mode !== "source") && <button
+          <button
             className="line-numbers-toggle"
             aria-pressed={showLineHighlight}
             title={showLineHighlight ? "Hide line highlight" : "Show line highlight"}
@@ -1247,7 +1288,7 @@ export default function App() {
             <span className="line-numbers-check" aria-hidden="true">
               {showLineHighlight && <Check size={13} />}
             </span>
-          </button>}
+          </button>
           {galaxyMode && <button
             className="icon-button toolbar-icon focus-toggle"
             aria-label="Translucent background"
@@ -1337,7 +1378,7 @@ export default function App() {
           disabled={!!(syncFolder || settingsOpen || palette || bookmarkDraft || renameTarget || fileAction)}
           onJump={jump}
         />}
-        <div className="document-area" onWheelCapture={mobile ? undefined : extendScrollSpace}>
+        <div className="document-area">
           {loading && <div className="loading">Opening your note…</div>}
           {data && (
             <div className={"write-pane " + (mode === "read" && !documentView ? "hidden" : "")}>
@@ -1598,7 +1639,7 @@ export default function App() {
           }
         } finally { operation.current = false; }
       }} />}
-      {syncFolder && <SyncSettings key={syncFolder.root} folder={syncFolder} onClose={() => setSyncFolder(null)}
+      {syncFolder && <SyncSettings key={syncFolder.root} folder={syncFolder} folders={folders} initialPath={syncPath} onFolderChange={folder => showSync(folder)} onClose={() => setSyncFolder(null)}
         onSaved={policy => setFolders(old => old.map(folder => folder.root === syncFolder.root ? { ...folder, syncPolicy: policy, syncError: undefined } : folder))} />}
       {renameTarget && (
         <RenameDialog

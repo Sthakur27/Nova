@@ -1,7 +1,12 @@
 # Sync selection and planned Google Drive support
 
-Open a workspace’s **… → Sync selection…** menu to choose notes for future sync.
-This release saves selections only. Google Drive sign-in, uploads, downloads,
+Open **Sync** in the global sidebar or top tab bar to choose notes for future sync.
+Each note tab also has a cloud control that opens and focuses that note’s choice.
+Use the folder picker to switch workspaces, or search for a file or subfolder.
+These controls are available in compact layouts too. The workspace **… → Sync
+selection…** menu opens the same settings. Cloud icons indicate selection, never
+a successful upload; connection status is shown separately.
+The app saves selections only. In-app Google Drive sign-in, uploads, downloads,
 portable bookmarks, and conflict reconciliation are not implemented yet.
 No account is connected and nothing is uploaded.
 
@@ -20,6 +25,26 @@ No account is connected and nothing is uploaded.
 - The current explorer derives subfolders from notes: empty folders do not appear.
 - Other sync software is outside Nova’s control. Keeping a note local in Nova
   cannot exclude it from Google Drive for desktop or another backup program.
+
+## Developer connection smoke test
+
+The standalone `scripts/test-drive-connection.py` checks desktop OAuth and a
+Drive upload/read-back independently of Nova. It does not connect the app or use
+its sync selections. Run it manually with Python 3 and a desktop OAuth client:
+
+```sh
+python3 scripts/test-drive-connection.py --client-id YOUR_DESKTOP_CLIENT_ID
+```
+
+Enter the client secret at the hidden prompt, then open the printed authorization
+URL in your browser. The script uses PKCE, a state-checked loopback callback, and
+`drive.file` permission. Authorization times out after 30 minutes.
+
+The test creates a new **Nova connection test** folder and a generated Markdown
+note, downloads the note, and checks that its bytes match. It never reads local
+notes or saves tokens; test artifacts remain in Drive for inspection or manual
+removal. A successful test does not enable sync inside Nova. This manual network
+test is separate from `npm test` and requires Google API/OAuth setup.
 
 ## Next implementation stage
 

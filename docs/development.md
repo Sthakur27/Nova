@@ -65,7 +65,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 npm run tauri build
 ```
 
-Tests cover terminal startup, tab lifetimes, collapse and teardown, a real Unix PTY shell (input, working directory, and resize), panel shortcuts and dragging, dictation previews and cancellation, the native dictation shortcut, toolbar preference-menu navigation and dismissal, shared Edit/Read markup, checkbox-only source changes, preservation of untouched Markdown, table alignment, rich-editor undo/redo and selections, large-note fallback, extension-specific modes, single-click file opening, bookmark tracking and search, formatting, current-tab search, tabs, folder and session preferences, recovery drafts, find/replace matching, zoom shortcuts, large-document pagination and nested lists, custom extensions, note creation and renaming, empty-note cleanup, starred-file registries, move destinations, file scope, symlink escapes on Unix, stale-save rejection, and CRLF preservation. Windows has not been tested locally.
+Tests cover terminal startup, tab lifetimes, collapse and teardown, a real Unix PTY shell (input, working directory, and resize), panel shortcuts and dragging, dictation previews and cancellation, the native dictation shortcut, toolbar preference-menu navigation and dismissal, shared Edit/Read markup, checkbox-only source changes, preservation of untouched Markdown, table alignment, rich-editor undo/redo and selections, large-note fallback, extension-specific modes, single-click file opening, bookmark tracking and search, formatting, current-tab search, find toggling and query retention, tab drag reordering and cancellation, formatted-document line highlighting, tabs, folder and session preferences, recovery drafts, find/replace matching, zoom shortcuts, large-document pagination and nested lists, custom extensions, note creation and renaming, empty-note cleanup, starred-file registries, move destinations, file scope, symlink escapes on Unix, stale-save rejection, and CRLF preservation. Windows has not been tested locally.
 
 Architecture: React/TypeScript → Tauri IPC → Rust file operations. CodeMirror owns the Markdown text buffer, undo history, and bookmark mappings. Tiptap/ProseMirror provides the shared Edit/Read document surface and maps changes back into that buffer. Unchanged blocks retain their original Markdown; edits can normalize the changed block. Large-note pagination prepares Markdown in a background worker. Full-text search runs off the UI thread and does not retain all note bodies in memory.
 
@@ -81,6 +81,10 @@ cargo test --manifest-path src-tauri/Cargo.toml actual_whisper_transcription -- 
 ```
 
 Set `NOVA_SPEECH_TEST_MODEL` to an existing tiny.en model file to skip the model download; the fixture is still downloaded. This test checks partial decoding, final transcription, and cancellation, not microphone capture or desktop permissions.
+
+## Google Drive connection test
+
+See the [standalone Drive smoke test](sync.md#developer-connection-smoke-test) for manual OAuth, generated-note upload, and exact read-back checks. It is independent of Nova’s selection-only sync UI and is not run by the normal test suite.
 
 ## iPhone and iPad
 

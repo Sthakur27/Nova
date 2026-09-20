@@ -7,7 +7,7 @@ import { textChanges } from "./documentMarkdown";
 import GalaxyMark from "./GalaxyMark";
 import FileTitle from "./FileTitle";
 import { createPortal } from "react-dom";
-import { scrollSpaceStyle } from "./scrollSpace";
+import { initialScrollTop } from "./scrollSpace";
 import { GFM } from "@lezer/markdown";
 import { tags } from "@lezer/highlight";
 import {
@@ -123,7 +123,7 @@ const decorations = StateField.define<DecorationSet>({
   },
   provide: (field) => EditorView.decorations.from(field),
 });
-export type EditorSnapshot = { state: EditorState; scrollTop: number; scrollSpace?: { before: string; after: string } };
+export type EditorSnapshot = { state: EditorState; scrollTop: number };
 export type EditorHandle = {
   snapshot: () => EditorSnapshot;
   format: (action: FormatAction) => void;
@@ -186,7 +186,6 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
       snapshot: () => ({
         state: view.current!.state,
         scrollTop: latest.current.documentMode ? documentPane.current?.scrollTop ?? 0 : view.current!.scrollDOM.scrollTop,
-        scrollSpace: scrollSpaceStyle(latest.current.documentMode ? documentPane.current : view.current?.scrollDOM),
       }),
       format: (action) => {
         if (latest.current.documentMode) { documentEditor.current?.format(action); return; }
@@ -372,7 +371,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
             lineHeight: "var(--editor-line-height, 1.9)",
             overflow: "auto",
           },
-          ".cm-content": { padding: "calc(100cqh + 40px + var(--extra-scroll-before, 0px) + var(--file-title-height, 72px)) 36px calc(100cqh + var(--extra-scroll-after, 0px))", maxWidth: "var(--text-width, 900px)" },
+          ".cm-content": { padding: "calc(var(--scroll-before) + 40px + var(--file-title-height, 72px)) 36px max(0px, calc(100cqh - 48px))", maxWidth: "var(--text-width, 900px)" },
           ".cm-gutters": {
             backgroundColor: "transparent",
             color: "#54565f",
@@ -395,10 +394,6 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
         }).state
       : EditorState.create({ doc: p.initial, extensions });
     const v = new EditorView({ parent: mount.current!, state });
-    if (p.snapshot?.scrollSpace) {
-      v.scrollDOM.style.setProperty("--extra-scroll-before", p.snapshot.scrollSpace.before);
-      v.scrollDOM.style.setProperty("--extra-scroll-after", p.snapshot.scrollSpace.after);
-    }
     const heading = document.createElement("div");
     heading.className = "source-file-heading";
     v.scrollDOM.prepend(heading);
@@ -422,7 +417,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
     // A source editor can mount hidden behind Read mode. Wait until it has a
     // viewport before positioning the first line below the space above it.
     const positionSource = () => {
-      v.scrollDOM.scrollTop = p.snapshot?.scrollTop ?? (mobile ? 0 : v.scrollDOM.clientHeight);
+      v.scrollDOM.scrollTop = p.snapshot?.scrollTop ?? initialScrollTop(v.scrollDOM, mobile);
     };
     let openingObserver: ResizeObserver | undefined;
     if (v.scrollDOM.clientHeight) positionSource();
@@ -472,13 +467,10 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
         },
       });
       if (documentPane.current) {
-        if (props.snapshot?.scrollSpace) {
-          documentPane.current.style.setProperty("--extra-scroll-before", props.snapshot.scrollSpace.before);
-          documentPane.current.style.setProperty("--extra-scroll-after", props.snapshot.scrollSpace.after);
-        }
-        documentPane.current.scrollTop = props.snapshot?.scrollTop ?? (mobile ? 0 : documentPane.current.clientHeight);
+        documentPane.current.scrollTop = props.snapshot?.scrollTop ?? initialScrollTop(documentPane.current, mobile);
       }
       documentEditor.current.setBookmarks(latest.current.bookmarks);
+      documentEditor.current.setLineHighlight(latest.current.showLineHighlight);
     }
     bridging.current = true;
     try {
@@ -502,6 +494,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
     view.current?.dispatch({
       effects: highlighting.current.reconfigure(props.showLineHighlight ? highlightActiveLine() : []),
     });
+    documentEditor.current?.setLineHighlight(props.showLineHighlight);
   }, [props.showLineHighlight]);
   useEffect(() => {
     view.current?.dispatch({ effects: wrapping.current.reconfigure(props.wordWrap ? EditorView.lineWrapping : []) });

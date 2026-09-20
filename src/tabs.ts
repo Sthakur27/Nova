@@ -16,3 +16,12 @@ export function openTab(tabs: NoteTab[], note: NoteTab): NoteTab[] {
 export function pinTab(tabs: NoteTab[], id: string) {
   return tabs.map((t) => (tabId(t) === id ? { ...t, pinned: true } : t));
 }
+
+/** Move a tab before another tab, or to the end when beforeId is null. */
+export function reorderTab(tabs: NoteTab[], id: string, beforeId: string | null) {
+  const tab = tabs.find((t) => tabId(t) === id);
+  if (!tab || id === beforeId || (beforeId !== null && !tabs.some((t) => tabId(t) === beforeId))) return tabs;
+  const next = tabs.filter((t) => tabId(t) !== id);
+  next.splice(beforeId === null ? next.length : next.findIndex((t) => tabId(t) === beforeId), 0, tab);
+  return next.every((t, i) => t === tabs[i]) ? tabs : next;
+}

@@ -23,10 +23,13 @@ export default function ReadFind({ text, disabled, onJump }: {
         (event.target instanceof Element && event.target.closest("#terminal-panel"))) return;
       event.preventDefault();
       event.stopPropagation();
-      if (!open) previousFocus.current = document.activeElement as HTMLElement | null;
-      setOpen(true);
-      input.current?.focus();
-      input.current?.select();
+      if (open) {
+        setOpen(false);
+        previousFocus.current?.focus({ preventScroll: true });
+      } else {
+        previousFocus.current = document.activeElement as HTMLElement | null;
+        setOpen(true);
+      }
     };
     window.addEventListener("keydown", key, true);
     return () => window.removeEventListener("keydown", key, true);

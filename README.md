@@ -94,7 +94,7 @@ Use **⌘ + arrow keys** on Mac or **Ctrl + arrow keys** on Windows to toggle pa
 | What you'd like to do | Mac | Windows |
 | --- | --- | --- |
 | Find a note, bookmark, or phrase | ⌘ K | Ctrl K |
-| Find within the current note | ⌘ F | Ctrl F |
+| Open / close find within the current note | ⌘ F | Ctrl F |
 | Create a note | ⌘ T | Ctrl T |
 | Bookmark a passage | ⌘ Shift B | Ctrl Shift B |
 | Save | ⌘ S | Ctrl S |
@@ -118,5 +118,6 @@ Recovery drafts help you return to unfinished work, but **Save** writes changes 
 ## Explore further
 
 - **[Reference guide](docs/user-guide.md)** — detailed controls, bookmarks, tabs, saving, and current limits.
+- **[Sync selection](docs/sync.md)** — choose notes for future sync; transfers are not available yet.
 - **[Developer guide](docs/development.md)** — run from source, build installers, and run checks.
 - **[Release notes](https://github.com/Sthakur27/Nova/releases/latest)** — available downloads and changes.

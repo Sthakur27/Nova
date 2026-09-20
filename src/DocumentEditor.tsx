@@ -87,6 +87,9 @@ export class DocumentEditor {
   private positions?: ReturnType<typeof documentPositions>;
   private lastDoc?: DocumentNode;
   private bookmarks: Bookmark[] = [];
+  private lineHighlight = false;
+  private highlightFrame = 0;
+  private highlightObserver?: ResizeObserver;
 
   constructor(element: HTMLElement, source: string, private callbacks: Callbacks) {
     this.source = source;
@@ -185,8 +188,13 @@ export class DocumentEditor {
         this.reportSelection();
       },
       onSelectionUpdate: ({ transaction }) => { if (!this.syncing && !transaction.docChanged) this.reportSelection(); },
+      onTransaction: () => this.scheduleLineHighlight(),
     });
     this.rememberParts(this.editor.state.doc, parsed);
+    if (typeof ResizeObserver !== "undefined") {
+      this.highlightObserver = new ResizeObserver(() => this.scheduleLineHighlight());
+      this.highlightObserver.observe(this.editor.view.dom);
+    }
   }
 
   private rememberParts(doc: DocumentNode, parsed: ReturnType<typeof parseDocument>) {
@@ -265,6 +273,24 @@ export class DocumentEditor {
     this.editor.view.dom.setAttribute("spellcheck", String(editable && spellcheck));
     this.editor.view.dom.setAttribute("aria-label", editable ? "Note editor" : "Note document");
   }
+  setLineHighlight(enabled: boolean) {
+    this.lineHighlight = enabled;
+    this.editor.view.dom.classList.toggle("has-line-highlight", enabled);
+    this.scheduleLineHighlight();
+  }
+  private scheduleLineHighlight() {
+    cancelAnimationFrame(this.highlightFrame);
+    if (!this.lineHighlight) return;
+    this.highlightFrame = requestAnimationFrame(() => {
+      const { view, state } = this.editor;
+      const dom = view.dom;
+      if (!dom.getClientRects().length) return;
+      const caret = view.coordsAtPos(state.selection.head);
+      const bounds = dom.getBoundingClientRect();
+      dom.style.setProperty("--active-line-top", `${caret.top - bounds.top + dom.scrollTop}px`);
+      dom.style.setProperty("--active-line-height", `${caret.bottom - caret.top}px`);
+    });
+  }
   setBookmarks(bookmarks: Bookmark[]) {
     this.bookmarks = bookmarks;
     this.editor.view.dispatch(this.editor.state.tr.setMeta("bookmarks", true));
@@ -305,5 +331,9 @@ export class DocumentEditor {
     }
     this.reportSelection();
   }
-  destroy() { this.editor.destroy(); }
+  destroy() {
+    cancelAnimationFrame(this.highlightFrame);
+    this.highlightObserver?.disconnect();
+    this.editor.destroy();
+  }
 }
