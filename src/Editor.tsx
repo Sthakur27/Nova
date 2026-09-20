@@ -5,7 +5,8 @@ import { DocumentEditor } from "./DocumentEditor";
 import { supportsDocumentView } from "./documentLimits";
 import { textChanges } from "./documentMarkdown";
 import GalaxyMark from "./GalaxyMark";
-import FileTitle, { fileTitle } from "./FileTitle";
+import FileTitle from "./FileTitle";
+import { createPortal } from "react-dom";
 import { scrollSpaceStyle } from "./scrollSpace";
 import { GFM } from "@lezer/markdown";
 import { tags } from "@lezer/highlight";
@@ -16,7 +17,7 @@ import {
   paragraphStyle,
   type FormatAction,
 } from "./richMarkdown";
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import {
   Compartment,
   EditorState,
@@ -153,6 +154,7 @@ type Props = {
   onSourceSearch?: () => void;
   isMarkdown: boolean;
   filePath?: string;
+  onRename?: (name: string) => Promise<void>;
   documentMode?: "edit" | "read";
   showLineNumbers: boolean;
   showLineHighlight: boolean;
@@ -165,7 +167,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
   const highlighting = useRef(new Compartment());
   const numbering = useRef(new Compartment());
   const language = useRef(new Compartment());
-  const sourceTitle = useRef<HTMLHeadingElement | null>(null);
+  const [sourceTitleContainer, setSourceTitleContainer] = useState<HTMLElement | null>(null);
   const mount = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const documentMount = useRef<HTMLDivElement>(null);
@@ -397,15 +399,10 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
       v.scrollDOM.style.setProperty("--extra-scroll-before", p.snapshot.scrollSpace.before);
       v.scrollDOM.style.setProperty("--extra-scroll-after", p.snapshot.scrollSpace.after);
     }
-    const heading = document.createElement("header");
-    heading.className = "file-heading source-file-heading";
-    const title = document.createElement("h1");
-    title.className = "file-title";
-    title.dir = "auto";
-    title.textContent = title.title = fileTitle(p.filePath);
-    heading.append(title);
+    const heading = document.createElement("div");
+    heading.className = "source-file-heading";
     v.scrollDOM.prepend(heading);
-    sourceTitle.current = title;
+    setSourceTitleContainer(heading);
     const measureTitle = () => {
       const style = getComputedStyle(v.contentDOM);
       const left = v.contentDOM.offsetLeft + (parseFloat(style.paddingLeft) || 36);
@@ -446,7 +443,6 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
     return () => {
       openingObserver?.disconnect();
       titleObserver?.disconnect();
-      sourceTitle.current = null;
       v.destroy();
       view.current = null;
     };
@@ -516,20 +512,18 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
     ) });
   }, [props.isMarkdown, props.filePath]);
   useEffect(() => {
-    if (sourceTitle.current) sourceTitle.current.textContent = sourceTitle.current.title = fileTitle(props.filePath);
-  }, [props.filePath]);
-  useEffect(() => {
     view.current?.dispatch({ effects: spelling.current.reconfigure(EditorView.contentAttributes.of({
       "aria-label": "Note editor", spellcheck: String(props.spellcheck && !codeLanguage(props.filePath)),
     })) });
   }, [props.spellcheck, props.filePath]);
   return <div className="editor-mount">
+    {sourceTitleContainer && createPortal(<FileTitle key={props.filePath} path={props.filePath ?? ""} onRename={props.onRename} />, sourceTitleContainer)}
     <div className="source-editor-mount" ref={mount} hidden={!!props.documentMode} />
     <div className="document-pane" ref={documentPane} hidden={!props.documentMode} data-mode={props.documentMode}>
       <div className="start-mark" aria-hidden="true"><GalaxyMark circled /></div>
       <article className="prose document-prose">
         <div className="document-eyebrow">A NOTE IN YOUR SPACE</div>
-        <FileTitle path={props.filePath ?? ""} />
+        <FileTitle key={props.filePath} path={props.filePath ?? ""} onRename={props.onRename} />
         <div ref={documentMount} />
         <div className="end-mark"><GalaxyMark circled /></div>
       </article>

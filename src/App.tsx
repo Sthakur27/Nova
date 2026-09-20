@@ -1356,6 +1356,7 @@ export default function App() {
                 onSourceSearch={() => setMode("source")}
                 isMarkdown={isMarkdown}
                 filePath={path}
+                onRename={name => renameFile(workspace, path, name)}
                 documentMode={documentView && mode !== "source" ? mode : undefined}
                 showLineNumbers={showLineNumbers}
                 showLineHighlight={showLineHighlight}
@@ -1371,7 +1372,7 @@ export default function App() {
                 <div className="document-eyebrow">
                   {isMarkdown ? "A NOTE IN YOUR SPACE" : "PLAIN & SIMPLE"}
                 </div>
-                <FileTitle path={path} />
+                <FileTitle key={path} path={path} onRename={name => renameFile(workspace, path, name)} />
                 <Suspense fallback={<p>Rendering your note…</p>}>
                   {preview.length > RICH_DOCUMENT_LIMIT ? (
                     <LargeRead ref={largeRead} text={preview} markdown={isMarkdown} controlsContainer={readControls} onToggleTask={toggleReadTask} />
