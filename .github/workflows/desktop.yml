@@ -45,7 +45,16 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: cargo test --manifest-path src-tauri/Cargo.toml
-      - run: npm run package -- --target ${{ matrix.target }}
+      - name: Build installer and signed update
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/heads/main && -z "$TAURI_SIGNING_PRIVATE_KEY" ]]; then
+            echo "The updater signing secret must be configured before publishing a release."
+            exit 1
+          fi
+          npm run package -- --target ${{ matrix.target }}
       - name: Verify packaged Mac signature
         if: runner.os == 'macOS'
         shell: bash
@@ -54,7 +63,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Nova-${{ matrix.label }}-${{ github.sha }}
-          path: src-tauri/target/${{ matrix.target }}/release/bundle/${{ matrix.bundle }}
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/${{ matrix.bundle }}
+            src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.sig
+            src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.tar.gz
+            src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.sig
           if-no-files-found: error
           retention-days: 14
   release:
@@ -64,26 +77,16 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - uses: actions/download-artifact@v4
         with:
           pattern: Nova-*-${{ github.sha }}
           path: installers
-      - name: Prepare downloads
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir release
-          for platform in mac-apple-silicon mac-intel windows-x64; do
-            extension=dmg
-            if [[ "$platform" == windows-x64 ]]; then extension=exe; fi
-            mapfile -t files < <(find "installers/Nova-${platform}-${GITHUB_SHA}" -type f -name "*.${extension}")
-            if [[ ${#files[@]} -ne 1 ]]; then
-              echo "Expected exactly one installer for ${platform}, found ${#files[@]}"
-              exit 1
-            fi
-            cp "${files[0]}" "release/Nova-${platform}.${extension}"
-          done
-          (cd release && sha256sum Nova-* > SHA256SUMS.txt)
+      - name: Prepare downloads and updater manifest
+        run: node scripts/prepare-release.mjs
       - name: Publish complete release
         env:
           GH_TOKEN: ${{ github.token }}

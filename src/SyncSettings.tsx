@@ -17,6 +17,7 @@ export default function SyncSettings({ onRestored, uploads, onUpload, drive, fol
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
   const selectedRow = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (!pending.current) setPolicy(folder.syncPolicy); }, [folder.syncPolicy]);
   const [query, setQuery] = useState("");
   const [slowCredentialCheck, setSlowCredentialCheck] = useState(false);
   useEffect(() => {
@@ -51,7 +52,7 @@ export default function SyncSettings({ onRestored, uploads, onUpload, drive, fol
     const name = path ? path.split("/").at(-1)! : folder.name;
     return <div key={path} ref={path === initialPath ? selectedRow : undefined} className={`sync-row${!path ? " sync-root-row" : ""}${path === initialPath ? " sync-row-current" : ""}`} style={{ paddingLeft: 14 + Math.min(path ? path.split("/").length : 0, 4) * 12 }}>
       {directory ? <Folder size={15} /> : <FileText size={15} />}
-      <div className="sync-name"><span title={path || folder.root}>{name}</span><small data-included={syncIncluded(policy, path)}>{syncIncluded(policy, path) ? (directory ? "Include by default" : "Included") : (directory ? "Local by default" : "Local only")}</small>{!directory && selected && <small className={`sync-file-transfer ${transfer?.state ?? "pending"}`} title={transfer?.message}>{transfer?.state === "uploading" ? <LoaderCircle size={12} /> : transfer?.state === "uploaded" ? <CheckCircle2 size={12} /> : transfer?.state === "error" ? <AlertCircle size={12} /> : null}{transfer?.message ?? "Waiting for upload"}</small>}</div>
+      <div className="sync-name"><span title={path || folder.root}>{name}</span><small data-included={syncIncluded(policy, path)}>{syncIncluded(policy, path) ? (directory ? "Include by default" : "Included") : (directory ? "Local by default" : "Local only")}</small>{!directory && selected && <small className={`sync-file-transfer ${transfer?.state ?? "pending"}`} title={transfer?.message}>{transfer?.state === "uploading" ? <LoaderCircle size={12} /> : transfer?.state === "uploaded" ? <CheckCircle2 size={12} /> : transfer?.state === "error" ? <AlertCircle size={12} /> : null}{transfer?.message ?? "Waiting for sync"}</small>}</div>
       <select aria-label={`Sync choice for ${path || folder.name}`} value={syncChoice(policy, path)} disabled={busy || !!folder.syncError || !folder.root}
         onChange={event => void change(path, event.target.value as SyncChoice)}>
         <option value="inherit">{path ? "Use folder default" : "Default (local only)"}</option>
@@ -86,16 +87,17 @@ export default function SyncSettings({ onRestored, uploads, onUpload, drive, fol
         <div className="sync-transfer-actions">
           <button disabled={!!uploads.activeRoot || folder.root === "demo" || !included || busy} onClick={() => void onUpload()}>
             {uploads.activeRoot === folder.root ? <LoaderCircle size={15} className="sync-spin" /> : <Upload size={15} />}
-            {uploads.activeRoot === folder.root ? "Uploading…" : "Upload now"}
+            {uploads.activeRoot === folder.root ? "Syncing…" : "Sync now"}
           </button>
           <button disabled={!!uploads.activeRoot || folder.root === "demo"} onClick={() => void uploads.openFolder(folder.root)}><ExternalLink size={15} />Open in Drive</button>
         </div>
-        <p role="status">{uploads.activeRoot === folder.root ? "Uploading selected saved notes to Google Drive…" : uploads.errors[folder.root] || (uploads.completed[folder.root] ? `Selected saved notes uploaded · ${uploads.completed[folder.root]}` : "Selected notes upload after saving or changing your selection.")}</p>
-        <small>Uploads go to this workspace’s linked folder inside .nova on Google Drive. Use “Bring notes to this device” for a new local copy. Turning sync off keeps existing Drive copies.</small>
+        <p role="status">{uploads.activeRoot === folder.root ? "Checking Drive and syncing selected notes…" : uploads.errors[folder.root] || (uploads.completed[folder.root] ? `Selected notes synced · ${uploads.completed[folder.root]}` : "Selected notes sync after saving and check Drive every minute while Nova is open. Unsaved edits and conflicting changes are preserved.")}</p>
+        <small>Uploads go to this workspace’s linked folder inside .nova on Google Drive. Use “Bring notes to this device” for a new local copy. Turning sync off stops uploads and downloads and keeps both copies. Deleting locally keeps the Drive copy; a missing Drive copy pauses sync and keeps your local file.</small>
       </div>}
 
     </div>
     {error && <p className="folder-error" role="alert">{error}</p>}
+    {Object.entries(uploads.items).filter(([key,item]) => key.startsWith(`${folder.root}\n`) && item.state === "error" && !folder.files.some(file => file.path === item.path)).map(([key,item]) => <p key={key} className="folder-error" role="status">{item.path}: {item.message}</p>)}
     {drive.status.connected && <>
     <DriveRestore disabled={!!uploads.activeRoot || drive.busy} onRestored={onRestored} />
     <div className="sync-section-heading"><h2>Files & folders</h2><span>{included} selected</span></div>

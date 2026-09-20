@@ -13,8 +13,8 @@ export default function TerminalView({ root, open }: { root: string; open: boole
     if (!desktop || !host.current) return;
     let disposed = false, ready = false, exited = false;
     const id = crypto.randomUUID();
-    const term = new Terminal({ cursorBlink: true, fontSize: 13, fontFamily: 'Menlo, Monaco, Consolas, monospace',
-      scrollback: 5000, theme: { background: "#191a1e", foreground: "#d7d5df", cursor: "#cbb0ef", selectionBackground: "#a287c944" } });
+    const term = new Terminal({ cursorBlink: true, allowTransparency: true, fontSize: 13, fontFamily: 'Menlo, Monaco, Consolas, monospace',
+      scrollback: 5000, theme: { background: "#00000000", foreground: "#d7d5df", cursor: "#cbb0ef", selectionBackground: "#a287c944" } });
     terminal.current = term;
     const fit = new FitAddon();
     term.loadAddon(fit);

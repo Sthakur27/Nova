@@ -1,4 +1,6 @@
 #[cfg(desktop)]
+mod background;
+#[cfg(desktop)]
 mod speech;
 mod sync_policy;
 #[cfg(desktop)]
@@ -35,6 +37,8 @@ struct Access {
     search_generation: Arc<AtomicU64>,
     #[cfg(desktop)]
     quitting: AtomicBool,
+    #[cfg(desktop)]
+    updating: Mutex<bool>,
     #[cfg(mobile)]
     mobile_root: Mutex<Option<PathBuf>>,
 }
@@ -768,6 +772,9 @@ fn reveal_note(root: String, path: String, access: State<'_, Access>) -> Result<
 #[cfg(desktop)]
 #[tauri::command]
 fn new_window(app: tauri::AppHandle) -> Result<(), String> {
+    let updating = app.state::<Access>();
+    let guard = updating.updating.lock().map_err(err)?;
+    if *guard { return Err("An update is being installed.".into()); }
     static WINDOW_ID: AtomicU64 = AtomicU64::new(1);
     let mut config = app.config().app.windows[0].clone();
     config.label = format!("nova-{}", WINDOW_ID.fetch_add(1, Ordering::Relaxed));
@@ -790,6 +797,29 @@ fn configure_window_menu(window: &tauri::WebviewWindow) -> tauri::Result<()> {
 fn quit_app(app: tauri::AppHandle, access: State<'_, Access>) {
     access.quitting.store(true, Ordering::Relaxed);
     app.exit(0);
+}
+#[cfg(desktop)]
+#[tauri::command]
+fn begin_update(app: tauri::AppHandle, access: State<'_, Access>) -> Result<(), String> {
+    let mut updating = access.updating.lock().map_err(err)?;
+    if *updating { return Err("An update is already being installed.".into()); }
+    if app.webview_windows().len() != 1 {
+        return Err("Close other Nova windows before restarting to update. Their drafts will be preserved when you close them.".into());
+    }
+    *updating = true;
+    Ok(())
+}
+#[cfg(desktop)]
+#[tauri::command]
+fn cancel_update(access: State<'_, Access>) {
+    if let Ok(mut updating) = access.updating.lock() { *updating = false; }
+}
+#[cfg(desktop)]
+#[tauri::command]
+fn restart_after_update(app: tauri::AppHandle, access: State<'_, Access>) -> Result<(), String> {
+    if !*access.updating.lock().map_err(err)? { return Err("No update is being installed.".into()); }
+    access.quitting.store(true, Ordering::Relaxed);
+    app.restart();
 }
 #[cfg(desktop)]
 pub fn run() {
@@ -862,7 +892,9 @@ pub fn run() {
         .manage(speech::SpeechState::default())
         .manage(drive_auth::DriveAuth::default())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
+            background::set_background_blur,
             drive_upload::drive_workspaces,
             drive_upload::drive_restore,
             drive_upload::drive_upload,
@@ -887,6 +919,9 @@ pub fn run() {
             load_explorer,
             save_explorer,
             quit_app,
+            begin_update,
+            cancel_update,
+            restart_after_update,
             new_window,
             create_note,
             rename_note,
@@ -907,6 +942,7 @@ pub fn run() {
             }
             if let tauri::RunEvent::ExitRequested { api, .. } = event {
                 if !app.state::<Access>().quitting.load(Ordering::Relaxed)
+                    && !*app.state::<Access>().updating.lock().unwrap_or_else(|e| e.into_inner())
                     && !app.webview_windows().is_empty()
                 {
                     api.prevent_exit();

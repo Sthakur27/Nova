@@ -14,7 +14,7 @@ export default function FileActionDialog({ folder, path, action, onSubmit, onClo
     <form onSubmit={async e => { e.preventDefault(); if (pending.current) return; pending.current = true; setBusy(true); setError(""); try { await onSubmit(destination); onClose(); } catch (error) { setError(String(error)); } finally { pending.current = false; setBusy(false); } }}>
       <h2 id="file-action-title">{action === "move" ? "Move file" : "Delete file"}</h2>
       <p>{path}</p>
-      {action === "move" ? <div className="rename-fields file-move-fields"><label>Destination folder within {folder.name}<input autoFocus value={destination} disabled={busy} onChange={e => setDestination(e.target.value)} placeholder="Leave empty for the root folder" /><small>Enter an existing folder path relative to {folder.name}.</small></label></div> : <p>This permanently deletes the file and its bookmarks. This cannot be undone.</p>}
+      {action === "move" ? <div className="rename-fields file-move-fields"><label>Destination folder within {folder.name}<input autoFocus value={destination} disabled={busy} onChange={e => setDestination(e.target.value)} placeholder="Leave empty for the root folder" /><small>Enter an existing folder path relative to {folder.name}.</small></label></div> : <p>This permanently deletes the local file and its bookmarks. Existing Google Drive copies are kept, and Nova will not download this deleted file again automatically.</p>}
       {error && <p role="alert" className="rename-error">{error}</p>}
       <div className="dialog-buttons"><button type="button" disabled={busy} onClick={onClose}>Cancel</button><button className="primary" disabled={busy}>{busy ? "Working…" : action === "move" ? "Move" : "Delete"}</button></div>
     </form>

@@ -17,6 +17,20 @@ For direct `cargo` commands and packaging on a newly configured Mac, run `source
 
 ### Fast iteration
 
+On macOS, run `node scripts/setup-dev-signing.mjs` once before starting desktop
+development. It creates a **Nova Local Development** code-signing identity in
+your user keychain. If macOS asks whether **codesign** may use that key, choose
+**Always Allow**. The launcher signs each native build with that same certificate
+before starting it, so approving access to **Nova Google Drive** survives Rust
+rebuilds and restarts. The first run after switching from ad-hoc signing can still
+require one more **Always Allow** approval for the Drive credential.
+
+The private signing key stays in Keychain; temporary certificate-generation files
+are deleted. Rerunning setup reuses the existing identity. Use `npm run desktop`
+for this signing flow; raw `cargo run` and `npm run tauri dev` bypass it. The local
+certificate is for development only and does not change installer signing or
+notarize the app.
+
 Run `npm run desktop` and leave it running while making changes. This opens the native app with live frontend updates; Rust changes automatically rebuild and restart it. The launcher automatically chooses an available frontend port, so an existing preview server does not block startup. The command finds Rust in the standard Cargo installation directory, so sourcing Cargo's environment is not needed for this command. Stop it with Ctrl-C.
 
 Quit the installed Nova before starting development: both use the same saved folders and bookmarks. Unsaved edits are retained as local recovery drafts across reloads and native restarts. Development does not update `/Applications/Nova.app`; the Dock copy stays at its last installed version. No DMG or drag-to-Applications step is needed to try changes. Use `npm run package` when you need an installer to share.
@@ -25,11 +39,11 @@ Quit the installed Nova before starting development: both use the same saved fol
 
 ### Native window backgrounds
 
-Both Windows and macOS use the transparent window in `src-tauri/tauri.conf.json`, so Galaxy mode's Translucent background control remains available on both platforms.
+Both Windows and macOS use the transparent window in `src-tauri/tauri.conf.json`, so Galaxy mode’s Translucent, Black, and Frosted background choices remain available on both platforms.
 
 On Windows, `configure_window_menu` hides only the native menu strip, which can expose the desktop when a transparent window is maximized. It keeps the native title bar and window controls, and retains the registered menu for keyboard accelerators. This runs for the startup window and additional windows created by `new_window`. macOS keeps its visible system menu unchanged. Do not disable window transparency to fix a menu-strip rendering issue.
 
-For native visual verification, maximize, restore, resize, minimize/restore, and enter/exit fullscreen with both Galaxy modes, then repeat in a newly opened window. On Windows, check that no menu strip remains below the title bar, the window controls and Ctrl-Q/Ctrl-A/Ctrl-C/Ctrl-V/Ctrl-Z shortcuts work, and the translucency toggle visibly switches the editor between translucent and solid backgrounds. On macOS, check the traffic lights, system menu, fullscreen transitions, and Galaxy translucency.
+For native visual verification, maximize, restore, resize, minimize/restore, and enter/exit fullscreen with both Galaxy modes, then repeat in a newly opened window. On Windows, check that no menu strip remains below the title bar, the window controls and Ctrl-Q/Ctrl-A/Ctrl-C/Ctrl-V/Ctrl-Z shortcuts work, and the Background control cycles between Translucent, Black, and Frosted, and Frosted panels changes the surrounding panels independently. On macOS, check the traffic lights, system menu, fullscreen transitions, and Galaxy translucency.
 
 ### Generate installers
 
@@ -81,6 +95,10 @@ cargo test --manifest-path src-tauri/Cargo.toml actual_whisper_transcription -- 
 ```
 
 Set `NOVA_SPEECH_TEST_MODEL` to an existing tiny.en model file to skip the model download; the fixture is still downloaded. This test checks partial decoding, final transcription, and cancellation, not microphone capture or desktop permissions.
+
+## Desktop updater releases
+
+See [Desktop update releases](app-updates.md) for the signing secret, generated versions, updater artifacts, and rollout checks. Main-branch installer builds require the updater signing secret; local builds without it still produce ordinary installers. `npm test` includes the release-manifest validation test in `scripts/prepare-release.test.mjs`.
 
 ## Google Drive build configuration
 

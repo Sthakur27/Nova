@@ -1,6 +1,6 @@
 [package]
 name = "nova-notes"
-version = "0.1.0"
+version = "0.2.0"
 description = "A little space to think"
 edition = "2021"
 
@@ -21,6 +21,8 @@ walkdir = "2"
 blake3 = "1"
 tempfile = "3"
 [target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
+tauri-plugin-updater = "2"
+window-vibrancy = "0.6"
 whisper-rs = "0.16"
 cpal = "0.16"
 sha2 = "0.10"
@@ -30,6 +32,11 @@ base64 = "0.22"
 rand = "0.8"
 webbrowser = "1"
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["NSView", "NSWindow", "NSVisualEffectView", "NSUserInterfaceItemIdentification"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["NSString", "NSArray", "NSGeometry"] }
 
 [dev-dependencies]
 hound = "3"

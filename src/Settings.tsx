@@ -1,3 +1,5 @@
+import AppUpdate from "./AppUpdate";
+import type { useAppUpdate } from "./useAppUpdate";
 import { FontControl, TextSizeControl, type EditorFont } from "./TypographyControls";
 import LineSpacingControl, { type LineSpacing } from "./LineSpacingControl";
 import { normalizeExtension } from "./fileExtensions";
@@ -19,6 +21,7 @@ function Toggle({ title, description, checked, onChange }: {
 }
 
 type Props = {
+  updater?: ReturnType<typeof useAppUpdate>;
   onClose: () => void;
   syncConnected?: boolean; onSyncSetup?: () => void;
   onOpenDrive?: () => void; openDriveDisabled?: boolean;
@@ -58,6 +61,7 @@ export default function Settings(props: Props) {
       <button autoFocus className="icon-button" aria-label="Close settings" onClick={props.onClose}><X size={18} /></button>
     </header>
     <div className="settings-content">
+      {props.updater && <AppUpdate updater={props.updater} />}
       <section aria-labelledby="settings-appearance"><h2 id="settings-appearance">Appearance</h2>
         <Toggle title="Galaxy mode" description="A translucent backdrop with motion and glow around your workspace." checked={props.galaxy} onChange={props.onGalaxy} />
       </section>

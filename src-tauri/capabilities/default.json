@@ -9,7 +9,8 @@
     "core:default",
     "core:window:allow-destroy",
     "core:webview:allow-set-webview-zoom",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "updater:default"
   ],
   "platforms": [
     "macOS",

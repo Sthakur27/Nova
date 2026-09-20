@@ -53,7 +53,7 @@ See [all releases and release notes](https://github.com/Sthakur27/Nova/releases/
 
 Turn **Galaxy mode** on for translucent surfaces and glowing edges, or off for a simple, solid background. Your notes and bookmarks stay right where they are.
 
-Let a little of your background show through the page with **Translucent background**, the overlapping-circles button above your note. You can turn it off while keeping Galaxy's glow.
+With Galaxy mode enabled, the overlapping-circles **Background** button cycles the page through Translucent, Black, and Frosted. Use **Frosted panels** beside it to change the surrounding panels independently. Native desktop builds blur the background in Frosted mode.
 
 | Galaxy on | Galaxy off |
 | :---: | :---: |
@@ -112,7 +112,7 @@ Your audio stays on your computer and isn't uploaded. Voice typing requires the 
 
 ## A few things to know
 
-Nova is still a prototype. Alongside plain text and Markdown notes, it offers basic code editing for Python, TypeScript/JavaScript (including JSX/TSX), Java, JSON, HTML, and CSS. Open a file with the corresponding extension to get syntax highlighting, completion suggestions, basic syntax diagnostics, bracket matching, indentation, and folding. See [code editing](docs/user-guide.md#code-editing) for shortcuts and limits. Image attachments are not available yet. Configured desktop builds can connect Google Drive to upload selected saved notes and download a workspace onto another desktop; background downloads and automatic conflict merging are not available. See the [Google Drive guide](docs/sync.md). If you change files in another app, refresh the folder and reopen the note to pick up the changes.
+Nova is still a prototype. Alongside plain text and Markdown notes, it offers basic code editing for Python, TypeScript/JavaScript (including JSX/TSX), Java, JSON, HTML, and CSS. Open a file with the corresponding extension to get syntax highlighting, completion suggestions, basic syntax diagnostics, bracket matching, indentation, and folding. See [code editing](docs/user-guide.md#code-editing) for shortcuts and limits. Image attachments are not available yet. Configured desktop builds can connect Google Drive to upload selected saved notes and download a workspace onto another desktop; selected workspaces check for incoming changes every minute while Nova runs. Conflicting edits pause for review; automatic merging is not available. See the [Google Drive guide](docs/sync.md). If you change files in another app, refresh the folder and reopen the note to pick up the changes.
 
 Recovery drafts help you return to unfinished work, but **Save** writes changes to your original files. Keep a separate backup of important notes. If a file changes outside Nova while you're editing, Nova stops the save so you can reconcile the two versions.
 
@@ -122,3 +122,11 @@ Recovery drafts help you return to unfinished work, but **Save** writes changes 
 - **[Google Drive](docs/sync.md)** — connect, choose uploads, download a workspace, and understand current limits.
 - **[Developer guide](docs/development.md)** — run from source, build installers, and run checks.
 - **[Release notes](https://github.com/Sthakur27/Nova/releases/latest)** — available downloads and changes.
+
+## App updates
+
+On desktop, Nova checks for updates shortly after launch. An **Update Nova** button appears in Settings only when an update is available. Click it to download, then choose **Restart to update** when ready. Downloads do not interrupt writing.
+
+Before installation, Nova preserves the current session and recovery draft. Finish voice typing and close other Nova windows first; terminal sessions end on restart. Existing installations without this feature need one manual installation of an updater-enabled release.
+
+Release maintainers: see [the updater release guide](docs/app-updates.md).

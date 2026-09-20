@@ -347,10 +347,11 @@ kbd {
 .view-switch button {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 10px;
+  justify-content: center;
+  width: 28px;
+  height: 26px;
   color: #777582;
-  padding: 5px 9px;
+  padding: 0;
   border-radius: 4px;
 }
 .view-switch button.selected {
@@ -1703,7 +1704,7 @@ kbd {
   outline-offset: 2px;
 }
 
-/* Galaxy: native window transparency shows the desktop through only the center. */
+/* Each galaxy surface owns its tint so panel and editor backgrounds are independent. */
 .galaxy-toggle {
   display: grid;
   place-items: center;
@@ -1733,11 +1734,15 @@ kbd {
   --galaxy-menu: #0b0a10;
   --bg: var(--galaxy-black);
 }
-.app-shell[data-galaxy="true"] .main-panel {
+.app-shell[data-galaxy="true"] .main-panel { background: transparent; }
+.app-shell[data-galaxy="true"] .document-area {
   background: var(--galaxy-black);
 }
-.app-shell[data-galaxy="true"][data-translucent="true"] .main-panel {
+.app-shell[data-galaxy="true"][data-background="on"] .document-area {
   background: rgba(9, 9, 17, 0.76);
+}
+.app-shell[data-galaxy="true"][data-background="frosted"] .document-area {
+  background: rgba(9, 9, 17, 0.5);
 }
 .app-shell[data-galaxy="true"] :is(.sidebar, .bookmark-rail) {
   background: var(--galaxy-black);
@@ -1754,8 +1759,15 @@ kbd {
   border: 1px solid #a899ed65;
   box-shadow: inset 1px 0 10px #a878ed12, inset -1px 0 8px #739afa16;
 }
-.app-shell[data-galaxy="true"] :is(.tab-bar, .document-toolbar, .format-toolbar, .status-bar) {
+/* Tint the full top pane once, including every wrapped toolbar row. */
+.app-shell[data-galaxy="true"] :is(.top-bars, .terminal-panel, .status-bar, .main-panel > .nova-find) {
   background: var(--galaxy-black);
+}
+.app-shell[data-galaxy="true"][data-frosted-panes="true"] :is(.sidebar, .bookmark-rail, .top-bars, .terminal-panel, .status-bar) {
+  background: rgba(9, 9, 17, 0.5);
+}
+.app-shell[data-galaxy="true"] :is(.tab-bar, .document-toolbar, .format-toolbar, .terminal-tab-bar) {
+  background: transparent;
 }
 .app-shell[data-galaxy="true"] :is(.palette, .bookmark-dialog, .voice-popover, .root-menu > div, .toast, .cm-panels) {
   background: var(--galaxy-menu);
@@ -1763,6 +1775,32 @@ kbd {
 }
 .app-shell[data-galaxy="true"] :is(.view-switch, .search-trigger, .format-toolbar select, .bookmark-dialog input, .cm-search input) {
   background: #0f0e15;
+}
+.app-shell[data-galaxy="true"][data-frosted-panes="true"] .view-switch {
+  background: #ffffff08;
+  border-color: #d8c7ef26;
+}
+.app-shell[data-galaxy="true"][data-frosted-panes="true"] .view-switch button {
+  color: #b9b0c5;
+}
+.app-shell[data-galaxy="true"][data-frosted-panes="true"] .view-switch button.selected {
+  background: #d8c7ef20;
+  color: #ede2fa;
+  box-shadow: inset 0 0 0 1px #d8c7ef15;
+}
+.app-shell[data-galaxy="true"][data-frosted-panes="true"] .search-trigger {
+  background: #ffffff08;
+  border-color: #d8c7ef26;
+  color: #c7bfd1;
+}
+.app-shell[data-galaxy="true"][data-frosted-panes="true"] .search-trigger:hover {
+  background: #ffffff10;
+  border-color: #d8c7ef45;
+}
+.app-shell[data-galaxy="true"][data-frosted-panes="true"] .search-trigger kbd {
+  background: #09091125;
+  border-color: #d8c7ef24;
+  color: #b9b0c5;
 }
 .app-shell[data-galaxy="true"] :is(.prose, .cm-content) {
   color: #d7d3e1;
@@ -1772,7 +1810,8 @@ kbd {
 }
 .app-shell[data-galaxy="true"] .loading { background: #090911e8; }
 @media (prefers-reduced-transparency: reduce) {
-  .app-shell[data-galaxy="true"][data-translucent="true"] .main-panel { background: var(--galaxy-black); }
+  .app-shell[data-galaxy="true"][data-frosted-panes="true"] :is(.sidebar, .bookmark-rail, .top-bars, .terminal-panel, .status-bar) { background: var(--galaxy-black); }
+  .app-shell[data-galaxy="true"]:is([data-background="on"], [data-background="frosted"]) .document-area { background: var(--galaxy-black); }
 }
 
 .line-numbers-check {
@@ -2214,6 +2253,7 @@ kbd {
 @media (max-width: 1000px) { .status-terminal-controls .terminal-directory { display: none; } }
 .terminal-body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 4px 10px 8px 14px; overflow: hidden; }
 .terminal-body[hidden] { display: none; }
+.terminal-screen .xterm .xterm-viewport { background-color: transparent; }
 .terminal-screen { flex: 1; min-height: 0; min-width: 0; }
 .terminal-message { font-size: 12px; color: #a9a4b6; padding: 8px 0; margin: 0; }
 .terminal-resizer { position: absolute; z-index: 5; left: 0; right: 0; top: -3px; height: 6px; cursor: row-resize; touch-action: none; }
@@ -2444,3 +2484,10 @@ kbd {
 .sync-off-dialog p { line-height: 1.6; color: var(--muted); margin-bottom: 24px; }
 .sync-off-dialog > div { display: flex; justify-content: flex-end; gap: 10px; }
 .sync-off-dialog button { padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; }
+
+.settings-update-button { display: inline-flex; align-items: center; gap: 6px; }
+.app-update-dialog { max-width: min(440px, calc(100vw - 32px)); font-size: 14px; font-weight: 400; letter-spacing: normal; }
+.app-update-dialog p { line-height: 1.6; }
+.app-update-dialog progress { width: 100%; accent-color: #b59bf3; }
+.app-update-dialog .dialog-buttons button { display: inline-flex; align-items: center; gap: 6px; }
+.app-update-error { color: #f0b4b4; overflow-wrap: anywhere; }

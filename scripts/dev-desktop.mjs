@@ -4,6 +4,7 @@ import { homedir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
+import { developmentIdentity, developmentRunner } from './dev-signing.mjs';
 
 const require = createRequire(import.meta.url);
 const pathKey = Object.keys(process.env).find(key => key.toLowerCase() === 'path') ?? 'PATH';
@@ -26,6 +27,11 @@ process.on('SIGTERM', () => void stop('SIGTERM'));
 try {
   const configArgs = [];
   if (!args.includes('--help') && !args.includes('-h') && !args.includes('--version') && !args.includes('-V')) {
+    const build = { beforeDevCommand: '' };
+    if (process.platform === 'darwin') {
+      developmentIdentity();
+      build.runner = developmentRunner(process.execPath, join(root, 'scripts/dev-macos-runner.mjs'));
+    }
     // Own the frontend server so Tauri and Vite always agree on the chosen port.
     // Leave existing preview servers alone; Vite tries the next available port.
     server = await createServer({
@@ -36,10 +42,10 @@ try {
     const address = server.httpServer.address();
     const devUrl = `http://127.0.0.1:${address.port}`;
     console.log(`Nova live development: ${devUrl}`);
-    configArgs.push('--config', JSON.stringify({ build: { beforeDevCommand: '', devUrl } }));
+    configArgs.push('--config', JSON.stringify({ build: { ...build, devUrl } }));
   }
   child = spawn(process.execPath, [
-    require.resolve('@tauri-apps/cli/tauri.js'), 'dev', ...args, ...configArgs,
+    require.resolve('@tauri-apps/cli/tauri.js'), 'dev', ...configArgs, ...args,
   ], {
     cwd: root,
     env: { ...process.env, [pathKey]: `${cargoBin}${delimiter}${process.env[pathKey] || ''}` },

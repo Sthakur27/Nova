@@ -1,9 +1,10 @@
 import { useEffect, useRef } from "react";
 import { EditorView } from "@codemirror/view";
+import { overflowClip } from "./overflowClip";
 
 const SUPERNOVA_DURATION = 3000;
 const targets = "button:not(:disabled), a, summary, select, input, .bookmark-card, .note-tab, .file-row";
-type Edge = { x: number; y: number; width: number; height: number; radius?: number; selected?: boolean; burst?: number };
+type Edge = { x: number; y: number; width: number; height: number; radius?: number; selected?: boolean; burst?: number; clip?: ReturnType<typeof overflowClip> };
 type SelectedLine = { kind: "reader"; element: Element; row: number } | { kind: "editor"; element: HTMLElement };
 
 /** A fixed violet-blue rim emits energy dots inward, clipped to each box. */
@@ -123,6 +124,12 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
       };
       if (w <= 2 || h <= 2) return;
       ctx.save();
+      if (edge.clip) {
+        const { left, top, right, bottom } = edge.clip;
+        ctx.beginPath();
+        ctx.rect(left, top, Math.max(0, right - left), Math.max(0, bottom - top));
+        ctx.clip();
+      }
       ctx.beginPath();
       ctx.roundRect(x + 0.5, y + 0.5, w - 1, h - 1, Math.max(0, radius - 0.5));
       ctx.clip();
@@ -208,7 +215,10 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
       for (const element of elements) {
         if (!visible(element)) continue;
         const r = element.getBoundingClientRect();
+        const clip = overflowClip(element, width, height);
+        if (r.right <= clip.left || r.left >= clip.right || r.bottom <= clip.top || r.top >= clip.bottom) continue;
         edges.push({ x: r.left, y: r.top, width: r.width, height: r.height,
+          clip,
           radius: parseFloat(getComputedStyle(element).borderTopLeftRadius) || 0 });
       }
       const selected = selectedLine.current;

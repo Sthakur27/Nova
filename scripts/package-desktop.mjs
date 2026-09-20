@@ -18,7 +18,7 @@ if (values.help) {
 }
 
 const platforms = {
-  darwin: { bundle: 'dmg', targets: ['aarch64-apple-darwin', 'x86_64-apple-darwin', 'universal-apple-darwin'] },
+  darwin: { bundle: 'app,dmg', targets: ['aarch64-apple-darwin', 'x86_64-apple-darwin', 'universal-apple-darwin'] },
   win32: { bundle: 'nsis', targets: ['x86_64-pc-windows-msvc', 'aarch64-pc-windows-msvc'] },
 };
 const platform = platforms[process.platform];
@@ -35,7 +35,12 @@ if (values.target && !platform.targets.includes(values.target)) {
 const cli = require.resolve('@tauri-apps/cli/tauri.js');
 const args = [cli, 'build', '--ci', '--bundles', platform.bundle];
 if (values.target) args.push('--target', values.target);
-const result = spawnSync(process.execPath, args, { cwd: root, stdio: 'inherit' });
+// Release builds use a monotonically increasing version shared by all three jobs.
+const config = {};
+if (process.env.GITHUB_RUN_NUMBER) config.version = `0.2.${process.env.GITHUB_RUN_NUMBER}`;
+if (process.env.TAURI_SIGNING_PRIVATE_KEY) config.bundle = { createUpdaterArtifacts: true };
+if (Object.keys(config).length) args.push('--config', JSON.stringify(config));
+const result = spawnSync(process.execPath, args, { cwd: root, stdio: 'inherit', env: { ...process.env, TAURI_SIGNING_PRIVATE_KEY_PASSWORD: process.env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ?? '' } });
 if (result.error) console.error(result.error.message);
 if (result.status !== 0) process.exit(result.status ?? 1);
-console.log(`Installer generated in Cargo's release/bundle/${platform.bundle}/ directory (under src-tauri/target by default).`);
+console.log(`Installer generated in Cargo's release/bundle/ directory (under src-tauri/target by default).`);

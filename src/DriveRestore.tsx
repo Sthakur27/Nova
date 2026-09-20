@@ -42,6 +42,6 @@ export default function DriveRestore({disabled,onRestored}:{disabled:boolean;onR
       </>}
     </div>}
     {error && <p role="alert">{error}</p>}{done && <p role="status">Downloaded to {done}</p>}
-    <small>Downloaded notes remember their Drive workspace. Saved changes can upload back there. Background downloads and automatic conflict merging are not available yet.</small>
+    <small>Downloaded notes remember their Drive workspace. Selected files check for changes every minute while Nova is open. Conflicting edits pause sync for review; files are never merged automatically.</small>
   </section>;
 }

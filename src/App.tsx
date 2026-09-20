@@ -18,6 +18,7 @@ import { installPanelShortcuts } from "./panelShortcuts";
 import SidePanelControls from "./SidePanelControls";
 import TextWidthControl, { textWidths, type TextWidth } from "./TextWidthControl";
 import { usePreference } from "./preferences";
+import { useBackgroundBlur } from "./useBackgroundBlur";
 import ScopeToggle from "./ScopeToggle";
 import type {SearchScope} from "./currentSearch";
 import { openTab, pinTab, reorderTab, tabId, type NoteTab } from "./tabs";
@@ -45,6 +46,7 @@ import {
   ListOrdered,
   ScanLine,
   Blend,
+  PanelsTopLeft,
   Plus,
   Search,
   PanelRight,
@@ -73,6 +75,7 @@ import { addFolders, type EditorMode } from "./folders";
 import VoiceControl from "./VoiceControl";
 import NovaMark from "./NovaMark";
 import GalaxyMark from "./GalaxyMark";
+import { useAppUpdate } from "./useAppUpdate";
 import { initialScrollTop } from "./scrollSpace";
 import { readFileMode, saveFileMode } from "./fileModes";
 import { RICH_DOCUMENT_LIMIT, supportsDocumentView } from "./documentLimits";
@@ -105,6 +108,9 @@ const LargeRead = lazy(() => import("./LargeRead"));
 const Markdown = lazy(() => import("./Markdown"));
 const mod = navigator.platform.toLowerCase().includes("mac") ? "⌘" : "Ctrl";
 const supportsTranslucency = !mobile;
+// Retain the existing on/off storage values when adding the third mode.
+const backgroundModes = ["on", "off", "frosted"] as const;
+const backgroundLabels = { on: "Translucent", off: "Black", frosted: "Frosted" };
 function BlackHoleIcon() {
   return (
     <svg className="black-hole-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -159,7 +165,9 @@ export default function App() {
   const [renameTarget, setRenameTarget] = useState<{ folder: Workspace; path: string } | null>(null);
   const [readControls, setReadControls] = useState<HTMLDivElement | null>(null);
   const [galaxyMode, setGalaxyMode, galaxyError] = usePreference<boolean>("galaxy", true);
-  const [translucent, setTranslucent, translucencyError] = usePreference<boolean>("translucent", true);
+  const [backgroundMode, setBackgroundMode, translucencyError] = usePreference<typeof backgroundModes[number]>("translucent", "on", backgroundModes);
+  const [frostedPanes, setFrostedPanes, frostedPanesError] = usePreference<boolean>("frosted-panes", false);
+  const nextBackgroundMode = backgroundModes[(backgroundModes.indexOf(backgroundMode) + 1) % backgroundModes.length];
   const [supernova, setSupernova] = useState(0);
   const [showLineNumbers, setShowLineNumbers, numbersError] = usePreference<boolean>("line-numbers", true);
   const [showLineHighlight, setShowLineHighlight, highlightError] = usePreference<boolean>("line-highlight", false);
@@ -347,6 +355,22 @@ export default function App() {
       return false;
     }
   }, []);
+  const prepareUpdate = async () => {
+    if (operation.current || saveInFlight.current || voiceBusy.current || !current.current.foldersReady) {
+      throw new Error("Finish the current operation or voice typing before updating.");
+    }
+    operation.current = true;
+    try {
+      const c = current.current;
+      await saveExplorer({
+        folders: c.folders.map(({ root, name, collapsed, closedDirectories }) => ({ root, name, collapsed, closedDirectories })),
+        active: c.hasDocument ? { root: c.workspace.root, path: c.path } : null,
+        tabs: tabsRef.current, mode: c.mode,
+      });
+      if (!(await preserveDraft())) throw new Error("Save your note before restarting; its recovery draft could not be preserved.");
+    } catch (error) { operation.current = false; throw error; }
+  };
+  const appUpdate = useAppUpdate(desktop, prepareUpdate, () => { operation.current = false; });
   const changed = useCallback(() => {
     pin(current.current.workspace.root, current.current.path);
     dirtyRef.current = true;
@@ -673,10 +697,11 @@ export default function App() {
       await starQueue.current;
       const nextPath = await (moving ? moveNote(folder.root, oldPath, name) : renameNote(folder.root, oldPath, name));
       await moveDraft(folder.root, oldPath, nextPath);
+      uploads.schedule(folder.root);
       if (nextPath !== oldPath) createdNotes.current.delete(tabId({ root: folder.root, path: oldPath }));
       name = nextPath.split("/").at(-1)!;
-      const updated = { ...folder, starred: (folder.starred ?? []).map(p => p === oldPath ? nextPath : p), files: folder.files.map(f => f.path === oldPath ? { path: nextPath, name } : f) };
-      setFolders(old => old.map(f => f.root === folder.root ? { ...f, files: updated.files, starred: (f.starred ?? []).map(p => p === oldPath ? nextPath : p) } : f));
+      const updated = { ...folder, ...(await openWorkspace(folder.root)) };
+      setFolders(old => old.map(f => f.root === folder.root ? { ...f, files: updated.files, syncPolicy: updated.syncPolicy, starred: updated.starred } : f));
       const oldId = tabId({ root: folder.root, path: oldPath });
       const cached = snapshots.current.get(oldId);
       if (cached) snapshots.current.set(tabId({ root: folder.root, path: nextPath }), cached);
@@ -839,6 +864,7 @@ export default function App() {
     try {
       await starQueue.current;
       const refreshed = await openWorkspace(root);
+      setSyncFolder(old => old?.root === root ? {...old, ...refreshed} : old);
       setFolders((old) =>
         old.map((f) =>
           f.root === root ? { ...refreshed, collapsed: f.collapsed, closedDirectories: f.closedDirectories } : f,
@@ -851,6 +877,39 @@ export default function App() {
       );
     }
   };
+  uploads.configure({
+    roots: foldersReady ? folders.filter(folder => folder.root !== "demo" && !folder.error && !folder.syncError
+      && (Object.values(folder.syncPolicy?.rules ?? {}).some(Boolean))).map(folder => folder.root) : [],
+    protectedPaths: root => current.current.workspace.root === root && (dirtyRef.current || operation.current || !!saveInFlight.current || voiceBusy.current)
+      ? [current.current.path] : [],
+    onComplete: async (root, changes) => {
+      if (!changes.length) return;
+      await refreshFolder(root);
+      const before = current.current;
+      updateTabs(tabsRef.current.map(tab => {
+        const renamed = changes.find(change => change.previousPath === tab.path && change.path !== tab.path);
+        if (tab.root !== root || !renamed || (before.workspace.root === root && before.path === tab.path && dirtyRef.current)) return tab;
+        snapshots.current.delete(tabId(tab));
+        return {...tab, path: renamed.path};
+      }));
+      const change = changes.find(change => change.previousPath === before.path);
+      if (before.workspace.root !== root || !change || !before.hasDocument) return;
+      if (dirtyRef.current || operation.current || saveInFlight.current || voiceBusy.current) {
+        setNotice("Drive changes arrived while you were editing. Your draft is retained; review it before saving.");
+        return;
+      }
+      const note = await readNote(root, change.path);
+      if (current.current.workspace.root !== root || current.current.path !== before.path || dirtyRef.current || operation.current || saveInFlight.current) return;
+      setEditorSnapshot(undefined);
+      revision.current = note.revision;
+      setData(note); setPreview(note.text); applyMarks(note.bookmarks);
+      if (change.path !== change.previousPath) {
+        updateTabs(tabsRef.current.map(tab => tab.root === root && tab.path === change.previousPath ? {...tab, path: change.path} : tab));
+        setPath(change.path);
+        current.current = {...current.current, path: change.path};
+      }
+    },
+  });
   const removeFolder = async (root: string) => {
     if (voiceBusy.current || operation.current) {
       setNotice("Finish the current operation before removing a folder.");
@@ -1114,6 +1173,9 @@ export default function App() {
     }).then(fn => { if (disposed) fn(); else unlisten = fn; });
     return () => { disposed = true; unlisten?.(); };
   }, []);
+  useBackgroundBlur(galaxyMode, backgroundMode === "frosted", frostedPanes, {
+    compact, mobileView, navigation, rail, focusMode, topBars, statusBar, terminalStarted,
+  }, setNotice);
   const switchMode = (next: EditorMode) => {
     if (next === "read") setPreview(editor.current?.text() ?? data?.text ?? "");
     setMode(next);
@@ -1129,7 +1191,7 @@ export default function App() {
     setPreview(editor.current?.text() ?? "");
   };
   return (
-    <div className="app-shell" data-compact={compact} data-mobile={mobile} data-mobile-view={mobileView} data-focus-mode={!compact && focusMode} data-window-focused={windowFocused} data-galaxy={galaxyMode} data-translucent={supportsTranslucency && translucent} data-editor-size={fontSize} data-editor-font={editorFont} data-text-width={textWidth} data-line-spacing={lineSpacing}
+    <div className="app-shell" data-compact={compact} data-mobile={mobile} data-mobile-view={mobileView} data-focus-mode={!compact && focusMode} data-window-focused={windowFocused} data-galaxy={galaxyMode} data-background={supportsTranslucency ? backgroundMode : "off"} data-frosted-panes={supportsTranslucency && frostedPanes} data-editor-size={fontSize} data-editor-font={editorFont} data-text-width={textWidth} data-line-spacing={lineSpacing}
       onPointerMove={(event) => {
         if (event.pointerType === "touch") return;
         const bounds = event.currentTarget.getBoundingClientRect();
@@ -1207,7 +1269,7 @@ export default function App() {
         <div className="sidebar-bottom">
           {drive.status.connected && <button className="global-sync-button" aria-haspopup="dialog" onClick={() => showSync(workspace)}>
             <Cloud size={18} aria-hidden="true" />
-            <span><strong>Sync</strong><small>{uploads.activeRoot ? "Uploading…" : Object.values(uploads.errors).some(Boolean) ? "Upload needs attention" : drive.status.email}</small></span>
+            <span><strong>Sync</strong><small>{uploads.activeRoot ? "Syncing…" : Object.values(uploads.errors).some(Boolean) ? "Sync needs attention" : drive.status.email}</small></span>
             <ChevronRight size={14} aria-hidden="true" />
           </button>}
           <div className="local-indicator">
@@ -1297,7 +1359,7 @@ export default function App() {
                   </button>
                   {drive.status.connected && <button className="tab-sync" data-selected={selectedForSync}
                     aria-label={`Sync settings for ${name}: ${selectedForSync ? "selected for sync" : "local only"}`}
-                    title={selectedForSync ? (uploads.items[`${tab.root}\n${tab.path}`]?.message ?? "Selected · Waiting for upload") : "Local only · Choose sync settings"}
+                    title={selectedForSync ? (uploads.items[`${tab.root}\n${tab.path}`]?.message ?? "Selected · Waiting for sync") : "Local only · Choose sync settings"}
                     aria-haspopup="dialog" disabled={!tabFolder}
                     onClick={() => { if (tabFolder) showSync(tabFolder, tab.path); }}>
                     {selectedForSync ? <Cloud size={13} /> : <CloudOff size={13} />}
@@ -1317,7 +1379,7 @@ export default function App() {
           <div className="tab-bar-space" />
           {drive.status.connected && <div className="top-drive-actions"><button className="top-sync-button" aria-label={drive.status.connected ? "Sync settings · Google Drive connected" : "Connect Google Drive"}
             title={drive.status.connected ? `Connected as ${drive.status.email}` : "Connect Google Drive"} aria-haspopup="dialog" onClick={() => showSync(workspace)}>
-            <Cloud size={16} aria-hidden="true" /><span>{uploads.activeRoot ? "Uploading…" : Object.values(uploads.errors).some(Boolean) ? "Sync needs attention" : "Drive connected"}</span>
+            <Cloud size={16} aria-hidden="true" /><span>{uploads.activeRoot ? "Syncing…" : Object.values(uploads.errors).some(Boolean) ? "Sync needs attention" : "Drive connected"}</span>
           </button><button className="icon-button" aria-label="Open workspace in Google Drive"
             title="Open workspace in Google Drive" disabled={!!uploads.activeRoot || workspace.root === "demo"}
             onClick={() => void uploads.openFolder(workspace.root)}><ExternalLink size={15} aria-hidden="true" /></button></div>}
@@ -1381,14 +1443,27 @@ export default function App() {
           </button>
           {galaxyMode && <button
             className="icon-button toolbar-icon focus-toggle"
-            aria-label="Translucent background"
-            aria-pressed={translucent}
+            aria-label={`Background: ${backgroundLabels[backgroundMode]}. Switch to ${backgroundLabels[nextBackgroundMode]}`}
             aria-describedby="translucency-tooltip"
-            onClick={() => setTranslucent(!translucent)}
+            onClick={() => setBackgroundMode(nextBackgroundMode)}
           >
             <Blend size={17} aria-hidden="true" />
             <span className="focus-tooltip" id="translucency-tooltip" role="tooltip">
-              Translucent background · {translucent ? "On" : "Off"}
+              Background · {backgroundLabels[backgroundMode]}<br />
+              Click for {backgroundLabels[nextBackgroundMode].toLowerCase()}
+            </span>
+          </button>}
+          {galaxyMode && supportsTranslucency && <button
+            className="icon-button toolbar-icon focus-toggle"
+            aria-label="Frosted panels"
+            aria-pressed={frostedPanes}
+            aria-describedby="pane-background-tooltip"
+            onClick={() => setFrostedPanes(!frostedPanes)}
+          >
+            <PanelsTopLeft size={17} aria-hidden="true" />
+            <span className="focus-tooltip" id="pane-background-tooltip" role="tooltip">
+              Panels · {frostedPanes ? "Frosted" : "Black"}<br />
+              Click for {frostedPanes ? "black" : "frosted"}
             </span>
           </button>}
           {!mobile && <VoiceControl
@@ -1417,26 +1492,30 @@ export default function App() {
               <button
                 onClick={() => switchMode("source")}
                 className={mode === "source" ? "selected" : ""}
+                aria-label="Source"
+                aria-pressed={mode === "source"}
                 title="Edit Markdown source"
               >
                 <Code2 size={14} />
-                Source
               </button>
             )}
             <button
               onClick={() => switchMode(isMarkdown ? "edit" : "source")}
               className={(isMarkdown ? mode === "edit" : mode !== "read") ? "selected" : ""}
+              aria-label="Edit"
+              aria-pressed={isMarkdown ? mode === "edit" : mode !== "read"}
               title={documentView ? "Edit formatted Markdown" : isMarkdown ? "Edit Markdown source (large note)" : "Edit text"}
             >
               <Pencil size={13} />
-              Edit
             </button>
             <button
               onClick={() => switchMode("read")}
               className={mode === "read" ? "selected" : ""}
+              aria-label="Read"
+              aria-pressed={mode === "read"}
+              title="Read"
             >
               <BookOpen size={14} />
-              Read
             </button>
           </div>
           <button
@@ -1741,7 +1820,7 @@ export default function App() {
           onClose={() => setRenameTarget(null)}
         />
       )}
-      {settingsOpen && <Settings syncConnected={drive.status.connected} onSyncSetup={() => { setSettingsOpen(false); showSync(workspace); }} onClose={() => setSettingsOpen(false)}
+      {settingsOpen && <Settings updater={desktop ? appUpdate : undefined} syncConnected={drive.status.connected} onSyncSetup={() => { setSettingsOpen(false); showSync(workspace); }} onClose={() => setSettingsOpen(false)}
         onOpenDrive={() => void uploads.openFolder(workspace.root)} openDriveDisabled={!!uploads.activeRoot || workspace.root === "demo"}
         galaxy={galaxyMode} onGalaxy={setGalaxyMode}
         lineHighlight={showLineHighlight} onLineHighlight={setShowLineHighlight}
@@ -1752,7 +1831,7 @@ export default function App() {
         editorFont={editorFont} onEditorFont={setEditorFont}
         textWidth={textWidth} onTextWidth={setTextWidth}
         lineSpacing={lineSpacing} onLineSpacing={setLineSpacing}
-        storageError={editorFontError || extensionError || spacingError || widthError || galaxyError || translucencyError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
+        storageError={editorFontError || extensionError || spacingError || widthError || galaxyError || translucencyError || frostedPanesError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
       {bookmarkDraft && (
         <div
           className="overlay"

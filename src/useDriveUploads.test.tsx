@@ -29,3 +29,26 @@ it("reports uploads and failures, skips demo files, and stops after disconnect",
     expect(uploads.items).toEqual({});
   } finally { await act(async () => root.unmount()); }
 });
+it("polls selected workspaces, protects local edits, applies downloads and stops when disconnected", async () => {
+  vi.useFakeTimers(); vi.mocked(invoke).mockReset();
+  (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+  const onComplete=vi.fn(async()=>{});
+  function Harness({connected}: {connected:boolean}) {
+    const uploads=useDriveUploads(connected);
+    uploads.configure({roots:["/notes"],protectedPaths:()=>["draft.txt"],onComplete});
+    return null;
+  }
+  const root=createRoot(document.createElement("div"));
+  try {
+    vi.mocked(invoke).mockResolvedValue({root:"/notes",folderUrl:"",items:[],changes:[{path:"renamed.txt",previousPath:"old.txt"}]});
+    await act(async()=>root.render(<Harness connected/>));
+    await act(async()=>vi.advanceTimersByTimeAsync(2500));
+    expect(invoke).toHaveBeenCalledWith("drive_upload",{root:"/notes",protectedPaths:["draft.txt"]});
+    expect(onComplete).toHaveBeenCalledWith("/notes",[{path:"renamed.txt",previousPath:"old.txt"}]);
+    await act(async()=>vi.advanceTimersByTimeAsync(60000));
+    expect(invoke).toHaveBeenCalledTimes(2);
+    await act(async()=>root.render(<Harness connected={false}/>));
+    await act(async()=>vi.advanceTimersByTimeAsync(60000));
+    expect(invoke).toHaveBeenCalledTimes(2);
+  } finally { await act(async()=>root.unmount());vi.useRealTimers(); }
+});

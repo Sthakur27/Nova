@@ -1,0 +1,13 @@
+# Desktop update releases
+
+Nova uses Tauri's updater with a public verification key in `src-tauri/tauri.conf.json`. GitHub Actions stores the corresponding private key in the `TAURI_SIGNING_PRIVATE_KEY` repository secret. Keep a secure backup of that private key: existing installed apps trust this key, so replacing it without a migration breaks their updates. Updater signing is separate from Apple notarization and Windows publisher signing.
+
+The desktop workflow builds all three supported targets before publishing a complete release. It gives every build version `0.2.<GITHUB_RUN_NUMBER>` through a Tauri configuration override. `GITHUB_RUN_ID` and the attempt identify the immutable release tag; the increasing run number orders app versions. Re-running the same workflow run does not create a new app version; start a new run for a new update.
+
+Signed builds include Mac `.app.tar.gz` archives, the Windows NSIS `.exe`, and their `.sig` files. `scripts/prepare-release.mjs` requires every installer, updater package, and signature before writing `latest.json`. The manifest points at the version-specific release assets, so subsequent releases cannot change the bytes referenced by an older manifest. The release remains a draft until every asset is uploaded.
+
+Pushes to main require the signing secret. Fork PR builds without access to secrets can still build ordinary installers, but do not generate signed update packages. Local `npm run package` also builds regular installers unless `TAURI_SIGNING_PRIVATE_KEY` is provided as a key file path or its contents.
+
+To validate a rollout, install an older updater-enabled build, publish a higher version, and check download, installation, restart, and draft recovery on Apple Silicon, Intel Mac, and Windows. Also check an offline request, failed download, and a second open window. The initial release containing this updater must be installed manually by existing users.
+
+The updater runs only on desktop. It checks three seconds after launch. Settings shows an update button only when a newer version is available. Update state lives at the app level, so closing Settings does not cancel a download or lose a downloaded update. Downloads are user initiated and verified by Tauri. Installation waits for an explicit restart action; the UI blocks interaction while preserving the session and current draft. Other windows must be closed before installation. Native window creation is locked during installation, and the normal quit interception is bypassed for the updater's Windows installer exit. On Mac, Nova explicitly restarts after installation.

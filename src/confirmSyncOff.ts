@@ -17,7 +17,7 @@ export function confirmSyncOff(name: string): Promise<boolean> {
     title.textContent = `Turn off sync for ${name}?`;
     const description = document.createElement("p");
     description.id = "sync-off-description";
-    description.textContent = "Future changes from this device will stay local. Existing files in Google Drive and on this device will not be deleted. An upload already in progress may still finish. Other devices keep their own sync settings.";
+    description.textContent = "Future changes from this device will stay local, and changes from Drive will stop downloading. Existing files in Google Drive and on this device will not be deleted. An upload already in progress may still finish. Other devices keep their own sync settings.";
     const actions = document.createElement("div");
     const cancel = document.createElement("button");
     cancel.textContent = "Keep syncing";
