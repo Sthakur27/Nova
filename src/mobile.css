@@ -65,6 +65,6 @@
 @media (pointer: coarse) { .file-context-menu button { min-height: 44px; } }
 
 /* Desktop's extra scroll canvas moves the caret when the iOS keyboard resizes. */
-.app-shell[data-mobile="true"] .cm-editor .cm-content { padding-top: 24px; padding-bottom: 80px; }
+.app-shell[data-mobile="true"] .cm-editor .cm-content { padding-top: calc(24px + var(--file-title-height, 72px)); padding-bottom: 80px; }
 .app-shell[data-mobile="true"] .start-mark { height: 24px; padding: 0; }
 .app-shell[data-mobile="true"] :is(.read-pane, .document-pane) > .prose { padding-bottom: 80px; }

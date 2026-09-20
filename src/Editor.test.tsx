@@ -73,6 +73,7 @@ it("changes language on rename and preserves text and undo across restored tabs"
   );
   try {
     await act(async () => render("Main.java"));
+    expect(container.querySelector(".cm-scroller > .source-file-heading")?.textContent).toBe("Main");
     expect(container.querySelector(".cm-foldGutter")).not.toBeNull();
     expect(container.querySelector(".cm-content")?.getAttribute("spellcheck")).toBe("false");
     await act(async () => {
@@ -82,6 +83,8 @@ it("changes language on rename and preserves text and undo across restored tabs"
     });
     const snapshot = ref.current!.snapshot();
     await act(async () => render("Main.txt"));
+    expect(container.querySelector(".cm-scroller > .source-file-heading")?.textContent).toBe("Main");
+    expect(ref.current!.text()).not.toContain("Main.txt");
     expect(container.querySelector(".cm-foldGutter")).toBeNull();
     expect(container.querySelector(".cm-content")?.getAttribute("spellcheck")).toBe("true");
     expect(ref.current!.text()).toContain("addition");

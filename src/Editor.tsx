@@ -5,6 +5,7 @@ import { DocumentEditor } from "./DocumentEditor";
 import { supportsDocumentView } from "./documentLimits";
 import { textChanges } from "./documentMarkdown";
 import GalaxyMark from "./GalaxyMark";
+import FileTitle, { fileTitle } from "./FileTitle";
 import { scrollSpaceStyle } from "./scrollSpace";
 import { GFM } from "@lezer/markdown";
 import { tags } from "@lezer/highlight";
@@ -164,6 +165,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
   const highlighting = useRef(new Compartment());
   const numbering = useRef(new Compartment());
   const language = useRef(new Compartment());
+  const sourceTitle = useRef<HTMLHeadingElement | null>(null);
   const mount = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const documentMount = useRef<HTMLDivElement>(null);
@@ -368,7 +370,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
             lineHeight: "var(--editor-line-height, 1.9)",
             overflow: "auto",
           },
-          ".cm-content": { padding: "calc(100cqh + 40px + var(--extra-scroll-before, 0px)) 36px calc(100cqh + var(--extra-scroll-after, 0px))", maxWidth: "var(--text-width, 900px)" },
+          ".cm-content": { padding: "calc(100cqh + 40px + var(--extra-scroll-before, 0px) + var(--file-title-height, 72px)) 36px calc(100cqh + var(--extra-scroll-after, 0px))", maxWidth: "var(--text-width, 900px)" },
           ".cm-gutters": {
             backgroundColor: "transparent",
             color: "#54565f",
@@ -395,6 +397,31 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
       v.scrollDOM.style.setProperty("--extra-scroll-before", p.snapshot.scrollSpace.before);
       v.scrollDOM.style.setProperty("--extra-scroll-after", p.snapshot.scrollSpace.after);
     }
+    const heading = document.createElement("header");
+    heading.className = "file-heading source-file-heading";
+    const title = document.createElement("h1");
+    title.className = "file-title";
+    title.dir = "auto";
+    title.textContent = title.title = fileTitle(p.filePath);
+    heading.append(title);
+    v.scrollDOM.prepend(heading);
+    sourceTitle.current = title;
+    const measureTitle = () => {
+      const style = getComputedStyle(v.contentDOM);
+      const left = v.contentDOM.offsetLeft + (parseFloat(style.paddingLeft) || 36);
+      heading.style.left = `${left}px`;
+      heading.style.width = `${Math.max(0, Math.min(v.contentDOM.clientWidth - (parseFloat(style.paddingLeft) || 36) - (parseFloat(style.paddingRight) || 36), v.scrollDOM.clientWidth - left - 24))}px`;
+      const height = heading.getBoundingClientRect().height;
+      if (height && v.scrollDOM.style.getPropertyValue("--file-title-height") !== `${height}px`) {
+        v.scrollDOM.style.setProperty("--file-title-height", `${height}px`);
+        v.requestMeasure();
+      }
+    };
+    const titleObserver = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(measureTitle);
+    titleObserver?.observe(heading);
+    titleObserver?.observe(v.contentDOM);
+    titleObserver?.observe(v.scrollDOM);
+    measureTitle();
     // A source editor can mount hidden behind Read mode. Wait until it has a
     // viewport before positioning the first line below the space above it.
     const positionSource = () => {
@@ -418,6 +445,8 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
     p.onParagraphStyle?.(paragraphStyle(v.state));
     return () => {
       openingObserver?.disconnect();
+      titleObserver?.disconnect();
+      sourceTitle.current = null;
       v.destroy();
       view.current = null;
     };
@@ -487,6 +516,9 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
     ) });
   }, [props.isMarkdown, props.filePath]);
   useEffect(() => {
+    if (sourceTitle.current) sourceTitle.current.textContent = sourceTitle.current.title = fileTitle(props.filePath);
+  }, [props.filePath]);
+  useEffect(() => {
     view.current?.dispatch({ effects: spelling.current.reconfigure(EditorView.contentAttributes.of({
       "aria-label": "Note editor", spellcheck: String(props.spellcheck && !codeLanguage(props.filePath)),
     })) });
@@ -497,6 +529,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
       <div className="start-mark" aria-hidden="true"><GalaxyMark circled /></div>
       <article className="prose document-prose">
         <div className="document-eyebrow">A NOTE IN YOUR SPACE</div>
+        <FileTitle path={props.filePath ?? ""} />
         <div ref={documentMount} />
         <div className="end-mark"><GalaxyMark circled /></div>
       </article>

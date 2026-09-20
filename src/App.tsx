@@ -1,4 +1,5 @@
 import ReadFind from "./ReadFind";
+import FileTitle from "./FileTitle";
 import { mobile } from "./platform";
 import { useCompactLayout } from "./useCompactLayout";
 import SyncSettings from "./SyncSettings";
@@ -1370,6 +1371,7 @@ export default function App() {
                 <div className="document-eyebrow">
                   {isMarkdown ? "A NOTE IN YOUR SPACE" : "PLAIN & SIMPLE"}
                 </div>
+                <FileTitle path={path} />
                 <Suspense fallback={<p>Rendering your note…</p>}>
                   {preview.length > RICH_DOCUMENT_LIMIT ? (
                     <LargeRead ref={largeRead} text={preview} markdown={isMarkdown} controlsContainer={readControls} onToggleTask={toggleReadTask} />
