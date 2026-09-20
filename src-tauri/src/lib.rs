@@ -1,11 +1,13 @@
+#[cfg(any(mobile, test))]
+mod mobile_storage;
 #[cfg(desktop)]
 mod background;
 #[cfg(desktop)]
 mod speech;
 mod sync_policy;
-#[cfg(desktop)]
+#[cfg(any(desktop, target_os = "ios"))]
 mod drive_auth;
-#[cfg(desktop)]
+#[cfg(any(desktop, target_os = "ios"))]
 mod drive_upload;
 #[cfg(desktop)]
 mod terminal;
@@ -125,8 +127,8 @@ fn normalize_extension(value: &str) -> Result<String, String> {
 fn root_path(access: &Access, root: &str) -> Result<PathBuf, String> {
     #[cfg(mobile)]
     {
-        if root != "mobile" { return Err("Only on-device notes are available on mobile.".into()); }
-        return access.mobile_root.lock().map_err(err)?.clone().ok_or("Notes storage is not ready.".into());
+        let notes = access.mobile_root.lock().map_err(err)?.clone().ok_or("Notes storage is not ready.")?;
+        return mobile_storage::resolve(&notes, root);
     }
     #[cfg(desktop)]
     let path = fs::canonicalize(root).map_err(err)?;
@@ -195,9 +197,9 @@ fn metadata_path(app: &tauri::AppHandle, path: &Path) -> Result<PathBuf, String>
     let dir = app.path().app_data_dir().map_err(err)?.join("bookmarks");
     fs::create_dir_all(&dir).map_err(err)?;
     #[cfg(mobile)]
-    let storage_root = fs::canonicalize(app.path().app_data_dir().map_err(err)?.join("Notes")).map_err(err)?;
+    let storage_root = app.path().app_data_dir().map_err(err)?;
     #[cfg(mobile)]
-    let path = path.strip_prefix(&storage_root).map_err(err)?;
+    let path = mobile_storage::bookmark_identity(&storage_root, path)?;
     Ok(dir.join(format!("{}.json", revision(path.to_string_lossy().as_bytes()))))
 }
 fn atomic_write(path: &Path, data: &[u8]) -> Result<(), String> {
@@ -306,9 +308,9 @@ async fn open_workspace(root: String, access: State<'_, Access>) -> Result<Works
         starred,
         stars_error,
         #[cfg(mobile)]
-        root: "mobile".into(),
+        root: root.clone(),
         #[cfg(mobile)]
-        name: "On this device".into(),
+        name: if root == "mobile" { "On this device".into() } else { path.file_name().unwrap_or_default().to_string_lossy().into_owned() },
         #[cfg(desktop)]
         root: path.to_string_lossy().into_owned(),
         #[cfg(desktop)]
@@ -444,7 +446,7 @@ fn scan_search(
                 Err(_) => continue,
             };
             #[cfg(mobile)]
-            let canonical = match canonical.strip_prefix(&root) {
+            let canonical = match mobile_storage::bookmark_identity(metadata_dir.parent().unwrap(), &canonical) {
                 Ok(path) => path.to_path_buf(),
                 Err(_) => continue,
             };
@@ -544,8 +546,9 @@ async fn search_notes(
     .map_err(err)?;
     #[cfg(mobile)]
     {
-        for hit in &mut response.hits { hit.root = "mobile".into(); }
-        for hit in &mut response.bookmarks { hit.root = "mobile".into(); }
+        let data = app.path().app_data_dir().map_err(err)?;
+        for hit in &mut response.hits { hit.root = mobile_storage::identity(&data, Path::new(&hit.root))?; }
+        for hit in &mut response.bookmarks { hit.root = mobile_storage::identity(&data, Path::new(&hit.root))?; }
     }
     response.warnings.extend(warnings);
     Ok(response)
@@ -956,20 +959,30 @@ pub fn run() {
 #[cfg(mobile)]
 #[tauri::mobile_entry_point]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(target_os = "ios")]
+    let builder = builder.plugin(tauri_plugin_nova_auth::init()).manage(drive_auth::DriveAuth::default());
+    let builder = builder
         .manage(Access::default())
         .setup(|app| {
             let root = app.path().app_data_dir()?.join("Notes");
             fs::create_dir_all(&root)?;
             *app.state::<Access>().mobile_root.lock().map_err(|_| "Notes storage lock failed")? = Some(fs::canonicalize(root)?);
             Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![
+        });
+    #[cfg(target_os = "ios")]
+    let builder = builder.invoke_handler(tauri::generate_handler![
+        drive_auth::drive_status, drive_auth::drive_connect, drive_auth::drive_cancel, drive_auth::drive_disconnect,
+        drive_upload::drive_upload, drive_upload::drive_open_folder, drive_upload::drive_workspaces, drive_upload::drive_restore,
+        open_workspace, set_file_star, set_sync_choice, read_note, save_note, save_bookmarks, search_notes, load_draft, save_draft, load_explorer, save_explorer, create_note, rename_note, move_note, delete_note
+    ]);
+    #[cfg(not(target_os = "ios"))]
+    let builder = builder.invoke_handler(tauri::generate_handler![
             open_workspace, set_file_star, set_sync_choice, read_note, save_note,
             save_bookmarks, search_notes, load_draft, save_draft, load_explorer,
             save_explorer, create_note, rename_note, move_note, delete_note
-        ])
-        .run(tauri::generate_context!())
+        ]);
+    builder.run(tauri::generate_context!())
         .expect("Unable to run Nova");
 }
 

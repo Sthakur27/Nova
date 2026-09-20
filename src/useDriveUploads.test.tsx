@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { useDriveUploads, type DriveUploads } from "./useDriveUploads";
-vi.mock("./platform", () => ({ desktop: true }));
+vi.mock("./platform", () => ({ driveSupported: true }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(async () => () => {}) }));
 it("reports uploads and failures, skips demo files, and stops after disconnect", async () => {
@@ -51,4 +51,24 @@ it("polls selected workspaces, protects local edits, applies downloads and stops
     await act(async()=>vi.advanceTimersByTimeAsync(60000));
     expect(invoke).toHaveBeenCalledTimes(2);
   } finally { await act(async()=>root.unmount());vi.useRealTimers(); }
+});
+it("waits while hidden and checks immediately when returning to the foreground", async () => {
+  vi.useFakeTimers(); vi.mocked(invoke).mockReset();
+  const visibility = vi.spyOn(document, "visibilityState", "get");
+  visibility.mockReturnValue("hidden");
+  vi.mocked(invoke).mockResolvedValue({root:"mobile",folderUrl:"",items:[]});
+  function Harness() {
+    const uploads = useDriveUploads(true);
+    uploads.configure({roots:["mobile"],protectedPaths:()=>[],onComplete:async()=>{}});
+    return null;
+  }
+  const root=createRoot(document.createElement("div"));
+  try {
+    await act(async()=>root.render(<Harness/>));
+    await act(async()=>vi.advanceTimersByTimeAsync(62500));
+    expect(invoke).not.toHaveBeenCalled();
+    visibility.mockReturnValue("visible");
+    await act(async()=>{document.dispatchEvent(new Event("visibilitychange"));});
+    expect(invoke).toHaveBeenCalledWith("drive_upload",{root:"mobile",protectedPaths:[]});
+  } finally { await act(async()=>root.unmount());visibility.mockRestore();vi.useRealTimers(); }
 });

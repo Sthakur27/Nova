@@ -33,3 +33,12 @@ it("opens native storage without a desktop folder picker and saves through Rust"
   await saveNote("mobile", "Ideas.md", "updated", "before");
   expect(invoke).toHaveBeenLastCalledWith("save_note", { root: "mobile", path: "Ideas.md", text: "updated", revision: "before" });
 });
+it("preserves restored workspace folders and tabs across launches", async () => {
+  const folder = {root:"mobile-sync/Work - abc",name:"Work",collapsed:false};
+  const active = {root:folder.root,path:"Personal.txt"};
+  invoke.mockResolvedValue({folders:[folder],active,tabs:[{...active,pinned:true}],mode:"edit"});
+  const saved = await loadExplorer();
+  expect(saved?.folders).toContainEqual(folder);
+  expect(saved?.active).toEqual(active);
+  expect(saved?.tabs).toContainEqual({...active,pinned:true});
+});

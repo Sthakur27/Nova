@@ -115,7 +115,9 @@ fn read_local(path: &Path) -> Result<Option<Vec<u8>>, String> {
 }
 fn saved_draft(data_dir: &Path, root: &Path, path: &str) -> Result<bool, String> {
     let directory = data_dir.join("drafts");
-    let draft = crate::draft_path(&directory, &root.to_string_lossy(), path);
+    #[cfg(desktop)] let root_id = root.to_string_lossy().into_owned();
+    #[cfg(target_os = "ios")] let root_id = crate::mobile_storage::identity(data_dir, root)?;
+    let draft = crate::draft_path(&directory, &root_id, path);
     match fs::read(draft) {
         Ok(bytes) => Ok(!serde_json::from_slice::<Value>(&bytes)
             .map_err(crate::err)?
@@ -125,6 +127,8 @@ fn saved_draft(data_dir: &Path, root: &Path, path: &str) -> Result<bool, String>
     }
 }
 fn bookmark_path(data_dir: &Path, path: &Path) -> Result<PathBuf, String> {
+    #[cfg(target_os = "ios")]
+    let path = crate::mobile_storage::bookmark_identity(data_dir, path)?;
     let dir = data_dir.join("bookmarks");
     fs::create_dir_all(&dir).map_err(crate::err)?;
     Ok(dir.join(format!(

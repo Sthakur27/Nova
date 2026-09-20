@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { useDriveConnection, type DriveConnection } from "./useDriveConnection";
-vi.mock("./platform", () => ({ desktop: true }));
+vi.mock("./platform", () => ({ driveSupported: true }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 it("tracks browser sign-in, blocks duplicate requests, and updates connected account and disconnect", async () => {
   (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
@@ -33,4 +33,17 @@ it("tracks browser sign-in, blocks duplicate requests, and updates connected acc
     expect(drive.error).toContain("cancelled");
     expect(drive.busy).toBe(false);
   } finally { await act(async () => root.unmount()); }
+});
+it("keeps reconnect available when secure credential storage reports an error", async () => {
+  vi.mocked(invoke).mockReset();
+  vi.mocked(invoke).mockResolvedValue({connected:false,configured:true,email:null,error:"Could not read saved connection."});
+  let drive!: DriveConnection;
+  function Harness() { drive=useDriveConnection();return null; }
+  const root=createRoot(document.createElement("div"));
+  try {
+    await act(async()=>root.render(<Harness/>));
+    expect(drive.status.configured).toBe(true);
+    expect(drive.error).toContain("Could not read");
+    expect(drive.busy).toBe(false);
+  } finally { await act(async()=>root.unmount()); }
 });

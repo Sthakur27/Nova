@@ -1,11 +1,12 @@
 # Google Drive sync
 
-Google Drive is optional and currently available in configured desktop builds.
+Google Drive is optional and available in configured desktop and iOS builds.
 Open **Settings → Google Drive → Set up sync**, or the cloud button beside Settings.
 Choose **Connect Google Drive**, finish sign-in in your browser, and return to Nova.
 The app requests `drive.file` access and stores its refresh token in the system
 credential store. Sign-in can be cancelled and times out after five minutes.
-Browser previews and iPhone/iPad builds cannot connect yet.
+Browser previews and Android builds cannot connect. iPhone and iPad use native
+Google sign-in; see [iPhone and iPad](#iphone-and-ipad) for setup.
 
 After connecting, **Sync** appears in the sidebar and top tab bar. A tab’s cloud
 button focuses that file in the dialog; explorer cloud buttons toggle individual
@@ -133,3 +134,53 @@ Validation includes native HTTP-backed reconciliation tests for incoming changes
 conflicts, ID-preserving renames, destination collisions, deleted-file tombstones,
 opt-out and draft protection. Real Google Drive verification requires native Keychain
 access and is separate from these deterministic tests.
+
+## iPhone and iPad
+
+The iOS app uses the same Drive file IDs, per-path choices, conflict handling, and
+`.nova` Drive folder as desktop. It checks on launch, on return to the foreground,
+and every minute while visible. Saves schedule another check. There is no closed-app
+background service; edits saved before suspension retry when Nova is opened again.
+
+Connect from the cloud button or **Settings → Google Drive → Set up sync**. To bring a desktop workspace to
+mobile, choose **Bring notes to this device**, select its Drive workspace, then
+**Download & open workspace**. Nova stores the copy in its private app storage,
+separate from **On this device** notes, and preserves its Drive association. Files
+remain readable/editable offline. Uninstalling Nova removes its local app storage;
+only changes that finished syncing are recoverable from Drive.
+
+Google sign-in uses ASWebAuthenticationSession with a state-checked PKCE callback.
+Refresh credentials stay in the iOS Keychain; tokens never enter the webview or
+workspace registry. The Swift bridge only handles browser authorization and opening
+a Drive folder. Android sync remains unavailable.
+
+Build configuration: create an **iOS** OAuth client in the same Google Cloud project
+as desktop, with bundle ID `com.nova.notes.prototype`. Set
+`NOVA_GOOGLE_IOS_CLIENT_ID=<client-id>.apps.googleusercontent.com` in `.env.local` or
+the build environment, then rebuild the native app. This client needs no secret.
+Desktop's client secret is not embedded in the iOS binary. Testing-mode Google apps
+still require the signing-in account to be an approved test user.
+
+Mobile workspace keys (`mobile`, `mobile-sync/<workspace>`) remain stable when iOS
+changes an app container path. Restored workspace bookmark and draft identities are
+scoped separately, and the on-device workspace gets a persisted random Drive key.
+
+### Live iOS verification — 2026-09-20
+
+Verified with Device Hub’s iPhone 18 Pro simulator and Google Drive in Chrome,
+using the configured iOS OAuth client and a signed simulator build:
+
+- Google sign-in completes and the connection appears in Nova.
+- The existing `mine` Drive workspace restores into private local `Synced` storage
+  with three files, retaining its original cloud workspace ID.
+- Editing and saving `Nova E2E sync check.txt` in the mobile editor updates the same
+  Drive file ID; the browser preview displays the exact appended mobile marker.
+- Renaming that test file in Drive while Nova is backgrounded updates the local
+  filename and open note title on return to the foreground, preserving contents.
+- The test filename was restored in Drive and synchronized back locally.
+- Installing the final build over the simulator app and launching it cold preserves
+  the Google connection, restored workspace, and note contents without signing in
+  again. The startup sync receives the restored filename.
+
+Only the synthetic E2E note was edited/renamed. Physical-device and iPad sync
+verification are still separate checks; these results cover the iPhone simulator.

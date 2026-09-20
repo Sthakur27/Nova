@@ -88,12 +88,13 @@ export async function loadExplorer(): Promise<ExplorerPreferences | null> {
   if (native) {
     const saved = parsePreferences(await invoke("load_explorer"));
     if (!mobile) return saved;
+    const validRoot = (root: string) => root === "mobile" || /^mobile-sync\/[^/\\]+$/.test(root);
     // Stable virtual root survives iOS changing the app container's absolute path.
     return {
-      folders: [{ root: "mobile", name: "On this device", collapsed: false }],
-      active: saved?.active?.root === "mobile" ? saved.active : null,
+      folders: [{ root: "mobile", name: "On this device", collapsed: false }, ...(saved?.folders.filter(folder => folder.root !== "mobile" && validRoot(folder.root)) ?? [])],
+      active: saved?.active && validRoot(saved.active.root) ? saved.active : null,
       mode: saved?.mode ?? "edit",
-      tabs: saved?.tabs?.filter(tab => tab.root === "mobile") ?? [],
+      tabs: saved?.tabs?.filter(tab => validRoot(tab.root)) ?? [],
     };
   }
   return parsePreferences(JSON.parse(localStorage.getItem("nova-explorer-v1") ?? "null"));

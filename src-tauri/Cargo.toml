@@ -20,16 +20,16 @@ serde_json = "1"
 walkdir = "2"
 blake3 = "1"
 tempfile = "3"
+sha2 = "0.10"
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls", "json"] }
+base64 = "0.22"
+rand = "0.8"
 [target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
 tauri-plugin-updater = "2"
 window-vibrancy = "0.6"
 whisper-rs = "0.16"
 cpal = "0.16"
-sha2 = "0.10"
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 portable-pty = "0.9"
-base64 = "0.22"
-rand = "0.8"
 webbrowser = "1"
 keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 
@@ -44,3 +44,7 @@ hound = "3"
 # Backport iOS scene lifecycle fixes while the Tauri 2 dependency pins Tao 0.35.
 [patch.crates-io]
 tao = { path = "vendor/tao" }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+keyring = { version = "3", features = ["apple-native"] }
+tauri-plugin-nova-auth = { path = "plugins/ios-auth" }

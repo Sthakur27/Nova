@@ -9,6 +9,7 @@ import { openWorkspace } from "./storage";
 vi.mock("@tauri-apps/api/core", () => ({invoke:vi.fn()}));
 vi.mock("@tauri-apps/plugin-dialog", () => ({open:vi.fn()}));
 vi.mock("./storage", () => ({openWorkspace:vi.fn()}));
+vi.mock("./platform", () => ({mobile:false}));
 it("requires a chosen destination and opens the downloaded workspace", async () => {
   (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
   const host=document.createElement("div"),root=createRoot(host),onRestored=vi.fn();

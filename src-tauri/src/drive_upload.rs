@@ -143,7 +143,19 @@ fn workspace_folder(drive: &Drive, root: &Path) -> Result<String, String> {
         if candidates.iter().any(|v|v["id"].as_str()==Some(linked.as_str())) { return Ok(linked); }
         return Err("The linked workspace was removed from Drive. Restore or reconnect it before uploading.".into());
     }
+    #[cfg(desktop)]
     let key = crate::revision(root.to_string_lossy().as_bytes());
+    #[cfg(target_os = "ios")]
+    let key = {
+        let mut registry = registry;
+        let key = registry["mobileDriveKey"].as_str().map(str::to_owned).unwrap_or_else(|| {
+            use rand::RngCore;
+            let mut bytes = [0u8;32]; rand::rngs::OsRng.fill_bytes(&mut bytes); crate::revision(&bytes)
+        });
+        registry["mobileDriveKey"] = json!(key);
+        let stars = crate::registry_stars(&registry)?; crate::write_registry(root, registry, &stars)?;
+        key
+    };
     drive.folder(&base, &key, root.file_name().and_then(|s|s.to_str()).unwrap_or("Notes"))
 }
 fn allowed(root: &Path, path: &str) -> Result<bool, String> {
@@ -156,7 +168,11 @@ fn upload_workspace(app: tauri::AppHandle, root: PathBuf, protected_paths: Vec<S
     crate::sync_policy::read(&crate::read_registry(&root)?)?;
     let folder = workspace_folder(&drive, &root)?;
     let account = drive_auth::account_key()?;
-    let mut report = Report { root: root.to_string_lossy().into_owned(), folder_url: format!("https://drive.google.com/drive/folders/{folder}"), items: Vec::new(), changes: Vec::new() };
+    #[cfg(desktop)]
+    let root_id = root.to_string_lossy().into_owned();
+    #[cfg(target_os = "ios")]
+    let root_id = crate::mobile_storage::identity(&app.path().app_data_dir().map_err(crate::err)?, &root)?;
+    let mut report = Report { root: root_id, folder_url: format!("https://drive.google.com/drive/folders/{folder}"), items: Vec::new(), changes: Vec::new() };
     {
         let access=app.state::<Access>();let _lock=access.writes.lock().map_err(crate::err)?;
         let mut registry=crate::read_registry(&root)?;
@@ -222,13 +238,15 @@ pub async fn drive_upload(root: String, protected_paths: Option<Vec<String>>, ap
     tauri::async_runtime::spawn_blocking(move || { let _guard = guard; upload_workspace(app,root,protected_paths.unwrap_or_default()) }).await.map_err(crate::err)?
 }
 #[tauri::command]
-pub async fn drive_open_folder(root: String, access: State<'_,Access>, auth: State<'_,DriveAuth>) -> Result<(),String> {
+pub async fn drive_open_folder(app: tauri::AppHandle, root: String, access: State<'_,Access>, auth: State<'_,DriveAuth>) -> Result<(),String> {
     let root = crate::root_path(&access,&root)?;
     let guard = drive_auth::transfer_guard(&auth)?;
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = guard;
         let folder = workspace_folder(&Drive::new()?,&root)?;
-        webbrowser::open(&format!("https://drive.google.com/drive/folders/{folder}")).map_err(|_| "Could not open the browser.".to_string())
+        let url = format!("https://drive.google.com/drive/folders/{folder}");
+        #[cfg(desktop)] { let _ = app; webbrowser::open(&url).map_err(|_| "Could not open the browser.".to_string()) }
+        #[cfg(target_os = "ios")] { app.state::<tauri_plugin_nova_auth::Auth<tauri::Wry>>().call("openDrive", json!({"url":url})).map(|_| ()) }
     }).await.map_err(crate::err)?
 }
 
@@ -276,11 +294,31 @@ fn restore_tree(drive: &Drive, remote: &str, destination: &Path, prefix: &str, r
 #[tauri::command]
 pub async fn drive_restore(parent: String, workspace_id: String, access: State<'_,Access>, auth: State<'_,DriveAuth>) -> Result<String,String> {
     let parent = crate::root_path(&access,&parent)?;
+    #[cfg(target_os = "ios")]
+    let parent = {
+        let notes = access.mobile_root.lock().map_err(crate::err)?.clone().ok_or("Notes storage is unavailable.")?;
+        let _ = parent;
+        let parent = notes.parent().ok_or("Missing storage directory.")?.join("Synced");
+        fs::create_dir_all(&parent).map_err(crate::err)?; parent
+    };
     let guard = drive_auth::transfer_guard(&auth)?;
     tauri::async_runtime::spawn_blocking(move || {
         let _guard = guard; let drive = Drive::new()?;
         let base = base_folder(&drive)?;
         let workspace = drive.children(&base)?.into_iter().find(|v|v["id"].as_str()==Some(workspace_id.as_str()) && v["mimeType"]=="application/vnd.google-apps.folder" && v["appProperties"]["novaKey"].is_string()).ok_or("Choose a Nova workspace from Drive.")?;
+        #[cfg(target_os = "ios")]
+        {
+            let account = drive_auth::account_key()?;
+            for entry in fs::read_dir(&parent).map_err(crate::err)? {
+                let entry = entry.map_err(crate::err)?;
+                if !entry.file_type().map_err(crate::err)?.is_dir() { continue; }
+                if let Ok(registry) = crate::read_registry(&entry.path()) {
+                    if registry["driveWorkspace"]["id"].as_str() == Some(&workspace_id) && registry["driveWorkspace"]["account"].as_str() == Some(&account) {
+                        return crate::mobile_storage::identity(parent.parent().ok_or("Missing storage directory.")?, &entry.path());
+                    }
+                }
+            }
+        }
         let name = workspace["name"].as_str().filter(|n|safe_name(n)).unwrap_or("Nova notes");
         // An exclusively created destination guarantees no existing files are overwritten.
         let directory = tempfile::Builder::new().prefix(&format!("{name} - ")).tempdir_in(&parent).map_err(crate::err)?;
@@ -295,7 +333,9 @@ pub async fn drive_restore(parent: String, workspace_id: String, access: State<'
         }
         let registry = json!({"driveFiles":{account.clone():identities},"syncPolicy":{"version":1,"rules":rules},"driveWorkspace":{"id":workspace_id,"account":account},"driveReceipts":{account:receipts},"starred":[]});
         fs::write(directory.path().join(".nova"),serde_json::to_vec(&registry).map_err(crate::err)?).map_err(crate::err)?;
-        Ok(directory.keep().to_string_lossy().into_owned())
+        let destination = directory.keep();
+        #[cfg(desktop)] { Ok(destination.to_string_lossy().into_owned()) }
+        #[cfg(target_os = "ios")] { crate::mobile_storage::identity(parent.parent().ok_or("Missing storage directory.")?, &destination) }
     }).await.map_err(crate::err)?
 }
 

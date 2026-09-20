@@ -421,9 +421,6 @@ kbd {
   position: absolute;
   top: calc(var(--scroll-before) + 40px);
 }
-.app-shell[data-mobile="true"] .source-file-heading {
-  top: 24px;
-}
 .document-area {
   /* Leave the title visible at the upper scroll limit. */
   --scroll-before: max(0px, calc(100cqh - 160px));

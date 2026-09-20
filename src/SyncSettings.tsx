@@ -77,8 +77,8 @@ export default function SyncSettings({ onRestored, uploads, onUpload, drive, fol
           <button className="drive-connect" disabled={!drive.supported || drive.busy || drive.checking || !drive.status.configured}
             onClick={() => void drive.connect()}>{drive.busy ? "Waiting for Google…" : "Connect Google Drive"}</button>
           {drive.busy && <><p role="status">Finish sign-in in your browser. This window will update automatically.</p><button onClick={() => void drive.cancel()}>Cancel sign-in</button></>}
-          {!drive.supported && <p>Open Nova’s desktop app to connect. Google sign-in is not available in this preview or on mobile yet.</p>}
-          {drive.supported && !drive.checking && !drive.status.configured && <p>This build is missing Google sign-in configuration. Use a configured desktop build.</p>}
+          {!drive.supported && <p>Connect using Nova for desktop, iPhone, or iPad. This preview or platform does not support Google sign-in.</p>}
+          {drive.supported && !drive.checking && !drive.status.configured && <p>This build is missing Google sign-in configuration. Install a build with Google sign-in configured for this device.</p>}
         </>}
         {slowCredentialCheck && <p role="status">Your system credential store is still responding. Check for a macOS Keychain or Windows credential prompt and allow Nova to read its saved Google connection.</p>}
         {drive.error && <p role="alert">{drive.error}</p>}

@@ -39,8 +39,9 @@
 .app-shell[data-compact="true"] .document-toolbar > :is(.toolbar-preference, .line-numbers-toggle, .toolbar-icon, .voice-control) { display: none; }
 .app-shell[data-compact="true"] .document-toolbar > :not(.breadcrumbs, .view-switch, .read-controls, [aria-label="Save note"]) { display: none; }
 .app-shell[data-compact="true"] .breadcrumbs > :not(:last-child) { display: none; }
-.app-shell[data-compact="true"] .view-switch button { min-height: 36px; padding: 5px 7px; }
-.app-shell[data-compact="true"] .view-switch svg { display: none; }
+.app-shell[data-compact="true"] .view-switch button { min-width: 44px; min-height: 44px; padding: 8px; color: #b7b0c3; }
+.app-shell[data-compact="true"] .view-switch button.selected { color: #f0e5ff; background: #40364f; }
+.app-shell[data-compact="true"] .view-switch svg { display: block; width: 20px; height: 20px; }
 .app-shell[data-compact="true"] .format-toolbar { overflow-x: auto; flex-wrap: nowrap; padding: 3px 8px; min-height: 46px; }
 .app-shell[data-compact="true"] .format-toolbar > * { flex-shrink: 0; }
 .app-shell[data-compact="true"] .format-toolbar button { min-width: 40px; min-height: 38px; }
@@ -64,7 +65,10 @@
 .app-shell[data-mobile="true"] .folder-grip { display: none; }
 @media (pointer: coarse) { .file-context-menu button { min-height: 44px; } }
 
-/* Desktop's extra scroll canvas moves the caret when the iOS keyboard resizes. */
-.app-shell[data-mobile="true"] .cm-editor .cm-content { padding-top: calc(24px + var(--file-title-height, 72px)); padding-bottom: 80px; }
-.app-shell[data-mobile="true"] .start-mark { height: 24px; padding: 0; }
-.app-shell[data-mobile="true"] :is(.read-pane, .document-pane) > .prose { padding-bottom: 80px; }
+/* Match desktop's scroll canvas, without resizing the padding with the keyboard. */
+.app-shell[data-mobile="true"] .document-area { --scroll-before: var(--mobile-scroll-space, max(0px, calc(100cqh - 160px))); }
+.app-shell[data-mobile="true"] .cm-editor .cm-content { padding-bottom: calc(var(--scroll-before) + 112px); }
+.app-shell[data-mobile="true"] :is(.read-pane, .document-pane) > .prose { padding-bottom: var(--scroll-before); }
+html[data-mobile-keyboard="true"] .mobile-navigation { display: none; }
+html[data-mobile-keyboard="true"] .app-shell[data-compact="true"] { padding-bottom: 0; }
+html[data-mobile-keyboard="true"] .app-shell[data-compact="true"] .toast { bottom: 12px; }
