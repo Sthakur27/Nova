@@ -48,6 +48,7 @@ jobs:
       - name: Build installer and signed update
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          NOVA_GOOGLE_CLIENT_SECRET: ${{ secrets.NOVA_GOOGLE_CLIENT_SECRET }}
         shell: bash
         run: |
           if [[ "$GITHUB_REF" == refs/heads/main && -z "$TAURI_SIGNING_PRIVATE_KEY" ]]; then
