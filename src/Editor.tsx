@@ -11,6 +11,7 @@ import { initialScrollTop } from "./scrollSpace";
 import { GFM } from "@lezer/markdown";
 import { tags } from "@lezer/highlight";
 import {
+  activeFormatting,
   formatTransaction,
   formattingKeymap,
   indentationKeymap,
@@ -147,6 +148,7 @@ type Props = {
   bookmarks: Bookmark[];
   onChange: () => void;
   onBookmarks: (b: Bookmark[]) => void;
+  onFormatting?: (active: FormatAction[]) => void;
   onParagraphStyle?: (style: FormatAction) => void;
   onCursor: (line: number, col: number) => void;
   onBookmark: () => void;
@@ -347,6 +349,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
             try {
               documentEditor.current.setSource(update.state.doc.toString(), update.state.selection.main.anchor, update.state.selection.main.head);
             } finally { bridging.current = false; }
+            latest.current.onFormatting?.(documentEditor.current.activeFormatting());
           }
           latest.current.onChange();
           latest.current.onBookmarks(update.state.field(bookmarkField));
@@ -356,6 +359,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
             line = update.state.doc.lineAt(pos);
           latest.current.onCursor(line.number, pos - line.from + 1);
           latest.current.onParagraphStyle?.(paragraphStyle(update.state));
+          if (!latest.current.documentMode) latest.current.onFormatting?.(latest.current.isMarkdown ? activeFormatting(update.state) : []);
         }
       }),
       EditorView.theme(
@@ -371,7 +375,13 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
             lineHeight: "var(--editor-line-height, 1.9)",
             overflow: "auto",
           },
-          ".cm-content": { padding: "calc(var(--scroll-before) + 40px + var(--file-title-height, 72px)) 36px max(0px, calc(100cqh - 48px))", maxWidth: "var(--text-width, 900px)" },
+          // Selection rectangles start at the content edge, so keep the left
+          // breathing room outside that box instead of inside its padding.
+          ".cm-content": {
+            marginLeft: "var(--editor-left-space, 36px)",
+            padding: "calc(var(--scroll-before) + 40px + var(--file-title-height, 72px)) 36px max(0px, calc(100cqh - 48px)) 0",
+            maxWidth: "calc(var(--text-width, 900px) - var(--editor-left-space, 36px))",
+          },
           ".cm-gutters": {
             backgroundColor: "transparent",
             color: "#54565f",
@@ -400,9 +410,9 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
     setSourceTitleContainer(heading);
     const measureTitle = () => {
       const style = getComputedStyle(v.contentDOM);
-      const left = v.contentDOM.offsetLeft + (parseFloat(style.paddingLeft) || 36);
+      const left = v.contentDOM.offsetLeft + (parseFloat(style.paddingLeft) || 0);
       heading.style.left = `${left}px`;
-      heading.style.width = `${Math.max(0, Math.min(v.contentDOM.clientWidth - (parseFloat(style.paddingLeft) || 36) - (parseFloat(style.paddingRight) || 36), v.scrollDOM.clientWidth - left - 24))}px`;
+      heading.style.width = `${Math.max(0, Math.min(v.contentDOM.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0), v.scrollDOM.clientWidth - left - 24))}px`;
       const height = heading.getBoundingClientRect().height;
       if (height && v.scrollDOM.style.getPropertyValue("--file-title-height") !== `${height}px`) {
         v.scrollDOM.style.setProperty("--file-title-height", `${height}px`);
@@ -444,7 +454,12 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
   }, []);
   useEffect(() => {
     const v = view.current;
-    if (!v || !props.documentMode || !documentMount.current) return;
+    if (!v) return;
+    if (!props.documentMode) {
+      latest.current.onFormatting?.(props.isMarkdown ? activeFormatting(v.state) : []);
+      return;
+    }
+    if (!documentMount.current) return;
     if (!documentEditor.current) {
       documentEditor.current = new DocumentEditor(documentMount.current, v.state.doc.toString(), {
         change: (source, selection) => {
@@ -457,6 +472,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
           v.dispatch({ selection: { anchor, head } });
           latest.current.onParagraphStyle?.(style);
         },
+        formatting: active => { if (!bridging.current && latest.current.documentMode) latest.current.onFormatting?.(active); },
         undo: () => { undo(v); },
         redo: () => { redo(v); },
         save: () => latest.current.onSave(),
@@ -477,6 +493,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
       documentEditor.current.setSource(v.state.doc.toString(), v.state.selection.main.anchor, v.state.selection.main.head);
       documentEditor.current.setEditable(props.documentMode === "edit", props.spellcheck);
     } finally { bridging.current = false; }
+    latest.current.onFormatting?.(documentEditor.current.activeFormatting());
   }, [props.documentMode, props.spellcheck]);
   useEffect(() => () => { documentEditor.current?.destroy(); documentEditor.current = null; }, []);
   useEffect(() => {

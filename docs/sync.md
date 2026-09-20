@@ -1,14 +1,48 @@
-# Sync selection and planned Google Drive support
+# Google Drive uploads and workspace downloads
 
-Open **Sync** in the global sidebar or top tab bar to choose notes for future sync.
-Each note tab also has a cloud control that opens and focuses that note’s choice.
-Use the folder picker to switch workspaces, or search for a file or subfolder.
-These controls are available in compact layouts too. The workspace **… → Sync
-selection…** menu opens the same settings. Cloud icons indicate selection, never
-a successful upload; connection status is shown separately.
-The app saves selections only. In-app Google Drive sign-in, uploads, downloads,
-portable bookmarks, and conflict reconciliation are not implemented yet.
-No account is connected and nothing is uploaded.
+Google Drive is optional and currently available in configured desktop builds.
+Open **Settings → Google Drive → Set up sync**, or the cloud button beside Settings.
+Choose **Connect Google Drive**, finish sign-in in your browser, and return to Nova.
+The app requests `drive.file` access and stores its refresh token in the system
+credential store. Sign-in can be cancelled and times out after five minutes.
+Browser previews and iPhone/iPad builds cannot connect yet.
+
+After connecting, **Sync** appears in the sidebar and top tab bar. A tab’s cloud
+button focuses that file in the dialog; explorer cloud buttons toggle individual
+file choices. The workspace menu also opens sync settings. Switch workspaces or
+search paths in the dialog. Cloud icons show selection; per-file messages show
+upload results and errors.
+
+## Upload saved notes
+
+Selected notes upload after Save or a selection change, following a short delay.
+Only saved file contents upload; unsaved recovery drafts stay local. **Upload now**
+saves the active note first, then uploads selected saved files in the workspace
+chosen in the dialog. **Open in Drive** opens the workspace’s cloud folder.
+
+Nova creates a `.nova` folder in Google Drive with a folder for each workspace,
+preserving note subfolders. Uploads accept UTF-8 text up to 32 MiB per file.
+Bookmarks, stars, drafts, and the local `.nova` registry are not uploaded.
+Local upload receipts record the last uploaded contents separately for each account.
+
+An unchanged cloud copy is skipped. Updates compare the remote contents with the
+last local receipt and use a conditional revision guard. A different remote version
+pauses that file’s upload and reports the problem. Review both versions in Drive
+and Nova; downloading a fresh workspace makes another local copy for comparison.
+There is no automatic merge or conflict-copy creation.
+
+## Bring notes to another desktop
+
+1. Connect the same Google account and open **Sync**.
+2. Choose **Bring notes to this device**, then a Drive workspace.
+3. Choose a local parent folder and select **Download & open workspace**.
+
+Nova creates a new uniquely named subfolder without overwriting existing local
+files, downloads Nova-managed text files, and adds the workspace to navigation.
+The new workspace remembers its Drive link and includes the downloaded notes for
+future uploads; new notes remain local unless included explicitly or by a folder
+default. Restore is limited to 512 MiB total, 50,000 notes, 32 MiB per note, and
+bounded folder nesting. Google Docs documents are not converted to text.
 
 ## Selection rules
 
@@ -16,7 +50,7 @@ No account is connected and nothing is uploaded.
 - Include a workspace or subfolder to include its existing and future notes by default.
 - A file or subfolder may explicitly include, explicitly exclude, or inherit.
 - The nearest explicit choice wins. Changing a parent keeps child exceptions.
-- Counts show effective file selections, not uploaded files. A local-by-default
+- Counts show effective file selections, not successful uploads. A local-by-default
   folder may contain explicitly included notes.
 - Explicit file choices follow renames and moves performed in Nova. Inherited
   choices adopt the destination folder’s default. Deletion removes the file’s rule.
@@ -26,10 +60,27 @@ No account is connected and nothing is uploaded.
 - Other sync software is outside Nova’s control. Keeping a note local in Nova
   cannot exclude it from Google Drive for desktop or another backup program.
 
+## Current limits
+
+- Downloads are manual into a new workspace. Existing workspaces do not receive
+  background downloads, and this is not continuous two-way synchronization.
+- Upload scheduling is in memory. There is no durable offline queue or automatic
+  retry/backoff; save again or use **Upload now** after resolving an error.
+- Renames, moves, and deletions are not reconciled remotely. A renamed or moved
+  file can create another cloud copy; old copies remain in Drive.
+- Excluding a file stops future selected uploads but retains existing cloud copies.
+  Disconnect removes this device’s saved credential; it does not delete Drive
+  files or revoke the Google account’s app authorization.
+- Overlapping local workspaces have independent selections. An exclusion in one
+  does not prevent another included workspace from uploading the same file.
+- Workspace/file identity still depends on local paths for newly uploaded folders.
+  Downloaded workspaces have an explicit Drive link. Portable bookmarks, stable
+  identities across arbitrary moves, and automatic reconciliation remain future work.
+
 ## Developer connection smoke test
 
 The standalone `scripts/test-drive-connection.py` checks desktop OAuth and a
-Drive upload/read-back independently of Nova. It does not connect the app or use
+Drive upload/read-back independently of Nova. It does not save an app connection or use
 its sync selections. Run it manually with Python 3 and a desktop OAuth client:
 
 ```sh
@@ -45,37 +96,3 @@ note, downloads the note, and checks that its bytes match. It never reads local
 notes or saves tokens; test artifacts remain in Drive for inspection or manual
 removal. A successful test does not enable sync inside Nova. This manual network
 test is separate from `npm test` and requires Google API/OAuth setup.
-
-## Next implementation stage
-
-Use a direct desktop OAuth connection and a Nova-created Drive folder with the
-narrow `drive.file` permission. Each user signs in to their own account. Nova’s
-maintainer registers one desktop OAuth client in Google’s developer console;
-users do not create developer projects. No application server is required.
-
-No paid services, billing accounts, or paid quota increases are part of the plan.
-Use free standard API quotas, batch work and back off when throttled. Storage-full
-and quota errors must leave local editing available and explain why sync is waiting.
-Google may change its terms; verify current limits before shipping.
-
-Before enabling uploads, implement:
-
-- Stable workspace and note IDs; no absolute local paths in remote metadata.
-- A per-device mapping from selected cloud workspaces to local folders.
-- Portable bookmarks bundled only with included notes; no upload of the whole
-  `.nova` registry, which can contain excluded filenames and metadata.
-- Local revision history, a durable transfer queue, retries and conditional writes.
-- Conflict copies for simultaneous changes; never silently overwrite divergent edits.
-- Rename/deletion tracking and reconciliation across offline devices.
-- Explicit semantics for opting out after upload: stop future transfers while
-  retaining local files; disclose that existing remote/device copies remain.
-  Removing remote copies must be a separate, explicit operation.
-- Treat externally renamed/moved files as unrecognized until identity is resolved;
-  do not accidentally upload a formerly excluded note under a new path.
-- Overlapping workspace detection so an included parent cannot bypass an exclusion
-  configured through a separately opened child workspace.
-- OS-protected refresh-token storage, disconnect/revocation, and visible sync status.
-
-References: [desktop OAuth](https://developers.google.com/identity/protocols/oauth2/native-app),
-[Drive scopes](https://developers.google.com/workspace/drive/api/guides/api-specific-auth),
-[usage policy](https://developers.google.com/workspace/tools-safety).

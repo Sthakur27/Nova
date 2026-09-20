@@ -2,6 +2,10 @@
 mod speech;
 mod sync_policy;
 #[cfg(desktop)]
+mod drive_auth;
+#[cfg(desktop)]
+mod drive_upload;
+#[cfg(desktop)]
 mod terminal;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -856,8 +860,17 @@ pub fn run() {
         .manage(terminal::Terminals::default())
         .manage(Access::default())
         .manage(speech::SpeechState::default())
+        .manage(drive_auth::DriveAuth::default())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
+            drive_upload::drive_workspaces,
+            drive_upload::drive_restore,
+            drive_upload::drive_upload,
+            drive_upload::drive_open_folder,
+            drive_auth::drive_status,
+            drive_auth::drive_connect,
+            drive_auth::drive_cancel,
+            drive_auth::drive_disconnect,
             terminal::terminal_open,
             terminal::terminal_write,
             terminal::terminal_resize,

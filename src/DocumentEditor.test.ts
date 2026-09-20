@@ -13,9 +13,10 @@ function create(source: string) {
   const mount = document.createElement("div");
   document.body.append(mount);
   const change = vi.fn();
-  const editor = new DocumentEditor(mount, source, { change, selection: vi.fn(), undo: vi.fn(), redo: vi.fn(), save: vi.fn(), bookmark: vi.fn() });
+  const formatting = vi.fn();
+  const editor = new DocumentEditor(mount, source, { change, formatting, selection: vi.fn(), undo: vi.fn(), redo: vi.fn(), save: vi.fn(), bookmark: vi.fn() });
   editors.push(editor);
-  return { editor, mount, change };
+  return { editor, mount, change, formatting };
 }
 afterEach(() => { editors.splice(0).forEach(e => e.destroy()); document.body.replaceChildren(); });
 
@@ -268,4 +269,32 @@ it("tracks the selected visual line in Edit and Read and disables without modify
   expect(dom.classList.contains("has-line-highlight")).toBe(false);
   expect(editor.source).toBe(source);
   expect(change).not.toHaveBeenCalled();
+});
+
+it("reports formatting when a shortcut toggles typing marks without changing the document", () => {
+  const { editor, change, formatting } = create("hello");
+  editor.select(2, 2, false);
+  const pressBold = () => editor.editor.view.dom.dispatchEvent(new KeyboardEvent("keydown", { key: "b", metaKey: true, bubbles: true, cancelable: true }));
+  pressBold();
+  expect(editor.activeFormatting()).toContain("bold");
+  expect(formatting).toHaveBeenLastCalledWith(["bold"]);
+  expect(change).not.toHaveBeenCalled();
+  pressBold();
+  expect(editor.activeFormatting()).not.toContain("bold");
+  expect(formatting).toHaveBeenLastCalledWith([]);
+});
+
+it("tracks marks and block formatting as the caret and selection move", () => {
+  const source = "**bold** and *italic*\n\n- list\n\nplain";
+  const { editor } = create(source);
+  editor.select(3, 3, false);
+  expect(editor.activeFormatting()).toContain("bold");
+  editor.select(source.indexOf("italic") + 2, undefined, false);
+  expect(editor.activeFormatting()).toEqual(["italic"]);
+  editor.select(source.indexOf("list") + 2, undefined, false);
+  expect(editor.activeFormatting()).toEqual(["bullet"]);
+  editor.select(source.indexOf("plain") + 2, undefined, false);
+  expect(editor.activeFormatting()).toEqual([]);
+  editor.select(2, source.indexOf(" and") + 4, false);
+  expect(editor.activeFormatting()).not.toContain("bold");
 });

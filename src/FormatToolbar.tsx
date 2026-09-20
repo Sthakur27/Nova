@@ -14,7 +14,8 @@ const controls = [
   { action: "task", Icon: ListTodo, label: "Task list" },
   { action: "quote", Icon: Quote, label: "Quote" },
 ] as const;
-export default function FormatToolbar({ onFormat, style, onUndo, onRedo }: {
+export default function FormatToolbar({ onFormat, style, onUndo, onRedo, active = [] }: {
+  active?: FormatAction[];
   onFormat: (action: FormatAction) => void;
   style: FormatAction;
   onUndo: () => void;
@@ -36,7 +37,7 @@ export default function FormatToolbar({ onFormat, style, onUndo, onRedo }: {
       {controls.map(({ action, Icon, label }) => {
         const key = formatShortcuts.find(binding => binding.action === action)?.key;
         return <button type="button" key={action} title={key ? `${label} (${shortcut(key)})` : label}
-          aria-label={label} onMouseDown={e => e.preventDefault()} onClick={() => onFormat(action)}>
+          aria-pressed={active.includes(action)} aria-label={label} onMouseDown={e => e.preventDefault()} onClick={() => onFormat(action)}>
           <Icon size={15} />
         </button>;
       })}

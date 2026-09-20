@@ -1,8 +1,12 @@
+import CloseTabDialog, { type CloseTabChoice } from "./CloseTabDialog";
+import { installTabCloseShortcut } from "./tabShortcuts";
 import ReadFind from "./ReadFind";
 import FileTitle from "./FileTitle";
 import { mobile } from "./platform";
 import { useCompactLayout } from "./useCompactLayout";
 import SyncSettings from "./SyncSettings";
+import { useDriveUploads } from "./useDriveUploads";
+import { useDriveConnection } from "./useDriveConnection";
 import { syncIncluded } from "./syncPolicy";
 import LineSpacingControl, { lineSpacings, type LineSpacing } from "./LineSpacingControl";
 import { loadDraft, storeDraft, clearDraft, moveDraft } from "./drafts";
@@ -28,6 +32,7 @@ import {
 import {
   Cloud,
   CloudOff,
+  ExternalLink,
   Bookmark as BookmarkIcon,
   BookOpen,
   ChevronRight,
@@ -79,6 +84,7 @@ import {
   discardEmptyUntitled,
   revealNote,
   setFileStar,
+  setWorkspaceSyncChoice,
   loadFolders,
   loadExplorer,
   saveExplorer,
@@ -124,8 +130,25 @@ export default function App() {
   const starQueue = useRef(Promise.resolve());
   const createdNotes = useRef(new Map<string, { root: string; path: string }>());
   const [fileAction, setFileAction] = useState<{ folder: Workspace; path: string; action: "move" | "delete" } | null>(null);
+  const drive = useDriveConnection();
+  const uploads = useDriveUploads(drive.status.connected);
   const [syncFolder, setSyncFolder] = useState<Workspace | null>(null);
   const [syncPath, setSyncPath] = useState<string | undefined>();
+  const [syncBusy, setSyncBusy] = useState(false);
+  const syncPending = useRef(false);
+  async function toggleFileSync(folder: Workspace, notePath: string) {
+    if (syncPending.current || folder.syncError) return;
+    syncPending.current = true;
+    setSyncBusy(true);
+    try {
+      const policy = await setWorkspaceSyncChoice(folder.root, notePath,
+        syncIncluded(folder.syncPolicy, notePath) ? "exclude" : "include");
+      setFolders(old => old.map(item => item.root === folder.root ? { ...item, syncPolicy: policy } : item));
+      setWorkspace(old => old.root === folder.root ? { ...old, syncPolicy: policy } : old);
+      uploads.schedule(folder.root);
+    } catch (error) { setNotice(String(error)); }
+    finally { syncPending.current = false; setSyncBusy(false); }
+  }
   function showSync(folder: Workspace, notePath?: string) {
     setSyncPath(notePath);
     setSyncFolder(folders.find(item => item.root === folder.root) ?? folders[0] ?? folder);
@@ -190,6 +213,8 @@ export default function App() {
   const [data, setData] = useState<DocumentData | null>(null);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const marksRef = useRef<Bookmark[]>([]);
+  const [closePrompt, setClosePrompt] = useState<{ path: string; resolve: (choice: CloseTabChoice) => void } | null>(null);
+  const closingTab = useRef(false);
   const [dirty, setDirty] = useState(false);
   const dirtyRef = useRef(false);
   const [draftStatus, setDraftStatus] = useState<"saving" | "saved" | "error">("saved");
@@ -241,6 +266,7 @@ export default function App() {
       folders.some((folder) => folder.root === hit.root) &&
       !(hit.root === workspace.root && hit.path === path)),
   ];
+  const [activeFormats, setActiveFormats] = useState<FormatAction[]>([]);
   const [paragraphStyle, setParagraphStyle] = useState<FormatAction>("paragraph");
   const [cursor, setCursor] = useState([1, 1]);
   const [notice, setNotice] = useState("");
@@ -457,6 +483,7 @@ export default function App() {
             revision.current,
           );
         await saveBookmarks(ws.root, file, marks);
+        if (syncIncluded(ws.syncPolicy, file)) uploads.schedule(ws.root);
         if (editor.current?.text() === text) {
           await clearDraft(ws.root, file);
           if (editor.current?.text() === text && marksRef.current === marks) {
@@ -675,48 +702,99 @@ export default function App() {
     createdNotes.current.delete(id);
   }, []);
   const closeTab = async (tab: NoteTab) => {
-    if (saveInFlight.current) return;
+    if (saveInFlight.current || closingTab.current) return;
     if (voiceBusy.current || operation.current) {
       setNotice("Finish the current operation before closing a tab.");
       return;
     }
-    const id = tabId(tab),
-      all = tabsRef.current,
-      next = all.filter((t) => tabId(t) !== id);
-    if (
-      current.current.hasDocument &&
-      tabId({
-        root: current.current.workspace.root,
-        path: current.current.path,
-      }) === id
-    ) {
-      const neighbor =
-        next[
-          Math.min(
-            all.findIndex((t) => tabId(t) === id),
-            next.length - 1,
-          )
-        ];
-      if (neighbor) {
-        const folder = current.current.folders.find(
-          (f) => f.root === neighbor.root,
-        );
-        if (!folder || !(await openNote(neighbor.path, undefined, folder)))
-          return;
-      } else {
-        if (!(await preserveDraft())) return;
-        setData(null);
-        setPath("");
-        applyMarks([]);
-        setEditorSnapshot(undefined);
+    closingTab.current = true;
+    let discardedActive = false;
+    let closed = false;
+    try {
+      operation.current = true;
+      const active = current.current.hasDocument && tabId({ root: current.current.workspace.root, path: current.current.path }) === tabId(tab);
+      const draft = active ? null : await loadDraft(tab.root, tab.path);
+      if ((active && dirtyRef.current) || draft) {
+        const choice = await new Promise<CloseTabChoice>(resolve => setClosePrompt({ path: tab.path, resolve }));
+        setClosePrompt(null);
+        if (choice === "cancel") return;
+        if (choice === "save") {
+          if (active) {
+            if (!(await save()) || dirtyRef.current) return;
+          } else if (draft) {
+            const savedRevision = await saveNote(tab.root, tab.path, draft.text, draft.revision);
+            // Retain a recoverable draft with the new revision if bookmark saving fails.
+            await storeDraft(tab.root, tab.path, { ...draft, revision: savedRevision });
+            await saveBookmarks(tab.root, tab.path, draft.bookmarks);
+            await clearDraft(tab.root, tab.path);
+            const folder = current.current.folders.find(folder => folder.root === tab.root);
+            if (folder && syncIncluded(folder.syncPolicy, tab.path)) uploads.schedule(tab.root);
+          }
+        } else {
+          await clearDraft(tab.root, tab.path);
+          if (active) {
+            discardedActive = true;
+            dirtyRef.current = false;
+            setDirty(false);
+          }
+        }
       }
+      operation.current = false;
+      const id = tabId(tab),
+        all = tabsRef.current,
+        next = all.filter((t) => tabId(t) !== id);
+      if (
+        current.current.hasDocument &&
+        tabId({
+          root: current.current.workspace.root,
+          path: current.current.path,
+        }) === id
+      ) {
+        const neighbor =
+          next[
+            Math.min(
+              all.findIndex((t) => tabId(t) === id),
+              next.length - 1,
+            )
+          ];
+        if (neighbor) {
+          const folder = current.current.folders.find(
+            (f) => f.root === neighbor.root,
+          );
+          if (!folder || !(await openNote(neighbor.path, undefined, folder)))
+            return;
+        } else {
+          if (!(await preserveDraft())) return;
+          setData(null);
+          setPath("");
+          applyMarks([]);
+          setEditorSnapshot(undefined);
+        }
+      }
+      updateTabs(next);
+      closed = true;
+      operation.current = true;
+      try { await discardCreatedNote(tab); }
+      catch (error) { setNotice(`Could not clean up empty note: ${String(error)}`); }
+      finally { operation.current = false; }
+    } catch (error) {
+      setNotice(`Could not close tab: ${String(error)}`);
+    } finally {
+      if (discardedActive && !closed) {
+        dirtyRef.current = true;
+        setDirty(true);
+        await preserveDraft();
+      }
+      operation.current = false;
+      closingTab.current = false;
     }
-    updateTabs(next);
-    operation.current = true;
-    try { await discardCreatedNote(tab); }
-    catch (error) { setNotice(`Could not clean up empty note: ${String(error)}`); }
-    finally { operation.current = false; }
   };
+  useEffect(() => installTabCloseShortcut(window, mod === "⌘", () => {
+    if (document.querySelector("dialog[open]") || palette || bookmarkDraft || closingTab.current) return;
+    const c = current.current;
+    const tab = tabsRef.current.find(tab => tab.root === c.workspace.root && tab.path === c.path);
+    if (c.hasDocument && tab) void closeTab(tab);
+  }));
   const changeFolders = (next: Workspace[]) => {
     if (current.current.foldersReady) setFolders(next);
   };
@@ -1114,7 +1192,9 @@ export default function App() {
             if (action === "reveal") void revealNote(folder.root, path).catch(error => setNotice(String(error)));
             else setFileAction({ folder, path, action });
           }}
-          onSync={folder => showSync(folder)}
+          onSync={drive.status.connected ? folder => showSync(folder) : undefined}
+          onToggleSync={drive.status.connected ? (folder, path) => void toggleFileSync(folder, path) : undefined}
+          syncBusy={syncBusy}
           onStar={starFile}
           onRename={(folder, path) => setRenameTarget({ folder, path })}
           onChange={changeFolders}
@@ -1124,17 +1204,17 @@ export default function App() {
           externalDrag={externalDrag}
         />
         <div className="sidebar-bottom">
-          <button className="global-sync-button" aria-haspopup="dialog" onClick={() => showSync(workspace)}>
+          {drive.status.connected && <button className="global-sync-button" aria-haspopup="dialog" onClick={() => showSync(workspace)}>
             <Cloud size={18} aria-hidden="true" />
-            <span><strong>Sync</strong><small>Google Drive · Not connected</small></span>
+            <span><strong>Sync</strong><small>{uploads.activeRoot ? "Uploading…" : Object.values(uploads.errors).some(Boolean) ? "Upload needs attention" : drive.status.email}</small></span>
             <ChevronRight size={14} aria-hidden="true" />
-          </button>
+          </button>}
           <div className="local-indicator">
             <span />
             {folders.length} {folders.length === 1 ? "folder" : "folders"} ·
             stored locally
           </div>
-          <p>{mobile ? "Notes stay on this device. Sync is not connected." : "Drag folder handles to organize your space."}</p>
+          <p>{mobile ? "Notes stay on this device." : "Drag folder handles to organize your space."}</p>
           <div className="sidebar-actions">
             <button className="sidebar-action" hidden={mobile} aria-label="Add folders" title="Add folders" onClick={openFolder}>
               <Plus size={17} aria-hidden="true" />
@@ -1143,6 +1223,14 @@ export default function App() {
               aria-haspopup="dialog" onClick={() => setSettingsOpen(true)}>
               <SettingsIcon size={17} aria-hidden="true" />
             </button>
+            <button className="sidebar-action" aria-label={drive.status.connected ? "Sync settings" : "Set up sync"}
+              title={drive.status.connected ? "Sync settings" : "Set up Google Drive sync"}
+              aria-haspopup="dialog" onClick={() => showSync(workspace)}>
+              <Cloud size={17} aria-hidden="true" />
+            </button>
+            {drive.status.connected && <button className="sidebar-action" aria-label="Open workspace in Google Drive"
+              title="Open workspace in Google Drive" disabled={!!uploads.activeRoot || workspace.root === "demo"}
+              onClick={() => void uploads.openFolder(workspace.root)}><ExternalLink size={17} aria-hidden="true" /></button>}
             <button className="sidebar-action focus-toggle" aria-label="Enter focus mode" aria-pressed={focusMode}
               aria-describedby="enter-focus-tooltip" aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+G`} onClick={() => changeFocusMode(true)}>
               <BlackHoleIcon />
@@ -1209,13 +1297,13 @@ export default function App() {
                     <span>{name}</span>
                     {active && dirty && <span className="dirty-dot" />}
                   </button>
-                  <button className="tab-sync" data-selected={selectedForSync}
-                    aria-label={`Sync settings for ${name}: ${selectedForSync ? "selected, not connected" : "local only"}`}
-                    title={selectedForSync ? "Selected for sync · Drive not connected" : "Local only · Choose sync settings"}
+                  {drive.status.connected && <button className="tab-sync" data-selected={selectedForSync}
+                    aria-label={`Sync settings for ${name}: ${selectedForSync ? "selected for sync" : "local only"}`}
+                    title={selectedForSync ? (uploads.items[`${tab.root}\n${tab.path}`]?.message ?? "Selected · Waiting for upload") : "Local only · Choose sync settings"}
                     aria-haspopup="dialog" disabled={!tabFolder}
                     onClick={() => { if (tabFolder) showSync(tabFolder, tab.path); }}>
                     {selectedForSync ? <Cloud size={13} /> : <CloudOff size={13} />}
-                  </button>
+                  </button>}
                   <button
                     className="tab-close"
                     aria-label={`Close ${name}`}
@@ -1229,10 +1317,10 @@ export default function App() {
           </div>
           <button className="icon-button new-tab-button" onClick={() => void newTab()} aria-label="New tab" title="New tab (Ctrl T)"><Plus size={16} /></button>
           <div className="tab-bar-space" />
-          <button className="top-sync-button" aria-label="Sync settings · Google Drive not connected"
-            title="Sync settings · Google Drive not connected" aria-haspopup="dialog" onClick={() => showSync(workspace)}>
-            <Cloud size={16} aria-hidden="true" /><span>Sync</span>
-          </button>
+          {drive.status.connected && <button className="top-sync-button" aria-label={drive.status.connected ? "Sync settings · Google Drive connected" : "Connect Google Drive"}
+            title={drive.status.connected ? `Connected as ${drive.status.email}` : "Connect Google Drive"} aria-haspopup="dialog" onClick={() => showSync(workspace)}>
+            <Cloud size={16} aria-hidden="true" /><span>{uploads.activeRoot ? "Uploading…" : Object.values(uploads.errors).some(Boolean) ? "Sync needs attention" : "Drive connected"}</span>
+          </button>}
           <button hidden={compact} className="icon-button" onClick={toggleTerminal}
             aria-label={terminalOpen ? "Collapse terminal" : "Open terminal"} title={`Toggle terminal (${mod}↓)`} aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+ArrowDown`}
             aria-expanded={terminalOpen} aria-controls="terminal-panel"><TerminalSquare size={17} /></button>
@@ -1360,7 +1448,7 @@ export default function App() {
           </button>
         </div>
         {data && mode !== "read" && isMarkdown && (
-          <FormatToolbar style={paragraphStyle} onFormat={(style) => editor.current?.format(style)}
+          <FormatToolbar active={activeFormats} style={paragraphStyle} onFormat={(style) => editor.current?.format(style)}
             onUndo={() => editor.current?.undo()} onRedo={() => editor.current?.redo()} />
         )}
         </div>
@@ -1391,6 +1479,7 @@ export default function App() {
                 onChange={changed}
                 onBookmarks={(marks) => { applyMarks(marks); preserveDraft(); }}
                 onParagraphStyle={setParagraphStyle}
+                onFormatting={setActiveFormats}
                 onCursor={(line, col) => setCursor([line, col])}
                 onBookmark={beginBookmark}
                 onSave={() => void save()}
@@ -1618,6 +1707,7 @@ export default function App() {
           }}
         />
       )}
+      {closePrompt && <CloseTabDialog path={closePrompt.path} onChoose={closePrompt.resolve} />}
       {fileAction && <FileActionDialog {...fileAction} onClose={() => setFileAction(null)} onSubmit={async destination => {
         const { folder, path: targetPath, action } = fileAction;
         if (action === "move") { await renameFile(folder, targetPath, destination, true); return; }
@@ -1639,8 +1729,8 @@ export default function App() {
           }
         } finally { operation.current = false; }
       }} />}
-      {syncFolder && <SyncSettings key={syncFolder.root} folder={syncFolder} folders={folders} initialPath={syncPath} onFolderChange={folder => showSync(folder)} onClose={() => setSyncFolder(null)}
-        onSaved={policy => setFolders(old => old.map(folder => folder.root === syncFolder.root ? { ...folder, syncPolicy: policy, syncError: undefined } : folder))} />}
+      {syncFolder && <SyncSettings onRestored={async root => { const restored = await openWorkspace(root); await acceptFolders([restored]); setSyncFolder(restored); setSyncPath(undefined); }} uploads={uploads} onUpload={async () => { if (await save()) await uploads.upload(syncFolder.root); }} drive={drive} key={syncFolder.root} folder={syncFolder} folders={folders} initialPath={syncPath} onFolderChange={folder => showSync(folder)} onClose={() => setSyncFolder(null)}
+        onSaved={policy => { setFolders(old => old.map(folder => folder.root === syncFolder.root ? { ...folder, syncPolicy: policy, syncError: undefined } : folder)); setWorkspace(old => old.root === syncFolder.root ? { ...old, syncPolicy: policy } : old); uploads.schedule(syncFolder.root); }} />}
       {renameTarget && (
         <RenameDialog
           path={renameTarget.path}
@@ -1649,7 +1739,7 @@ export default function App() {
           onClose={() => setRenameTarget(null)}
         />
       )}
-      {settingsOpen && <Settings onClose={() => setSettingsOpen(false)}
+      {settingsOpen && <Settings syncConnected={drive.status.connected} onSyncSetup={() => { setSettingsOpen(false); showSync(workspace); }} onClose={() => setSettingsOpen(false)}
         galaxy={galaxyMode} onGalaxy={setGalaxyMode}
         lineHighlight={showLineHighlight} onLineHighlight={setShowLineHighlight}
         lineNumbers={showLineNumbers} onLineNumbers={setShowLineNumbers} wordWrap={wordWrap} onWordWrap={setWordWrap}

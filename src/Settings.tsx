@@ -19,6 +19,7 @@ function Toggle({ title, description, checked, onChange }: {
 
 type Props = {
   onClose: () => void;
+  syncConnected?: boolean; onSyncSetup?: () => void;
   galaxy: boolean; onGalaxy: (value: boolean) => void;
   lineHighlight: boolean; onLineHighlight: (value: boolean) => void;
   lineNumbers: boolean; onLineNumbers: (value: boolean) => void;
@@ -74,6 +75,11 @@ export default function Settings(props: Props) {
         <Toggle title="Word wrap" description="Keep long lines within the editor width." checked={props.wordWrap} onChange={props.onWordWrap} />
         <Toggle title="Spellcheck" description="Use your system’s spelling suggestions as you type." checked={props.spellcheck} onChange={props.onSpellcheck} />
       </section>
+      {props.onSyncSetup && <section aria-labelledby="settings-sync"><h2 id="settings-sync">Google Drive</h2>
+        <div className="settings-row"><div><label>Optional sync</label><p>{props.syncConnected ? "Manage your connected account and file choices." : "Connect an account to enable sync controls in your workspace."}</p></div>
+          <button onClick={props.onSyncSetup}>{props.syncConnected ? "Manage sync" : "Set up sync"}</button>
+        </div>
+      </section>}
       <section aria-labelledby="settings-workspace"><h2 id="settings-workspace">Workspace</h2>
         <div className="settings-row"><div><label htmlFor="settings-extension">Default file extension</label><p id="settings-extension-help">Use any extension for new text files. Default: .txt.</p>
           {extensionError && <p id="settings-extension-error" role="alert">{extensionError}</p>}</div>

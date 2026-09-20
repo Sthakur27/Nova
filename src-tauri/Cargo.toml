@@ -9,6 +9,7 @@ name = "nova_notes_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
+dotenvy = "0.15"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
@@ -23,8 +24,12 @@ tempfile = "3"
 whisper-rs = "0.16"
 cpal = "0.16"
 sha2 = "0.10"
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls", "json"] }
 portable-pty = "0.9"
+base64 = "0.22"
+rand = "0.8"
+webbrowser = "1"
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 
 [dev-dependencies]
 hound = "3"

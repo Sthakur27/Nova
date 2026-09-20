@@ -82,9 +82,29 @@ cargo test --manifest-path src-tauri/Cargo.toml actual_whisper_transcription -- 
 
 Set `NOVA_SPEECH_TEST_MODEL` to an existing tiny.en model file to skip the model download; the fixture is still downloaded. This test checks partial decoding, final transcription, and cancellation, not microphone capture or desktop permissions.
 
+## Google Drive build configuration
+
+Desktop OAuth uses the client ID in `src-tauri/src/drive_auth.rs`. Supply its
+matching `NOVA_GOOGLE_CLIENT_SECRET` in the build environment or an ignored
+repository-root `.env.local` file. `src-tauri/build.rs` loads that file and embeds
+the value at compile time; rebuild the native app after changing it. A build
+without this value disables Connect and explains that configuration is missing.
+Do not commit local credentials. The embedded desktop client value is distinct
+from users’ refresh tokens, which are stored through the native credential store.
+
+Ordinary native tests cover callback validation, credential caching, selection
+inheritance, and restore name/ID validation without contacting Google. Frontend
+tests cover connection state, queued uploads, restore controls, tab-close prompts
+and shortcuts, and formatting state. Live Drive tests are explicitly ignored:
+`live_selected_upload` requires `NOVA_DRIVE_TEST_ROOT` and a JSON array in
+`NOVA_DRIVE_TEST_FILES`, uploads those selected root-level notes, and leaves them
+in Drive. `live_update_and_conflict_guard` creates a generated test folder,
+checks updates and stale-write rejection, then deletes that test folder. Both
+use the saved desktop connection; run only the intended test with `--ignored`.
+
 ## Google Drive connection test
 
-See the [standalone Drive smoke test](sync.md#developer-connection-smoke-test) for manual OAuth, generated-note upload, and exact read-back checks. It is independent of Nova’s selection-only sync UI and is not run by the normal test suite.
+See the [standalone Drive smoke test](sync.md#developer-connection-smoke-test) for manual OAuth, generated-note upload, and exact read-back checks. It is independent of the app’s stored connection and is not run by the normal test suite.
 
 ## iPhone and iPad
 

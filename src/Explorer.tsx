@@ -2,6 +2,8 @@ import { mobile } from "./platform";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import {
+  Cloud,
+  CloudOff,
   ArrowDown,
   ArrowUp,
   ChevronDown,
@@ -16,6 +18,7 @@ import {
   RefreshCw,
   X,
 } from "lucide-react";
+import { syncIncluded, type SyncPolicy } from "./syncPolicy";
 import type { Workspace } from "./model";
 import { closedDirectories, reorderFolders } from "./folders";
 function NovaStar({ size }: { size: number }) {
@@ -33,6 +36,7 @@ function FileTree({
   onContextMenu,
   starred,
   onStar,
+  syncPolicy, syncDisabled, onToggleSync,
   prefix = "",
   closed,
   onToggle,
@@ -44,6 +48,9 @@ function FileTree({
   onContextMenu: (event: MouseEvent, path: string) => void;
   starred: Set<string>;
   onStar: (path: string, starred: boolean) => void;
+  syncPolicy?: SyncPolicy;
+  syncDisabled: boolean;
+  onToggleSync?: (path: string) => void;
   prefix?: string;
   closed: Set<string>;
   onToggle: (path: string) => void;
@@ -91,6 +98,7 @@ function FileTree({
                   onContextMenu={onContextMenu}
                   starred={starred}
                   onStar={onStar}
+                  syncPolicy={syncPolicy} syncDisabled={syncDisabled} onToggleSync={onToggleSync}
                   prefix={prefix + name + "/"}
                 />
               </div>
@@ -108,6 +116,13 @@ function FileTree({
             <span>{path.slice(prefix.length)}</span>
             {path === active && <span className="active-dot" />}
           </button>
+          {onToggleSync && <button className="icon-button file-sync"
+            aria-label={`${syncIncluded(syncPolicy, path) ? "Exclude from" : "Include in"} sync: ${path}`}
+            aria-pressed={syncIncluded(syncPolicy, path)} disabled={syncDisabled}
+            title={syncDisabled ? "Sync selection unavailable" : syncIncluded(syncPolicy, path) ? "Selected for sync · Click to keep local" : "Keep local · Click to include in sync"}
+            onClick={() => onToggleSync(path)}>
+            {syncIncluded(syncPolicy, path) ? <Cloud size={14} /> : <CloudOff size={14} />}
+          </button>}
           <button
             className="icon-button file-star"
             aria-label={`${starred.has(path) ? "Unstar" : "Star"} ${path}`}
@@ -142,6 +157,8 @@ type Props = {
   onRemove: (root: string) => void;
   onRefresh: (root: string) => void;
   onSync?: (folder: Workspace) => void;
+  onToggleSync?: (folder: Workspace, path: string) => void;
+  syncBusy?: boolean;
   onAdd: () => void;
   externalDrag: boolean;
 };
@@ -158,6 +175,7 @@ export default function Explorer({
   onRefresh,
   onAdd,
   onSync,
+  onToggleSync, syncBusy = false,
   externalDrag,
 }: Props) {
   const [menu, setMenu] = useState<{ folder: Workspace; path: string; x: number; y: number; trigger: HTMLElement } | null>(null);
@@ -363,6 +381,9 @@ export default function Explorer({
                     onOpen={(path) => onOpen(folder, path)}
                     onRename={(path) => onRename(folder, path)}
                     onContextMenu={(event, path) => { event.preventDefault(); const trigger = event.currentTarget.closest(".file-row")!.querySelector<HTMLElement>(".file-open")!; const rect = trigger.getBoundingClientRect(); setMenu({ folder, path, trigger, x: Math.max(8, Math.min(event.clientX || rect.left, window.innerWidth - 228)), y: Math.max(8, Math.min(event.clientY || rect.bottom, window.innerHeight - 170)) }); }}
+                    syncPolicy={folder.syncError ? undefined : folder.syncPolicy}
+                    syncDisabled={syncBusy || !!folder.syncError}
+                    onToggleSync={onToggleSync ? path => onToggleSync(folder, path) : undefined}
                     starred={starred}
                     onStar={(path, value) => onStar(folder, path, value)}
                   />

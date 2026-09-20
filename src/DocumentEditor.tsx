@@ -74,6 +74,7 @@ type Callbacks = {
   save: () => void;
   bookmark: () => void;
   find?: () => void;
+  formatting?: (active: FormatAction[]) => void;
 };
 type Part = { raw: string; gap: string };
 
@@ -188,7 +189,10 @@ export class DocumentEditor {
         this.reportSelection();
       },
       onSelectionUpdate: ({ transaction }) => { if (!this.syncing && !transaction.docChanged) this.reportSelection(); },
-      onTransaction: () => this.scheduleLineHighlight(),
+      onTransaction: () => {
+        this.scheduleLineHighlight();
+        if (!this.syncing) this.reportFormatting();
+      },
     });
     this.rememberParts(this.editor.state.doc, parsed);
     if (typeof ResizeObserver !== "undefined") {
@@ -248,6 +252,16 @@ export class DocumentEditor {
     const { anchor, head } = this.editor.state.selection;
     const map = this.mapping();
     return { anchor: map.toSource(anchor), head: map.toSource(head) };
+  }
+  activeFormatting(): FormatAction[] {
+    const formats: [FormatAction, string][] = [
+      ["bold", "bold"], ["italic", "italic"], ["strike", "strike"], ["code", "code"],
+      ["bullet", "bulletList"], ["numbered", "orderedList"], ["task", "taskList"], ["quote", "blockquote"],
+    ];
+    return formats.filter(([, name]) => this.editor.isActive(name)).map(([action]) => action);
+  }
+  private reportFormatting() {
+    this.callbacks.formatting?.(this.activeFormatting());
   }
   private reportSelection() {
     const { anchor, head } = this.sourceSelection();

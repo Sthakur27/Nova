@@ -1,7 +1,7 @@
 import { it, expect } from "vitest";
 import { EditorState } from "@codemirror/state";
 import { history, undo } from "@codemirror/commands";
-import { formatTransaction, paragraphStyle, formattingKeymap, indentationKeymap } from "./richMarkdown";
+import { activeFormatting, formatTransaction, paragraphStyle, formattingKeymap, indentationKeymap } from "./richMarkdown";
 import { indentUnit, syntaxTree } from "@codemirror/language";
 import { markdown, insertNewlineContinueMarkup } from "@codemirror/lang-markdown";
 import { dictationAnchor, setDictationAnchor } from "./dictation";
@@ -120,4 +120,15 @@ it("format shortcuts modify the selection and leave plain text editors alone", (
   expect(state.doc.toString()).toBe("*hello*");
   expect(formattingKeymap(() => false)[0].run!(view)).toBe(false);
   expect(state.doc.toString()).toBe("*hello*");
+});
+
+it("reports source formatting and clears it outside formatted text", () => {
+  const doc = "**bold** and *italic* and `code`";
+  const active = (anchor: number, head = anchor) => activeFormatting(EditorState.create({ doc, selection: { anchor, head }, extensions: [markdown()] }));
+  expect(active(3)).toEqual(["bold"]);
+  expect(active(2, 6)).toEqual(["bold"]);
+  expect(active(3, 11)).toEqual([]);
+  expect(active(10)).toEqual([]);
+  expect(active(doc.indexOf("italic") + 2)).toEqual(["italic"]);
+  expect(active(doc.indexOf("code") + 2)).toEqual(["code"]);
 });

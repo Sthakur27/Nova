@@ -46,7 +46,7 @@
 .app-shell[data-compact="true"] .format-toolbar button { min-width: 40px; min-height: 38px; }
 .app-shell[data-compact="true"] .format-toolbar > span { display: none; }
 .app-shell[data-compact="true"] .prose { padding-left: 22px; padding-right: 22px; }
-.app-shell[data-compact="true"] .cm-editor .cm-content { padding-left: 12px; padding-right: 16px; }
+.app-shell[data-compact="true"] .cm-editor .cm-content { --editor-left-space: 12px; padding-left: 0; padding-right: 16px; }
 .app-shell[data-compact="true"] .status-bar { padding: 0 12px; gap: 8px; }
 .app-shell[data-compact="true"] .status-bar > span:not(:first-child) { display: none; }
 .app-shell[data-compact="true"] .empty-editor { padding: 24px; text-align: center; }

@@ -96,6 +96,7 @@ Use **⌘ + arrow keys** on Mac or **Ctrl + arrow keys** on Windows to toggle pa
 | Find a note, bookmark, or phrase | ⌘ K | Ctrl K |
 | Open / close find within the current note | ⌘ F | Ctrl F |
 | Create a note | ⌘ T | Ctrl T |
+| Close the current tab | ⌘ W | Ctrl W |
 | Bookmark a passage | ⌘ Shift B | Ctrl Shift B |
 | Save | ⌘ S | Ctrl S |
 | Start / stop dictation | ⌘ Shift D | Click Dictate |
@@ -111,13 +112,13 @@ Your audio stays on your computer and isn't uploaded. Voice typing requires the 
 
 ## A few things to know
 
-Nova is still a prototype. Alongside plain text and Markdown notes, it offers basic code editing for Python, TypeScript/JavaScript (including JSX/TSX), Java, JSON, HTML, and CSS. Open a file with the corresponding extension to get syntax highlighting, completion suggestions, basic syntax diagnostics, bracket matching, indentation, and folding. See [code editing](docs/user-guide.md#code-editing) for shortcuts and limits. Image attachments and sync between devices aren't available yet. If you change files in another app, refresh the folder and reopen the note to pick up the changes.
+Nova is still a prototype. Alongside plain text and Markdown notes, it offers basic code editing for Python, TypeScript/JavaScript (including JSX/TSX), Java, JSON, HTML, and CSS. Open a file with the corresponding extension to get syntax highlighting, completion suggestions, basic syntax diagnostics, bracket matching, indentation, and folding. See [code editing](docs/user-guide.md#code-editing) for shortcuts and limits. Image attachments are not available yet. Configured desktop builds can connect Google Drive to upload selected saved notes and download a workspace onto another desktop; background downloads and automatic conflict merging are not available. See the [Google Drive guide](docs/sync.md). If you change files in another app, refresh the folder and reopen the note to pick up the changes.
 
 Recovery drafts help you return to unfinished work, but **Save** writes changes to your original files. Keep a separate backup of important notes. If a file changes outside Nova while you're editing, Nova stops the save so you can reconcile the two versions.
 
 ## Explore further
 
 - **[Reference guide](docs/user-guide.md)** — detailed controls, bookmarks, tabs, saving, and current limits.
-- **[Sync selection](docs/sync.md)** — choose notes for future sync; transfers are not available yet.
+- **[Google Drive](docs/sync.md)** — connect, choose uploads, download a workspace, and understand current limits.
 - **[Developer guide](docs/development.md)** — run from source, build installers, and run checks.
 - **[Release notes](https://github.com/Sthakur27/Nova/releases/latest)** — available downloads and changes.

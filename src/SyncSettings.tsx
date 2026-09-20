@@ -1,11 +1,14 @@
+import DriveRestore from "./DriveRestore";
 import { useEffect, useRef, useState } from "react";
-import { Cloud, FileText, Folder, X } from "lucide-react";
+import { Cloud, FileText, Folder, X, ExternalLink, Upload, LoaderCircle, CheckCircle2, AlertCircle } from "lucide-react";
+import type { DriveUploads } from "./useDriveUploads";
+import type { DriveConnection } from "./useDriveConnection";
 import type { Workspace } from "./model";
 import { syncChoice, syncEntries, syncIncluded, type SyncChoice, type SyncPolicy } from "./syncPolicy";
 import { setWorkspaceSyncChoice } from "./storage";
 
-export default function SyncSettings({ folder, folders, initialPath, onFolderChange, onClose, onSaved }: {
-  folder: Workspace; folders: Workspace[]; initialPath?: string; onFolderChange: (folder: Workspace) => void; onClose: () => void; onSaved: (policy: SyncPolicy) => void;
+export default function SyncSettings({ onRestored, uploads, onUpload, drive, folder, folders, initialPath, onFolderChange, onClose, onSaved }: {
+  onRestored: (root:string) => Promise<void>; uploads: DriveUploads; onUpload: () => Promise<void>; drive: DriveConnection; folder: Workspace; folders: Workspace[]; initialPath?: string; onFolderChange: (folder: Workspace) => void; onClose: () => void; onSaved: (policy: SyncPolicy) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [policy, setPolicy] = useState(folder.syncPolicy);
@@ -14,6 +17,12 @@ export default function SyncSettings({ folder, folders, initialPath, onFolderCha
   const pending = useRef(false);
   const selectedRow = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
+  const [slowCredentialCheck, setSlowCredentialCheck] = useState(false);
+  useEffect(() => {
+    if (!drive.checking) { setSlowCredentialCheck(false); return; }
+    const timer = setTimeout(() => setSlowCredentialCheck(true), 8000);
+    return () => clearTimeout(timer);
+  }, [drive.checking]);
   useEffect(() => {
     dialog.current?.showModal();
     if (initialPath) {
@@ -34,10 +43,12 @@ export default function SyncSettings({ folder, folders, initialPath, onFolderCha
     finally { pending.current = false; setBusy(false); }
   }
   function row(path: string, directory: boolean) {
+    const transfer = uploads.items[`${folder.root}\n${path}`];
+    const selected = syncIncluded(policy, path);
     const name = path ? path.split("/").at(-1)! : folder.name;
-    return <div key={path} ref={path === initialPath ? selectedRow : undefined} className={`sync-row${path === initialPath ? " sync-row-current" : ""}`} style={{ paddingLeft: 12 + (path ? path.split("/").length : 0) * 14 }}>
+    return <div key={path} ref={path === initialPath ? selectedRow : undefined} className={`sync-row${!path ? " sync-root-row" : ""}${path === initialPath ? " sync-row-current" : ""}`} style={{ paddingLeft: 14 + Math.min(path ? path.split("/").length : 0, 4) * 12 }}>
       {directory ? <Folder size={15} /> : <FileText size={15} />}
-      <div className="sync-name"><span title={path || folder.root}>{name}</span><small>{syncIncluded(policy, path) ? (directory ? "Include by default" : "Included") : (directory ? "Local by default" : "Local only")}</small></div>
+      <div className="sync-name"><span title={path || folder.root}>{name}</span><small data-included={syncIncluded(policy, path)}>{syncIncluded(policy, path) ? (directory ? "Include by default" : "Included") : (directory ? "Local by default" : "Local only")}</small>{!directory && selected && <small className={`sync-file-transfer ${transfer?.state ?? "pending"}`} title={transfer?.message}>{transfer?.state === "uploading" ? <LoaderCircle size={12} /> : transfer?.state === "uploaded" ? <CheckCircle2 size={12} /> : transfer?.state === "error" ? <AlertCircle size={12} /> : null}{transfer?.message ?? "Waiting for upload"}</small>}</div>
       <select aria-label={`Sync choice for ${path || folder.name}`} value={syncChoice(policy, path)} disabled={busy || !!folder.syncError || !folder.root}
         onChange={event => void change(path, event.target.value as SyncChoice)}>
         <option value="inherit">{path ? "Use folder default" : "Default (local only)"}</option>
@@ -48,26 +59,58 @@ export default function SyncSettings({ folder, folders, initialPath, onFolderCha
   }
   return <dialog ref={dialog} className="settings-dialog sync-dialog" aria-labelledby="sync-title" onCancel={event => { event.preventDefault(); if (!pending.current) onClose(); }}>
     <header className="settings-header"><div className="settings-emblem"><Cloud size={21} /></div>
-      <div><h1 id="sync-title">Sync</h1><p>Choose what stays local and what joins sync.</p></div>
+      <div><h1 id="sync-title">Sync</h1><p>{drive.status.connected ? "Choose what stays local and what joins sync." : "Connect your Google Drive account."}</p></div>
       <button autoFocus className="icon-button" aria-label="Close sync settings" disabled={busy} onClick={onClose}><X size={18} /></button>
     </header>
-    <div className="sync-intro"><strong>Google Drive · Not connected</strong>
-      <p>Sync transfers are not available in this build yet. Your choices are saved on this device; nothing is uploading.</p>
-      <p>Folder defaults apply to existing and new notes. Override any file or subfolder; changing a parent keeps those exceptions.</p>
-      <p>These choices apply to Nova only. Other backup or sync apps can still upload files they manage.</p>
+    <div className="sync-body">
+    <div className="sync-intro">
+      <div className={`drive-connection${drive.status.connected ? " drive-connected" : ""}`}>
+        <div className="drive-account"><strong>{drive.checking ? "Checking Google Drive…" : drive.status.connected ? "Google Drive connected" : "Connect Google Drive"}</strong>{drive.status.connected && <p>{drive.status.email}</p>}</div>
+        {drive.status.connected ? <>
+          <button disabled={drive.busy || !!uploads.activeRoot} title="Remove this device’s saved access. Your Drive files stay intact." onClick={() => void drive.disconnect()}>Disconnect</button>
+        </> : <>
+          <p>Sign in with Google in your browser, allow Nova’s Drive access, then return here. No server setup or payment is needed.</p>
+          <button className="drive-connect" disabled={!drive.supported || drive.busy || drive.checking || !drive.status.configured}
+            onClick={() => void drive.connect()}>{drive.busy ? "Waiting for Google…" : "Connect Google Drive"}</button>
+          {drive.busy && <><p role="status">Finish sign-in in your browser. This window will update automatically.</p><button onClick={() => void drive.cancel()}>Cancel sign-in</button></>}
+          {!drive.supported && <p>Open Nova’s desktop app to connect. Google sign-in is not available in this preview or on mobile yet.</p>}
+          {drive.supported && !drive.checking && !drive.status.configured && <p>This build is missing Google sign-in configuration. Use a configured desktop build.</p>}
+        </>}
+        {slowCredentialCheck && <p role="status">Your system credential store is still responding. Check for a macOS Keychain or Windows credential prompt and allow Nova to read its saved Google connection.</p>}
+        {drive.error && <p role="alert">{drive.error}</p>}
+      </div>
+      {drive.status.connected && <div className="sync-transfer-panel">
+        <div className="sync-transfer-actions">
+          <button disabled={!!uploads.activeRoot || folder.root === "demo" || !included || busy} onClick={() => void onUpload()}>
+            {uploads.activeRoot === folder.root ? <LoaderCircle size={15} className="sync-spin" /> : <Upload size={15} />}
+            {uploads.activeRoot === folder.root ? "Uploading…" : "Upload now"}
+          </button>
+          <button disabled={!!uploads.activeRoot || folder.root === "demo"} onClick={() => void uploads.openFolder(folder.root)}><ExternalLink size={15} />Open in Drive</button>
+        </div>
+        <p role="status">{uploads.activeRoot === folder.root ? "Uploading selected saved notes to Google Drive…" : uploads.errors[folder.root] || (uploads.completed[folder.root] ? `Selected saved notes uploaded · ${uploads.completed[folder.root]}` : "Selected notes upload after saving or changing your selection.")}</p>
+        <small>Uploads go to this workspace’s linked folder inside .nova on Google Drive. Use “Bring notes to this device” for a new local copy. Turning sync off keeps existing Drive copies.</small>
+      </div>}
+
     </div>
     {error && <p className="folder-error" role="alert">{error}</p>}
+    {drive.status.connected && <>
+    <DriveRestore disabled={!!uploads.activeRoot || drive.busy} onRestored={onRestored} />
+    <div className="sync-section-heading"><h2>Files & folders</h2><span>{included} selected</span></div>
     <div className="sync-filters">
-      <label>Folder<select value={folder.root} disabled={busy} onChange={event => {
+      <label>Workspace<select value={folder.root} disabled={busy} onChange={event => {
         const next = folders.find(item => item.root === event.target.value);
         if (next) onFolderChange(next);
       }}>{folders.map(item => <option key={item.root} value={item.root}>{item.name}</option>)}</select></label>
-      <label>Find a file or subfolder<input type="search" value={query} placeholder="Search paths…" onChange={event => setQuery(event.target.value)} /></label>
+      <label>Find a file or folder<input type="search" value={query} placeholder="Search paths…" onChange={event => setQuery(event.target.value)} /></label>
     </div>
+    <p className="sync-selection-hint">Folder defaults include future notes. Individual choices override them.</p>
     <div className="sync-list">{row("", true)}{entries.filter(entry => entry.path.toLowerCase().includes(query.toLowerCase())).map(entry => row(entry.path, entry.directory))}
       {entries.length === 0 && <p className="sync-empty">No notes yet. The folder default will apply to new notes.</p>}
       {entries.length > 0 && !entries.some(entry => entry.path.toLowerCase().includes(query.toLowerCase())) && <p className="sync-empty">No matching files or subfolders.</p>}
     </div>
-    <footer className="settings-footer"><span role="status">{busy ? "Saving choices…" : `${included} of ${folder.files.length} notes selected · Not connected`}</span><button disabled={busy} onClick={onClose}>Done</button></footer>
+    <details className="sync-help"><summary>How folder choices work</summary><p>The nearest folder default applies unless a file has its own choice. Changing a parent preserves those exceptions. These choices only affect Nova, not other backup or sync apps.</p></details>
+    </>}
+    </div>
+    <footer className="settings-footer"><span role="status">{busy ? "Saving choices…" : !drive.status.connected ? "Connect Google Drive to choose files" : `${included} of ${folder.files.length} notes selected · ${drive.status.connected ? "Drive connected" : "Not connected"}`}</span><button disabled={busy} onClick={onClose}>Done</button></footer>
   </dialog>;
 }

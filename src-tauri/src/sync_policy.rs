@@ -9,6 +9,16 @@ pub struct SyncPolicy {
     version: u8,
     rules: BTreeMap<String, bool>,
 }
+impl SyncPolicy {
+    pub(crate) fn included(&self, path: &str) -> bool {
+        let mut current = path;
+        loop {
+            if let Some(value) = self.rules.get(current) { return *value; }
+            if current.is_empty() { return false; }
+            current = current.rsplit_once('/').map(|(parent, _)| parent).unwrap_or("");
+        }
+    }
+}
 impl Default for SyncPolicy {
     fn default() -> Self { Self { version: 1, rules: BTreeMap::new() } }
 }
@@ -58,6 +68,14 @@ pub fn relocate(registry: &mut serde_json::Value, old: &str, next: Option<&str>)
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn upload_inclusion_obeys_nearest_override() {
+        let policy = read(&serde_json::json!({"syncPolicy":{"version":1,"rules":{"":true,"private":false,"private/shared.txt":true}}})).unwrap();
+        assert!(policy.included("new.txt"));
+        assert!(!policy.included("private/secret.txt"));
+        assert!(policy.included("private/shared.txt"));
+        assert!(!SyncPolicy::default().included("new.txt"));
+    }
     #[test]
     fn persists_exceptions_and_preserves_other_metadata() {
         let dir = tempfile::tempdir().unwrap();

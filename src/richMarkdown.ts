@@ -303,3 +303,23 @@ export function formattingKeymap(enabled: () => boolean): KeyBinding[] {
     return true;
   } }));
 }
+
+/** Formats enclosing the entire source selection, excluding Markdown delimiters. */
+export function activeFormatting(state: EditorState): FormatAction[] {
+  const { from, to } = state.selection.main;
+  const formats = new Set<FormatAction>();
+  const names: Record<string, FormatAction> = {
+    StrongEmphasis: "bold", Emphasis: "italic", Strikethrough: "strike", InlineCode: "code",
+    BulletList: "bullet", OrderedList: "numbered", Task: "task", Blockquote: "quote",
+  };
+  for (let node = syntaxTree(state).resolveInner(from, 1); node; node = node.parent!) {
+    const action = names[node.name];
+    if (!action || to > node.to) continue;
+    const inline = ["bold", "italic", "strike", "code"].includes(action);
+    const start = inline ? node.firstChild?.to ?? node.from : node.from;
+    const end = inline ? node.lastChild?.from ?? node.to : node.to;
+    if (from >= start && to <= end) formats.add(action);
+  }
+  if (formats.has("task")) formats.delete("bullet");
+  return [...formats];
+}
