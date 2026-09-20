@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./resetLocalState";
 import { openWorkspace } from "./storage";
 import { driveTransfer } from "./driveTransfer";
 import type { Workspace } from "./model";

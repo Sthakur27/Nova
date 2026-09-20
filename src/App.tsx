@@ -68,7 +68,7 @@ import {
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { installZoomShortcuts } from "./zoom";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, resetLocalState, localResetInProgress } from "./resetLocalState";
 import { listen } from "@tauri-apps/api/event";
 import Editor, { type EditorHandle, type EditorSnapshot } from "./Editor";
 import Palette from "./Palette";
@@ -343,6 +343,7 @@ export default function App() {
     setBookmarks(marks);
   }, []);
   const preserveDraft = useCallback(async (): Promise<boolean> => {
+    if (localResetInProgress()) return true;
     const c = current.current;
     if (!c.hasDocument || !editor.current || !dirtyRef.current) return true;
     const write = ++draftWrite.current;
@@ -570,6 +571,7 @@ export default function App() {
     }).catch((error) => setNotice(String(error)));
   }, [foldersReady, folders, workspace.root, path, mode, !!data, tabs, paneLayout]);
   const save = useCallback(async (): Promise<boolean> => {
+    if (localResetInProgress()) return false;
     if (saveInFlight.current) return saveInFlight.current;
     const run = async () => {
       if (current.current.foldersReady) {
@@ -2083,7 +2085,7 @@ export default function App() {
           onClose={() => setRenameTarget(null)}
         />
       )}
-      {settingsOpen && <Settings updater={desktop ? appUpdate : undefined} syncConnected={drive.status.connected} onSyncSetup={() => { setSettingsOpen(false); showSync(workspace); }} onClose={() => setSettingsOpen(false)}
+      {settingsOpen && <Settings onResetLocal={mobile ? resetLocalState : undefined} resetDisabled={!drive.status.connected || drive.busy || !!uploads.activeRoot || cloud.loading || saving} updater={desktop ? appUpdate : undefined} syncConnected={drive.status.connected} onSyncSetup={() => { setSettingsOpen(false); showSync(workspace); }} onClose={() => setSettingsOpen(false)}
         onOpenDrive={() => void uploads.openFolder(workspace.root)} openDriveDisabled={!!uploads.activeRoot || workspace.root === "demo"}
         galaxy={galaxyMode} onGalaxy={setGalaxyMode}
         lineHighlight={showLineHighlight} onLineHighlight={setShowLineHighlight}

@@ -1,6 +1,6 @@
 import { parseSyncPolicy, setSyncChoice, type SyncChoice, type SyncPolicy } from "./syncPolicy";
 import { normalizeExtension, isUntitled } from "./fileExtensions";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke, localResetInProgress } from "./resetLocalState";
 import { open } from "@tauri-apps/plugin-dialog";
 import { demoFiles } from "./demo";
 import { parsePreferences, type ExplorerPreferences } from "./folders";
@@ -102,6 +102,7 @@ export async function loadExplorer(): Promise<ExplorerPreferences | null> {
 
 let preferenceQueue = Promise.resolve();
 export function saveExplorer(preferences: ExplorerPreferences): Promise<void> {
+  if (localResetInProgress()) return Promise.resolve();
   const payload = JSON.parse(JSON.stringify(preferences));
   // Synchronous recovery survives reload/quit before native writes complete.
   try { localStorage.setItem("nova-explorer-v1", JSON.stringify(payload)); }

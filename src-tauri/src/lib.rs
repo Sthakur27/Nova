@@ -5,6 +5,7 @@ mod background;
 #[cfg(desktop)]
 mod speech;
 mod sync_policy;
+mod drive_registry;
 #[cfg(any(desktop, target_os = "ios"))]
 mod drive_auth;
 #[cfg(any(desktop, target_os = "ios"))]
@@ -101,7 +102,7 @@ fn revision(bytes: &[u8]) -> String {
 }
 fn supported(path: &Path) -> bool {
     // Nova's workspace metadata is never an editable note.
-    if path.file_name().and_then(|name| name.to_str()) == Some(".nova") { return false; }
+    if path.file_name().and_then(|name| name.to_str()).is_some_and(|name| name == ".nova" || name.starts_with(".nova.") || name.starts_with(".tmp")) { return false; }
     if path.extension().and_then(|s| s.to_str())
         .is_some_and(|s| matches!(s.to_lowercase().as_str(), "md" | "markdown" | "txt" | "mdx")) {
         return true;
@@ -169,7 +170,7 @@ fn files_in(root: &Path) -> Result<Vec<NoteFile>, String> {
             e.depth() == 0
                 || !matches!(
                     e.file_name().to_str(),
-                    Some(".git" | "node_modules" | "target" | ".obsidian" | ".Trash")
+                    Some(".git" | "node_modules" | "target" | ".obsidian" | ".Trash" | ".nova-registry-backups")
                 )
         })
     {
@@ -242,10 +243,11 @@ fn read_registry(root: &Path) -> Result<serde_json::Value, String> {
             return Err(".nova must be a regular JSON file under 4 MiB.".into()),
         Ok(_) => {}
     }
-    let value: serde_json::Value = serde_json::from_slice(&fs::read(path).map_err(err)?)
+    let mut value: serde_json::Value = serde_json::from_slice(&fs::read(path).map_err(err)?)
         .map_err(|error| format!("Could not read .nova: {error}"))?;
     if !value.is_object() { return Err(".nova must contain a JSON object.".into()); }
     registry_stars(&value)?;
+    drive_registry::convert(&mut value)?;
     Ok(value)
 }
 fn registry_stars(value: &serde_json::Value) -> Result<Vec<String>, String> {
@@ -256,10 +258,24 @@ fn registry_stars(value: &serde_json::Value) -> Result<Vec<String>, String> {
     }
 }
 fn write_registry(root: &Path, mut registry: serde_json::Value, stars: &[String]) -> Result<(), String> {
+    drive_registry::convert(&mut registry)?;
     registry["starred"] = serde_json::json!(stars);
     let bytes = serde_json::to_vec_pretty(&registry).map_err(err)?;
     if bytes.len() > 4 * 1024 * 1024 { return Err(".nova registry is too large.".into()); }
     let path = root.join(".nova");
+    if let Ok(old) = fs::read(&path) {
+        if serde_json::from_slice::<serde_json::Value>(&old).ok().is_some_and(|v| v["driveFiles"].is_object()) {
+            use std::io::Write;
+            let backups = root.parent().ok_or("Missing registry backup directory")?.join(".nova-registry-backups");
+            fs::create_dir_all(&backups).map_err(err)?;
+            let backup_path = backups.join(format!("{}.json", revision(root.to_string_lossy().as_bytes())));
+            match fs::OpenOptions::new().write(true).create_new(true).open(backup_path) {
+                Ok(mut backup) => { backup.write_all(&old).map_err(err)?; backup.sync_all().map_err(err)?; }
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(error) => return Err(err(error)),
+            }
+        }
+    }
     // Polling must not replace the registry (or trigger file watchers) without a delta.
     if fs::read(&path).ok().as_deref() == Some(bytes.as_slice()) { return Ok(()); }
     atomic_write(&path, &bytes)
@@ -993,6 +1009,7 @@ pub fn run() {
         });
     #[cfg(target_os = "ios")]
     let builder = builder.invoke_handler(tauri::generate_handler![
+        drive_upload::cloud_reset::cloud_reset_local,
         drive_auth::drive_status, drive_auth::drive_connect, drive_auth::drive_cancel, drive_auth::drive_disconnect,
         drive_upload::cloud_spaces::cloud_setup, drive_upload::cloud_spaces::cloud_move_in,
         drive_upload::drive_upload, drive_upload::drive_open_folder, drive_upload::drive_workspaces, drive_upload::drive_restore,

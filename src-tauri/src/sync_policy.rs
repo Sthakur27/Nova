@@ -48,12 +48,6 @@ pub fn update(root: &Path, path: &str, choice: &str) -> Result<SyncPolicy, Strin
         "exclude" => { policy.rules.insert(path.into(), false); },
         _ => return Err("Invalid sync choice.".into()),
     }
-    if choice == "include" {
-        if let Some(deleted) = registry["syncDeletedPaths"].as_object_mut() { deleted.remove(path); }
-        if let Some(accounts)=registry["driveFiles"].as_object_mut() {
-            for files in accounts.values_mut() { if let Some(identity)=files[path].as_object_mut() { identity.remove("deleted"); } }
-        }
-    }
     registry["syncPolicy"] = serde_json::to_value(&policy).map_err(err)?;
     read(&registry)?;
     let stars = registry_stars(&registry)?;
@@ -62,24 +56,7 @@ pub fn update(root: &Path, path: &str, choice: &str) -> Result<SyncPolicy, Strin
 }
 // Explicit choices travel with renamed/moved files. Inherited choices use the destination folder.
 pub fn relocate(registry: &mut serde_json::Value, old: &str, next: Option<&str>) -> Result<(), String> {
-    if next.is_none() { registry["syncDeletedPaths"][old] = serde_json::json!(true); }
-    // File identity and its last agreed content travel with a local rename.
-    // A local deletion leaves a tombstone so polling cannot restore it again.
-    for field in ["driveFiles", "driveReceipts"] {
-        if let Some(accounts) = registry[field].as_object_mut() {
-            for entries in accounts.values_mut() {
-                if let Some(entries) = entries.as_object_mut() {
-                    if let Some(mut value) = entries.remove(old) {
-                        if let Some(next) = next { entries.insert(next.into(), value); }
-                        else if field == "driveFiles" {
-                            value["deleted"] = serde_json::json!(true);
-                            entries.insert(old.into(), value);
-                        }
-                    }
-                }
-            }
-        }
-    }
+    crate::drive_registry::relocate(registry, old, next)?;
     if registry.get("syncPolicy").is_none() { return Ok(()); }
     let mut policy = read(registry)?;
     if let Some(value) = policy.rules.remove(old) {
@@ -96,12 +73,12 @@ mod tests {
     fn drive_identity_follows_rename_and_deletion_leaves_a_tombstone() {
         let mut registry=serde_json::json!({"syncPolicy":{"version":1,"rules":{"a.txt":true}},"driveFiles":{"account":{"a.txt":{"id":"stable-id","remotePath":"a.txt"}}},"driveReceipts":{"account":{"a.txt":"agreed-hash"}}});
         relocate(&mut registry,"a.txt",Some("nested/b.txt")).unwrap();
-        assert_eq!(registry["driveFiles"]["account"]["nested/b.txt"]["id"],"stable-id");
-        assert_eq!(registry["driveFiles"]["account"]["nested/b.txt"]["remotePath"],"a.txt");
-        assert_eq!(registry["driveReceipts"]["account"]["nested/b.txt"],"agreed-hash");
+        assert_eq!(registry["driveObjects"]["account"]["stable-id"]["id"],"stable-id");
+        assert_eq!(registry["driveObjects"]["account"]["stable-id"]["remotePath"],"a.txt");
+        assert_eq!(registry["driveObjects"]["account"]["stable-id"]["receipt"],"agreed-hash");
         relocate(&mut registry,"nested/b.txt",None).unwrap();
-        assert_eq!(registry["driveFiles"]["account"]["nested/b.txt"]["deleted"],true);
-        assert!(registry["driveReceipts"]["account"]["nested/b.txt"].is_null());
+        assert_eq!(registry["driveObjects"]["account"]["stable-id"]["deleted"],true);
+        assert_eq!(registry["driveObjects"]["account"]["stable-id"]["localPath"], "nested/b.txt");
     }
     #[test]
     fn upload_inclusion_obeys_nearest_override() {

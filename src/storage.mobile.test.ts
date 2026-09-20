@@ -11,7 +11,7 @@ beforeEach(() => {
 it("starts empty until Cloud setup discovers workspaces", async () => {
   invoke.mockResolvedValue(null);
   expect(await loadExplorer()).toEqual({ folders: [], active: null, tabs: [], mode: "edit" });
-  expect(invoke).toHaveBeenCalledWith("load_explorer");
+  expect(invoke).toHaveBeenCalledWith("load_explorer", undefined);
 });
 it("restores stable mobile tab identities and discards foreign roots", async () => {
   invoke.mockResolvedValue({ folders: [{ root: "mobile-sync/test", name: "Notes" }, { root: "/old/container", name: "Old" }], active: { root: "mobile-sync/test", path: "Ideas.md" }, tabs: [{ root: "mobile-sync/test", path: "Ideas.md", pinned: true }, { root: "/old/container", path: "Old.md", pinned: true }], mode: "read" });

@@ -9,6 +9,7 @@ Nova now builds and runs as an installed iPhone/iPad app: a Tauri native shell w
 - Editing, reading, search, stars, bookmarks, rename, device-only deletion, Cloud autosave, and native recovery drafts using the existing note engine.
 - Touch navigation, safe-area spacing, horizontally scrolling formatting controls, and keyboard-aware viewport sizing. iPad uses the same touch layout. The mode switch uses larger icon controls; bottom navigation hides while editing, and the scroll canvas stays stable as the keyboard resizes.
 - Stable `mobile-sync/<hash>` workspace identity and relative bookmark identities, so an iOS container path change does not invalidate saved tabs, drafts, or bookmarks.
+- **Reset from Google Drive…** in Settings downloads fresh Cloud copies and clears local note state, including device-only deletions. It discards changes that have not uploaded while keeping sign-in and appearance preferences. See [reset recovery](sync.md#reset-mobile-local-data-from-drive) for details.
 
 Desktop terminal, desktop voice engine, new windows, folder pickers, and file-location actions are excluded from the mobile interface. Use the system keyboard for dictation. External Files/iCloud folder integration and general import/export are not implemented. Google Drive foreground sync is implemented for iOS; see [sync.md](sync.md) for setup and live verification results. Uninstalling the app removes its private notes. This is a development preview, not a production release.
 

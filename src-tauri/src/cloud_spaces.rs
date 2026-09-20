@@ -33,11 +33,12 @@ pub async fn cloud_setup(app: tauri::AppHandle, access: State<'_, Access>, auth:
                 restore_tree(&drive, &remote_id, temporary.path(), "", &mut rules, &mut budget, 0)?;
                 let mut receipts = serde_json::Map::new();
                 for path in rules.keys() { receipts.insert(path.clone(), json!(crate::revision(&fs::read(temporary.path().join(path)).map_err(crate::err)?))); }
-                let mut identities = serde_json::Map::new();
+                let mut registry = json!({"cloudSpace":{"id":remote_id,"name":name,"account":account},"driveWorkspace":{"id":remote_id,"account":account},"syncPolicy":{"version":1,"rules":{"":true}},"starred":[]});
                 for entry in reconcile::remote_tree(&drive, &remote_id)? {
-                    if rules.contains_key(&entry.path) { identities.insert(entry.path.clone(), json!({"id":id(&entry.file)?,"remotePath":entry.path})); }
+                    if let Some(hash) = receipts.get(&entry.path).and_then(Value::as_str) {
+                        identities::record(&mut registry, &account, &id(&entry.file)?, &entry.path, &entry.path, hash, &entry.file);
+                    }
                 }
-                let registry = json!({"cloudSpace":{"id":remote_id,"name":name,"account":account},"driveWorkspace":{"id":remote_id,"account":account},"driveFiles":{account.clone():identities},"driveReceipts":{account.clone():receipts},"syncPolicy":{"version":1,"rules":{"":true}},"starred":[]});
                 fs::write(temporary.path().join(".nova"), serde_json::to_vec(&registry).map_err(crate::err)?).map_err(crate::err)?;
                 fs::rename(temporary.path(), &destination).map_err(crate::err)?;
             } else {
@@ -58,9 +59,9 @@ pub async fn cloud_setup(app: tauri::AppHandle, access: State<'_, Access>, auth:
             let mut registry = crate::read_registry(&root)?;
             if registry["cloudSpace"]["name"].as_str() != Some(&name) {
                 registry["cloudSpace"]["name"] = json!(name);
-                let stars = crate::registry_stars(&registry)?;
-                crate::write_registry(&root, registry, &stars)?;
             }
+            let stars = crate::registry_stars(&registry)?;
+            crate::write_registry(&root, registry, &stars)?;
         }
         access.roots.lock().map_err(crate::err)?.insert(root.clone());
         #[cfg(desktop)] result.push(root.to_string_lossy().into_owned());
@@ -85,11 +86,11 @@ pub async fn cloud_move_in(app: tauri::AppHandle, access: State<'_, Access>, sou
     let destination = to.join(name);
     let old_meta = crate::metadata_path(&app, &original)?;
     let new_meta = crate::metadata_path(&app, &destination)?;
-    move_saved_note(&original, &destination, &old_meta, &new_meta)?;
+    move_saved_note(&original, &destination, &old_meta, &new_meta, Some(&to))?;
     Ok(name.to_owned())
 }
 
-fn move_saved_note(original: &Path, destination: &Path, old_meta: &Path, new_meta: &Path) -> Result<(), String> {
+fn move_saved_note(original: &Path, destination: &Path, old_meta: &Path, new_meta: &Path, cloud_root: Option<&Path>) -> Result<(), String> {
     if destination.exists() { return Err("Cloud already contains a note with this name. Rename one before moving.".into()); }
     let bytes = fs::read(original).map_err(crate::err)?;
     if bytes.len() as u64 > crate::MAX_FILE { return Err("This note exceeds the size limit.".into()); }
@@ -97,8 +98,22 @@ fn move_saved_note(original: &Path, destination: &Path, old_meta: &Path, new_met
     publish_copy(destination, &bytes)?;
     if old_meta.exists() { crate::atomic_write(new_meta, &fs::read(old_meta).map_err(crate::err)?)?; }
     if fs::read(original).map_err(crate::err)? != bytes { return Err("The local note changed during the move. Both copies were kept.".into()); }
+    if let Some(root) = cloud_root {
+        let name = destination.file_name().and_then(|n| n.to_str()).ok_or("Invalid note name.")?;
+        reset_imported_path(root, name)?;
+    }
     fs::remove_file(original).map_err(|e| format!("Cloud copy saved, but the original could not be removed: {e}"))?;
     Ok(())
+}
+
+// An explicit new import must not inherit the deleted note's identity or opt-out.
+fn reset_imported_path(root: &Path, path: &str) -> Result<(), String> {
+    let mut registry = crate::read_registry(root)?;
+    // Old deleted IDs remain tombstoned; a new import gets a new Drive ID.
+    crate::drive_registry::relocate(&mut registry, path, None)?;
+    if let Some(rules) = registry["syncPolicy"]["rules"].as_object_mut() { rules.remove(path); }
+    let stars = crate::registry_stars(&registry)?;
+    crate::write_registry(root, registry, &stars)
 }
 
 // Publish only complete bytes, and never replace an existing note.
@@ -123,10 +138,36 @@ mod tests {
         let new_meta = dir.path().join("cloud.json");
         fs::write(&original, "a fresh note").unwrap();
         fs::write(&old_meta, "[]").unwrap();
-        move_saved_note(&original, &destination, &old_meta, &new_meta).unwrap();
+        move_saved_note(&original, &destination, &old_meta, &new_meta, None).unwrap();
         assert!(!original.exists());
         assert_eq!(fs::read_to_string(destination).unwrap(), "a fresh note");
         assert_eq!(fs::read_to_string(new_meta).unwrap(), "[]");
+    }
+    #[test]
+    fn importing_a_reused_name_clears_only_its_deleted_identity() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        crate::write_registry(root, json!({
+            "syncPolicy":{"version":1,"rules":{"":true,"Work.txt":false}},
+            "syncDeletedPaths":{"Work.txt":true,"Other.txt":true},
+            "driveFiles":{"account":{"Work.txt":{"id":"old","deleted":true},"Other.txt":{"id":"keep"}}},
+            "driveReceipts":{"account":{"Work.txt":"old-hash","Other.txt":"keep-hash"}}
+        }), &[]).unwrap();
+        let original = root.join("source.txt");
+        let destination = root.join("Work.txt");
+        let meta = root.join("absent.json");
+        fs::write(&original, "new local content").unwrap();
+        move_saved_note(&original, &destination, &meta, &meta, Some(root)).unwrap();
+        let registry = crate::read_registry(root).unwrap();
+        assert!(registry["syncDeletedPaths"]["Work.txt"].is_null());
+        assert!(registry["driveFiles"]["account"]["Work.txt"].is_null());
+        assert!(registry["driveReceipts"]["account"]["Work.txt"].is_null());
+        assert_eq!(registry["driveObjects"]["account"]["keep"]["id"], "keep");
+        assert_eq!(registry["driveObjects"]["account"]["keep"]["deleted"], true);
+        assert_eq!(registry["driveObjects"]["account"]["old"]["deleted"], true);
+        assert!(crate::sync_policy::read(&registry).unwrap().included("Work.txt"));
+        assert_eq!(fs::read_to_string(destination).unwrap(), "new local content");
+        assert!(!original.exists());
     }
     #[test]
     fn failed_move_leaves_the_original_note_untouched() {
@@ -136,7 +177,7 @@ mod tests {
         let meta = dir.path().join("no-metadata.json");
         fs::write(&original, "local version").unwrap();
         fs::write(&destination, "cloud version").unwrap();
-        assert!(move_saved_note(&original, &destination, &meta, &meta).is_err());
+        assert!(move_saved_note(&original, &destination, &meta, &meta, None).is_err());
         assert_eq!(fs::read_to_string(original).unwrap(), "local version");
         assert_eq!(fs::read_to_string(destination).unwrap(), "cloud version");
     }

@@ -1,3 +1,4 @@
+import { confirmCloudReset } from "./confirmCloudReset";
 import AppUpdate from "./AppUpdate";
 import type { useAppUpdate } from "./useAppUpdate";
 import { FontControl, TextSizeControl, type EditorFont } from "./TypographyControls";
@@ -21,6 +22,7 @@ function Toggle({ title, description, checked, onChange }: {
 }
 
 type Props = {
+  onResetLocal?: () => Promise<void>; resetDisabled?: boolean;
   updater?: ReturnType<typeof useAppUpdate>;
   onClose: () => void;
   syncConnected?: boolean; onSyncSetup?: () => void;
@@ -39,6 +41,20 @@ type Props = {
   storageError: boolean;
 };
 export default function Settings(props: Props) {
+  const [resetting, setResetting] = useState(false);
+  const [resetError, setResetError] = useState("");
+  const resetPending = useRef(false);
+  const close = () => { if (!resetPending.current) props.onClose(); };
+  async function reset() {
+    if (!props.onResetLocal || resetPending.current) return;
+    resetPending.current = true;
+    try {
+      if (!await confirmCloudReset()) return;
+      setResetting(true); setResetError("");
+      await props.onResetLocal();
+    } catch (error) { setResetError(String(error)); }
+    finally { resetPending.current = false; setResetting(false); }
+  }
   const dialog = useRef<HTMLDialogElement>(null);
   const [extension, setExtension] = useState(props.defaultExtension);
   const [extensionError, setExtensionError] = useState("");
@@ -49,18 +65,19 @@ export default function Settings(props: Props) {
     return () => { element.close(); previous?.focus(); };
   }, []);
   return <dialog ref={dialog} className="settings-dialog" aria-labelledby="settings-title"
-    onCancel={props.onClose} onClick={(event) => {
+    onCancel={event => { event.preventDefault(); close(); }} onClick={(event) => {
       if (event.target === event.currentTarget) {
         const rect = event.currentTarget.getBoundingClientRect();
-        if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) props.onClose();
+        if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) close();
       }
     }}>
     <header className="settings-header">
       <div className="settings-emblem"><Settings2 size={21} /></div>
       <div><h1 id="settings-title">Settings</h1><p>Make yourself at home.</p></div>
-      <button autoFocus className="icon-button" aria-label="Close settings" onClick={props.onClose}><X size={18} /></button>
+      <button autoFocus className="icon-button" aria-label="Close settings" onClick={close} disabled={resetting}><X size={18} /></button>
     </header>
-    <div className="settings-content">
+    <div className="settings-content" aria-busy={resetting}>
+      <fieldset disabled={resetting} style={{border:0, padding:0, margin:0, minWidth:0}}>
       {props.updater && <AppUpdate updater={props.updater} />}
       <section aria-labelledby="settings-appearance"><h2 id="settings-appearance">Appearance</h2>
         <Toggle title="Galaxy mode" description="A translucent backdrop with motion and glow around your workspace." checked={props.galaxy} onChange={props.onGalaxy} />
@@ -108,7 +125,15 @@ export default function Settings(props: Props) {
         </div>
         <Toggle title="Bookmarks panel" description="Keep your saved passages alongside your notes." checked={props.bookmarks} onChange={props.onBookmarks} />
       </section>
+      {props.onResetLocal && <section aria-labelledby="settings-reset"><h2 id="settings-reset">Reset local data</h2>
+        <div className="settings-row"><div><label>Start fresh from Google Drive</label><p>Download your Cloud notes again and clear this device’s saved note state.</p></div>
+          <button disabled={props.resetDisabled || resetting} onClick={() => void reset()}>{resetting ? "Resetting…" : "Reset from Google Drive…"}</button>
+        </div>
+        {resetting && <p role="status">Downloading fresh copies from Google Drive. Keep Nova open.</p>}
+        {resetError && <p role="alert">{resetError}</p>}
+      </section>}
+      </fieldset>
     </div>
-    <footer className="settings-footer"><span role="status">{props.storageError ? "Changes apply now, but could not be saved on this device." : "Changes are saved automatically on this device."}</span><button onClick={props.onClose}>Done</button></footer>
+    <footer className="settings-footer"><span role="status">{props.storageError ? "Changes apply now, but could not be saved on this device." : "Changes are saved automatically on this device."}</span><button onClick={close} disabled={resetting}>Done</button></footer>
   </dialog>;
 }

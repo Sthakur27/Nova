@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./resetLocalState";
 import { listen } from "@tauri-apps/api/event";
 import { driveTransfer } from "./driveTransfer";
 import { driveSupported } from "./platform";

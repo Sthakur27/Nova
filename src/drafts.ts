@@ -1,4 +1,5 @@
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { isTauri } from "@tauri-apps/api/core";
+import { invoke } from "./resetLocalState";
 import type { DocumentData } from "./model";
 import { tabId } from "./tabs";
 

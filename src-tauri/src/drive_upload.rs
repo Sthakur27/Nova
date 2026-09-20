@@ -1,3 +1,6 @@
+#[cfg(any(target_os = "ios", test))]
+#[path = "cloud_reset.rs"]
+pub mod cloud_reset;
 #[path = "cloud_spaces.rs"]
 pub mod cloud_spaces;
 // Uploads selected saved notes. Remote edits are never silently overwritten.
@@ -6,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{fs, io::Read, path::{Path, PathBuf}, time::Duration};
 use tauri::{Emitter, Manager, State};
+use crate::drive_registry as identities;
 use crate::{Access, drive_auth::{self, DriveAuth}};
 #[path = "drive_reconcile.rs"]
 mod reconcile;
@@ -34,6 +38,12 @@ fn network(_: reqwest::Error) -> String { "Could not reach Google Drive. Check y
 struct Drive { client: Client, token: String, api: String, v2: String, upload_v2: String, upload_v3: String }
 impl Drive {
     fn new() -> Result<Self, String> { Ok(Self { api: API.into(), v2: "https://www.googleapis.com/drive/v2/files".into(), upload_v2: "https://www.googleapis.com/upload/drive/v2/files".into(), upload_v3: "https://www.googleapis.com/upload/drive/v3/files".into(), token: drive_auth::access_token()?, client: Client::builder().timeout(Duration::from_secs(60)).build().map_err(network)? }) }
+    fn generate_id(&self) -> Result<String, String> {
+        let value: Value = checked(self.client.get(format!("{}/generateIds", self.api))
+            .bearer_auth(&self.token).query(&[("count","1"),("space","drive"),("type","files")])
+            .send().map_err(network)?)?.json().map_err(network)?;
+        id(&json!({"id":value["ids"][0]}))
+    }
     fn find(&self, parent: &str, key: &str) -> Result<Option<Value>, String> {
         let query = format!("trashed = false and '{parent}' in parents and appProperties has {{ key='novaKey' and value='{key}' }}");
         let value: Value = checked(self.client.get(&self.api).bearer_auth(&self.token).query(&[("q",query.as_str()),("fields","files(id,name,parents,mimeType,appProperties)"),("pageSize","2")]).send().map_err(network)?)?.json().map_err(network)?;
@@ -42,20 +52,9 @@ impl Drive {
         Ok(files.first().cloned())
     }
     fn folder(&self, parent: &str, key: &str, name: &str) -> Result<String, String> {
-        self.folder_impl(parent,key,name,false)
-    }
-    fn folder_impl(&self, parent: &str, key: &str, name: &str, reuse_name: bool) -> Result<String, String> {
         if let Some(file) = self.find(parent,key)? {
             if file["mimeType"] != "application/vnd.google-apps.folder" { return Err("Nova’s Drive folder was replaced with a file.".into()); }
             return id(&file);
-        }
-        // A folder renamed on another device retains its original novaKey.
-        // Reuse the uniquely named managed folder instead of making a duplicate.
-        if reuse_name {
-            let matches=self.children(parent)?.into_iter().filter(|file|file["name"].as_str()==Some(name)
-                && file["mimeType"]=="application/vnd.google-apps.folder" && file["appProperties"]["novaKey"].is_string()).collect::<Vec<_>>();
-            if matches.len()>1 {return Err("Duplicate managed Drive folders have this name. Resolve them in Drive before syncing.".into());}
-            if let Some(file)=matches.first(){return id(file);}
         }
         let value: Value = checked(self.client.post(&self.api).bearer_auth(&self.token).json(&json!({"name":name,"mimeType":"application/vnd.google-apps.folder","parents":[parent],"appProperties":{"novaKey":key}})).send().map_err(network)?)?.json().map_err(network)?;
         id(&value)
@@ -73,11 +72,11 @@ impl Drive {
     }
     #[cfg(test)]
     fn upload(&self, parent: &str, key: &str, name: &str, bytes: &[u8], baseline: Option<&str>) -> Result<(), String> {
-        self.upload_file(parent, key, name, bytes, baseline, None).map(|_| ())
+        self.upload_file(parent, key, name, bytes, baseline, None, None).map(|_| ())
     }
-    fn upload_file(&self, parent: &str, key: &str, name: &str, bytes: &[u8], baseline: Option<&str>, linked: Option<&Value>) -> Result<String, String> {
+    fn upload_file(&self, parent: &str, key: &str, name: &str, bytes: &[u8], baseline: Option<&str>, linked: Option<&Value>, reserved: Option<&str>) -> Result<String, String> {
         let hash = crate::revision(bytes);
-        let existing = if let Some(linked) = linked { Some(linked.clone()) } else { self.find(parent,key)? };
+        let existing = if let Some(linked) = linked { Some(linked.clone()) } else if reserved.is_some() { None } else { self.find(parent,key)? };
         let mut etag = None;
         let mut file_id = None;
         if let Some(file) = &existing {
@@ -107,7 +106,7 @@ impl Drive {
             file_id = Some(found);
         }
         let mut metadata = json!({"name":name,"appProperties":{"novaKey":key,"novaRevision":hash}});
-        if file_id.is_none() { metadata["parents"] = json!([parent]); }
+        if file_id.is_none() { metadata["parents"] = json!([parent]); if let Some(reserved) = reserved { metadata["id"] = json!(reserved); } }
         else { metadata = json!({"title":name,"properties":[{"key":"novaKey","value":key,"visibility":"PRIVATE"},{"key":"novaRevision","value":hash,"visibility":"PRIVATE"}]}); }
         let boundary = format!("nova_{}", rand::random::<u128>());
         let mut body = format!("--{boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n{metadata}\r\n--{boundary}\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n").into_bytes();
@@ -170,7 +169,7 @@ fn workspace_folder(drive: &Drive, root: &Path) -> Result<String, String> {
 }
 fn allowed(root: &Path, path: &str) -> Result<bool, String> {
     let registry=crate::read_registry(root)?;
-    Ok(registry["syncDeletedPaths"][path]!=true && crate::sync_policy::read(&registry)?.included(path))
+    Ok(registry["cloudSpace"].is_object() || crate::sync_policy::read(&registry)?.included(path))
 }
 fn upload_workspace(app: tauri::AppHandle, root: PathBuf, protected_paths: Vec<String>, only_path: Option<String>) -> Result<Report, String> {
     let drive = Drive::new()?;
@@ -195,14 +194,14 @@ fn upload_workspace(app: tauri::AppHandle, root: PathBuf, protected_paths: Vec<S
     #[cfg(target_os = "ios")]
     let root_id = crate::mobile_storage::identity(&app.path().app_data_dir().map_err(crate::err)?, &root)?;
     let mut report = Report { root: root_id, folder_url: format!("https://drive.google.com/drive/folders/{folder}"), items: Vec::new(), changes: Vec::new(), uploaded: false };
-    let remote = reconcile::remote_tree(&drive, &folder)?;
+    let (remote, remote_folders) = reconcile::remote_tree_with_folders(&drive, &folder)?;
     if only_path.is_none() && reconcile::workspace_unchanged(
         &root, &account, &remote, &app.path().app_data_dir().map_err(crate::err)?, &protected_paths,
     )? {
         let registry = crate::read_registry(&root)?;
         let policy = crate::sync_policy::read(&registry)?;
-        report.items = remote.iter().filter(|entry| policy.included(&entry.path)
-            && registry["syncDeletedPaths"][&entry.path] != true).map(|entry| Item {path:entry.path.clone(),
+        report.items = remote.iter().filter(|entry| (registry["cloudSpace"].is_object() || policy.included(&entry.path))
+            && registry["driveObjects"][&account][id(&entry.file).unwrap_or_default()]["deleted"] != true).map(|entry| Item {path:entry.path.clone(),
             state:"uploaded".into(),message:"Saved file is up to date in Drive.".into()}).collect();
         return Ok(report);
     }
@@ -210,9 +209,14 @@ fn upload_workspace(app: tauri::AppHandle, root: PathBuf, protected_paths: Vec<S
         let access=app.state::<Access>();let _lock=access.writes.lock().map_err(crate::err)?;
         let mut registry=crate::read_registry(&root)?;
         registry["driveWorkspace"]=json!({"id":folder,"account":account});
+        for entry in &remote_folders {
+            let remote_id = id(&entry.file)?;
+            registry["driveFolders"][&account][&remote_id] = json!({"id":remote_id,"localPath":entry.path});
+        }
         let stars=crate::registry_stars(&registry)?;crate::write_registry(&root,registry,&stars)?;
     }
     let blocked = reconcile::pull(&app, &drive, &root, &account, &remote, &protected_paths, &mut report, only_path.as_deref())?;
+    let mut known_folders = remote_folders.iter().map(|e| id(&e.file)).collect::<Result<std::collections::HashSet<_>,_>>()?;
     for file in crate::files_in(&root)? {
         if only_path.as_deref().is_some_and(|selected| selected != file.path) { continue; }
         if blocked.contains(&file.path) || protected_paths.contains(&file.path) { continue; }
@@ -229,27 +233,68 @@ fn upload_workspace(app: tauri::AppHandle, root: PathBuf, protected_paths: Vec<S
             let mut parent = folder.clone();
             let parts: Vec<_> = file.path.split('/').collect();
             for (index, part) in parts[..parts.len()-1].iter().enumerate() {
-                parent = drive.folder_impl(&parent, &crate::revision(parts[..=index].join("/").as_bytes()), part, true)?;
+                let path = parts[..=index].join("/");
+                let access = app.state::<Access>();
+                let _lock = access.writes.lock().map_err(crate::err)?;
+                let mut registry = crate::read_registry(&root)?;
+                let tracked = registry["driveFolders"][&account].as_object().into_iter().flat_map(|m|m.values())
+                    .filter(|v|v["localPath"].as_str() == Some(&path))
+                    .min_by_key(|v| !v["id"].as_str().is_some_and(|id|known_folders.contains(id))).cloned();
+                let folder_id = match tracked {
+                    Some(ref value) => id(value)?,
+                    None => drive.generate_id()?,
+                };
+                let exists = known_folders.contains(&folder_id);
+                if !exists {
+                    if tracked.as_ref().is_some_and(|v|v["pending"] != true) {
+                        return Err("The destination Drive folder was removed. Restore it before syncing.".into());
+                    }
+                    registry["driveFolders"][&account][&folder_id] = json!({"id":folder_id,"localPath":path,"pending":true});
+                    let stars = crate::registry_stars(&registry)?;
+                    crate::write_registry(&root, registry.clone(), &stars)?;
+                    let value: Value = checked(drive.client.post(&drive.api).bearer_auth(&drive.token)
+                        .json(&json!({"id":folder_id,"name":part,"mimeType":"application/vnd.google-apps.folder","parents":[parent],"appProperties":{"novaKey":folder_id}}))
+                        .send().map_err(network)?)?.json().map_err(network)?;
+                    if id(&value)? != folder_id { return Err("Drive folder identity changed.".into()); }
+                    known_folders.insert(folder_id.clone());
+                    // Keep the reservation until the next listing confirms it; retries use the same ID.
+                }
+                parent = folder_id;
             }
             if !allowed(&root,&file.path)? { return Err("Selection changed. File was not uploaded.".into()); }
-            let registry = crate::read_registry(&root)?;
-            let receipt = &registry["driveReceipts"][&account][&file.path];
-            let tracked = &registry["driveFiles"][&account][&file.path];
-            if tracked["deleted"] == true { return Err("This file was deleted locally. Its Drive copy is retained; restore it explicitly to resume sync.".into()); }
-            let linked = if tracked["id"].is_string() {
-                Some(remote.iter().find(|entry| entry.file["id"] == tracked["id"]).ok_or("Drive copy was removed. Restore it in Drive before resuming sync.")?.file.clone())
-            } else { None };
-            let key = linked.as_ref().and_then(|v| v["appProperties"]["novaKey"].as_str()).map(str::to_owned).unwrap_or_else(||crate::revision(file.path.as_bytes()));
-            let remote_id = drive.upload_file(&parent,&key,parts.last().unwrap(),&bytes,receipt.as_str(),linked.as_ref())?;
+            // Reserve a real Drive ID before creation. Retries never rediscover by name.
+            let tracked = {
+                let access = app.state::<Access>();
+                let _lock = access.writes.lock().map_err(crate::err)?;
+                let mut registry = crate::read_registry(&root)?;
+                let mut tracked = identities::at_path(&registry, &account, &file.path).clone();
+                if tracked.is_null() {
+                    let reserved = drive.generate_id()?;
+                    tracked = json!({"id":reserved,"localPath":file.path,"remotePath":file.path,"pending":true});
+                    registry["driveObjects"][&account][&reserved] = tracked.clone();
+                    let stars = crate::registry_stars(&registry)?;
+                    crate::write_registry(&root,registry,&stars)?;
+                }
+                tracked
+            };
+            let remote_id = id(&tracked)?;
+            let linked = remote.iter().find(|entry| entry.file["id"] == tracked["id"]).map(|entry|entry.file.clone());
+            if linked.is_none() && tracked["pending"] != true {
+                return Err("Drive copy was removed. Local content is retained; restore the same Drive file to resume sync.".into());
+            }
+            let uploaded_id = drive.upload_file(&parent,&remote_id,parts.last().unwrap(),&bytes,tracked["receipt"].as_str(),linked.as_ref(),Some(&remote_id))?;
+            if uploaded_id != remote_id { return Err("Drive returned a different file identity. Sync paused.".into()); }
             {
                 let access = app.state::<Access>();
                 let _lock = access.writes.lock().map_err(crate::err)?;
                 let mut registry = crate::read_registry(&root)?;
                 // A concurrent rename/delete must not recreate a stale registry path.
                 if !local.exists() { return Err("File moved or was deleted during sync. Retry sync.".into()); }
-                registry["driveFiles"][&account][&file.path] = json!({"id":remote_id,"remotePath":file.path});
+                if identities::at_path(&registry, &account, &file.path)["id"] != remote_id {
+                    return Err("File identity changed during upload. Local changes are preserved.".into());
+                }
+                identities::record(&mut registry, &account, &remote_id, &file.path, &file.path, &crate::revision(&bytes), &Value::Null);
                 registry["driveWorkspace"] = json!({"id":folder,"account":account});
-                registry["driveReceipts"][&account][&file.path] = json!(crate::revision(&bytes));
                 let stars = crate::registry_stars(&registry)?;
                 crate::write_registry(&root,registry,&stars)?;
             }
@@ -361,11 +406,12 @@ pub async fn drive_restore(parent: String, workspace_id: String, access: State<'
         let account = drive_auth::account_key()?;
         let mut receipts = serde_json::Map::new();
         for path in rules.keys() { receipts.insert(path.clone(),json!(crate::revision(&fs::read(directory.path().join(path)).map_err(crate::err)?))); }
-        let mut identities = serde_json::Map::new();
+        let mut registry = json!({"syncPolicy":{"version":1,"rules":rules},"driveWorkspace":{"id":workspace_id,"account":account},"starred":[]});
         for entry in reconcile::remote_tree(&drive, &workspace_id)? {
-            if rules.contains_key(&entry.path) { identities.insert(entry.path.clone(), json!({"id":id(&entry.file)?,"remotePath":entry.path})); }
+            if let Some(hash) = receipts.get(&entry.path).and_then(Value::as_str) {
+                identities::record(&mut registry, &account, &id(&entry.file)?, &entry.path, &entry.path, hash, &entry.file);
+            }
         }
-        let registry = json!({"driveFiles":{account.clone():identities},"syncPolicy":{"version":1,"rules":rules},"driveWorkspace":{"id":workspace_id,"account":account},"driveReceipts":{account:receipts},"starred":[]});
         fs::write(directory.path().join(".nova"),serde_json::to_vec(&registry).map_err(crate::err)?).map_err(crate::err)?;
         let destination = directory.keep();
         #[cfg(desktop)] { Ok(destination.to_string_lossy().into_owned()) }

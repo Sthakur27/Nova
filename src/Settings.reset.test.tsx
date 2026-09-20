@@ -1,0 +1,43 @@
+// @vitest-environment jsdom
+import { act, type ComponentProps } from "react";
+import { createRoot } from "react-dom/client";
+import { expect, it, vi } from "vitest";
+import Settings from "./Settings";
+import { confirmCloudReset } from "./confirmCloudReset";
+vi.mock("./confirmCloudReset", () => ({confirmCloudReset:vi.fn()}));
+it("shows reset last only when enabled, confirms, locks controls, and surfaces failure", async () => {
+  (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+  HTMLDialogElement.prototype.showModal = vi.fn();
+  HTMLDialogElement.prototype.close = vi.fn();
+  const noop = vi.fn();
+  const props: ComponentProps<typeof Settings> = {
+    onClose:noop, galaxy:false,onGalaxy:noop,lineHighlight:false,onLineHighlight:noop,
+    lineNumbers:false,onLineNumbers:noop,wordWrap:true,onWordWrap:noop,spellcheck:false,onSpellcheck:noop,
+    bookmarks:true,onBookmarks:noop,editorFont:"default",onEditorFont:noop,fontSize:"default",onFontSize:noop,
+    lineSpacing:"default",onLineSpacing:noop,textWidth:"default",onTextWidth:noop,defaultExtension:".txt",onDefaultExtension:noop,storageError:false,
+  };
+  const host = document.createElement("div"); document.body.append(host);
+  const root = createRoot(host);
+  let fail!: (error: Error) => void;
+  const reset = vi.fn(() => new Promise<void>((_, reject) => { fail=reject; }));
+  const button = () => [...host.querySelectorAll("button")].find(b => b.textContent?.startsWith("Reset from"))!;
+  try {
+    await act(async () => root.render(<Settings {...props}/>));
+    expect(button()).toBeUndefined();
+    await act(async () => root.render(<Settings {...props} onResetLocal={reset}/>));
+    expect(host.querySelector("section:last-child")?.id).toBe("");
+    expect(host.querySelector("section:last-child")?.getAttribute("aria-labelledby")).toBe("settings-reset");
+    vi.mocked(confirmCloudReset).mockResolvedValue(false);
+    await act(async () => button().click());
+    expect(reset).not.toHaveBeenCalled();
+    vi.mocked(confirmCloudReset).mockResolvedValue(true);
+    await act(async () => button().click());
+    expect(reset).toHaveBeenCalledOnce();
+    expect(host.querySelector("fieldset")?.disabled).toBe(true);
+    await act(async () => host.querySelector("dialog")!.dispatchEvent(new Event("cancel", {cancelable:true})));
+    expect(noop).not.toHaveBeenCalled();
+    await act(async () => fail(new Error("Download failed; local notes kept")));
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("local notes kept");
+    expect(button().disabled).toBe(false);
+  } finally { await act(async () => root.unmount()); host.remove(); }
+});

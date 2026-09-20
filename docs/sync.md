@@ -118,3 +118,30 @@ Physical-device and signed-in iPad sync remain separate checks. Local-copy colli
 and the HTTP-backed reconciliation suite cover failure protection separately.
 
 While Nova is visible and focused, the active Cloud note is checked every five seconds. Other notes keep the 60-second schedule. The faster check pauses for unsaved edits, a Local tab, or an unfocused window. This is polling, not live collaborative editing.
+
+### Drive identity (registry v2)
+
+Sync objects and receipts are keyed by account and Drive file ID in `driveObjects`.
+`localPath` and `remotePath` are locations, never identities. Renaming or moving a
+note retains its ID. Device-only deletions tombstone that ID, so a different ID
+using the same filename can download. A local collision or unsaved draft pauses
+that download instead of adopting or overwriting the local contents.
+
+New uploads reserve an ID with Drive `generateIds`, persist it before uploading,
+and reuse it on retry. Subfolders also retain or reserve Drive IDs. App-container
+discovery uses Nova's stable app-property marker, not a folder name match.
+
+The first updated run converts existing ID-bearing records and saves the previous
+registry outside the workspace in the sibling `.nova-registry-backups` directory. No note content is rewritten by conversion.
+Install the updated app on every device; old builds do not understand this format.
+A receipt lacking any Drive ID is retained as unresolved and never matched by name.
+
+## Reset mobile local data from Drive
+
+At the bottom of mobile **Settings**, choose **Reset from Google Drive…** and
+confirm. Nova downloads a fresh snapshot before replacing the device's notes,
+sync registry (including local deletion records), drafts, bookmarks, stars, and
+open tabs. A note deleted only on this device returns if it still exists in Drive.
+Changes that have not uploaded are discarded. Sign-in and appearance preferences
+are retained; Google Drive files are not modified. Saves and sync pause during
+recovery, and Nova reloads after success. A failed download leaves local data intact.
