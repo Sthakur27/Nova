@@ -8,6 +8,7 @@ let container: HTMLDivElement, root: Root;
 let now: number, nextFrame: number;
 let frames: Map<number, FrameRequestCallback>;
 let motion: MediaQueryList;
+let onResize: ResizeObserverCallback;
 const clearRect = vi.fn(), stroke = vi.fn();
 
 function advance(milliseconds: number) {
@@ -37,6 +38,10 @@ beforeEach(() => {
   vi.stubGlobal("cancelAnimationFrame", (id: number) => frames.delete(id));
   motion = Object.assign(new EventTarget(), { matches: false }) as MediaQueryList;
   vi.stubGlobal("matchMedia", () => motion);
+  vi.stubGlobal("ResizeObserver", class {
+    constructor(callback: ResizeObserverCallback) { onResize = callback; }
+    observe = vi.fn(); unobserve = vi.fn(); disconnect = vi.fn();
+  });
   const gradient = { addColorStop: vi.fn() };
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
     clearRect, stroke, createLinearGradient: () => gradient, createRadialGradient: () => gradient,
@@ -107,6 +112,69 @@ it("draws once for reduced motion and clears the burst when it expires", async (
   advance(2800);
   expect(clearRect).toHaveBeenCalledTimes(paints);
   advance(400);
-  expect(clearRect).toHaveBeenCalledTimes(paints + 1);
+  expect(clearRect.mock.calls.length).toBeGreaterThan(paints);
+  expect(frames.size).toBe(0);
+});
+
+it("reuses geometry between animation frames and clears only glow bounds", async () => {
+  await render(); advance(80);
+  const boxes = vi.mocked(Element.prototype.getBoundingClientRect);
+  boxes.mockClear(); clearRect.mockClear();
+  advance(200);
+  expect(boxes).not.toHaveBeenCalled();
+  expect(clearRect).toHaveBeenCalled();
+  for (const [, , width, height] of clearRect.mock.calls) {
+    expect(width).toBeLessThan(innerWidth);
+    expect(height).toBeLessThan(innerHeight);
+  }
+});
+
+it.each(["scroll", "resize"])("remeasures geometry after %s", async event => {
+  await render(); advance(1000);
+  const boxes = vi.mocked(Element.prototype.getBoundingClientRect);
+  boxes.mockClear();
+  if (event === "resize") onResize([], {} as ResizeObserver);
+  else document.dispatchEvent(new Event("scroll"));
+  advance(80);
+  expect(boxes).toHaveBeenCalled();
+});
+
+it("clears both the old and new position when a control moves", async () => {
+  await render(); advance(1000);
+  const emblem = container.querySelector("button")!;
+  emblem.getBoundingClientRect = () => ({ left: 300, top: 200, right: 400, bottom: 250, width: 100, height: 50 } as DOMRect);
+  clearRect.mockClear();
+  document.dispatchEvent(new Event("scroll")); advance(40);
+  expect(clearRect).toHaveBeenCalledWith(0, 0, 101, 51);
+  expect(clearRect).toHaveBeenCalledWith(299, 199, 102, 52);
+});
+
+it("clears a removed control while idle without restarting animation", async () => {
+  await render(); advance(1000);
+  clearRect.mockClear(); stroke.mockClear();
+  await act(async () => { container.querySelector("button")!.remove(); });
+  advance(40);
+  expect(clearRect).toHaveBeenCalledWith(0, 0, 101, 51);
+  expect(stroke).not.toHaveBeenCalled();
+  expect(frames.size).toBe(0);
+});
+
+it.each(["transitionend", "transitioncancel", "removed"])("tracks moving geometry until a transition is %s", async ending => {
+  await render(); advance(1000);
+  const emblem = container.querySelector("button")!;
+  const transition = (type: string) => {
+    const event = new Event(type, { bubbles: true });
+    Object.defineProperty(event, "propertyName", { value: "transform" });
+    emblem.dispatchEvent(event);
+  };
+  transition("transitionrun");
+  advance(80);
+  expect(frames.size).toBe(1);
+  const boxes = vi.mocked(Element.prototype.getBoundingClientRect);
+  boxes.mockClear(); advance(40);
+  expect(boxes).toHaveBeenCalled();
+  if (ending === "removed") await act(async () => { emblem.remove(); });
+  else transition(ending);
+  advance(80);
   expect(frames.size).toBe(0);
 });

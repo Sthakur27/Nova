@@ -37,6 +37,12 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
     let frame = 0;
     let last = 0;
     let animateUntil = 0;
+    let geometryDirty = true;
+    let cachedEdges: Edge[] = [];
+    let cachedShells: Edge[] = [];
+    let painted: Edge[] = [];
+    const transitions = new Map<EventTarget, Set<string>>();
+    const observed = new Set<Element>();
     let width = innerWidth;
     let height = innerHeight;
     const size = () => {
@@ -46,6 +52,8 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
       layer.width = Math.round(width * scale);
       layer.height = Math.round(height * scale);
       ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      painted = [];
+      geometryDirty = true;
     };
     const rows = (element: Element) => {
       const range = document.createRange();
@@ -192,14 +200,10 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
       ctx.restore();
     };
 
-    const paint = (now: number) => {
-      frame = 0;
-      if (!motion.matches && now - last < 32) {
-        frame = requestAnimationFrame(paint);
-        return;
+    const measure = () => {
+      for (const element of transitions.keys()) {
+        if (element instanceof Element && !element.isConnected) transitions.delete(element);
       }
-      last = now;
-      ctx.clearRect(0, 0, width, height);
       const edges: Edge[] = [];
       const elements = new Set<Element>();
       const addControl = (element: Element) => {
@@ -292,28 +296,71 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
             width: right - left, height: bottom - top, radius: 5, selected: true });
         }
       }
-      edges.forEach((edge, i) => drawEdge(edge, motion.matches ? 0 : now / 1000, i * 2.4));
+      cachedEdges = edges;
+      cachedShells = [];
+      if (supernova > 0 && performance.now() < supernova + SUPERNOVA_DURATION) {
+        document.querySelectorAll(".app-shell").forEach(element => {
+          elements.add(element);
+          if (!visible(element)) return;
+          const r = element.getBoundingClientRect();
+          cachedShells.push({ x: r.left, y: r.top, width: r.width, height: r.height,
+            radius: parseFloat(getComputedStyle(element).borderTopLeftRadius) || 0 });
+        });
+      }
+      // Watch targets and their layout containers, not the entire document's
+      // boxes. Mutation/scroll events also catch movement without a size change.
+      if (selected?.element.isConnected) elements.add(selected.element);
+      const nextObserved = new Set<Element>([document.documentElement]);
+      for (const element of elements) {
+        for (let node: Element | null = element; node; node = node.parentElement) nextObserved.add(node);
+      }
+      for (const element of observed) if (!nextObserved.has(element)) resizeObserver.unobserve(element);
+      for (const element of nextObserved) if (!observed.has(element)) resizeObserver.observe(element);
+      observed.clear();
+      nextObserved.forEach(element => observed.add(element));
+      geometryDirty = false;
+    };
+    const clearEdge = (edge: Edge) => {
+      // Every effect is clipped inside its own border. Clear old and new bounds
+      // before drawing any edges, so moving/overlapping glows cannot leave trails.
+      const left = Math.max(0, edge.clip?.left ?? 0, Math.floor(edge.x) - 1);
+      const top = Math.max(0, edge.clip?.top ?? 0, Math.floor(edge.y) - 1);
+      const right = Math.min(width, edge.clip?.right ?? width, Math.ceil(edge.x + edge.width) + 1);
+      const bottom = Math.min(height, edge.clip?.bottom ?? height, Math.ceil(edge.y + edge.height) + 1);
+      if (right > left && bottom > top) ctx.clearRect(left, top, right - left, bottom - top);
+    };
+    const paint = (now: number) => {
+      frame = 0;
+      if (!motion.matches && now - last < 32) {
+        frame = requestAnimationFrame(paint);
+        return;
+      }
+      last = now;
+      if (geometryDirty || transitions.size) measure();
       const elapsed = now - supernova;
       const bursting = supernova > 0 && elapsed < SUPERNOVA_DURATION;
+      const edges = cachedEdges;
+      const current = bursting ? [...edges, ...cachedShells] : edges;
+      new Set([...painted, ...current]).forEach(clearEdge);
+      painted = current;
+      edges.forEach((edge, i) => drawEdge(edge, motion.matches ? 0 : now / 1000, i * 2.4));
       if (bursting) {
         // Light up only the outer app boundary, then settle over three seconds.
         const intensity = motion.matches ? 0.6 : Math.min(1, elapsed / 45) * Math.pow(1 - elapsed / SUPERNOVA_DURATION, 0.45);
-        document.querySelectorAll(".app-shell").forEach((element, i) => {
-          if (!visible(element)) return;
-          const r = element.getBoundingClientRect();
-          drawEdge({ x: r.left, y: r.top, width: r.width, height: r.height,
-            radius: parseFloat(getComputedStyle(element).borderTopLeftRadius) || 0, burst: intensity },
-            motion.matches ? 0 : elapsed / 1000, i * 2.4);
+        cachedShells.forEach((edge, i) => {
+          drawEdge({ ...edge, burst: intensity }, motion.matches ? 0 : elapsed / 1000, i * 2.4);
         });
       }
       // Leave the last painted glow in place once an interaction settles. Focus
       // alone must not keep repainting the full-window canvas while reading.
-      if (!motion.matches && ((active && now < animateUntil) || bursting)) frame = requestAnimationFrame(paint);
+      if (!motion.matches && ((active && now < animateUntil) || bursting || transitions.size > 0)) frame = requestAnimationFrame(paint);
     };
     const redraw = () => {
       if (!frame) frame = requestAnimationFrame(paint);
     };
+    const invalidate = () => { geometryDirty = true; redraw(); };
     const refresh = () => {
+      geometryDirty = true;
       animateUntil = performance.now() + INTERACTION_DURATION;
       redraw();
     };
@@ -359,10 +406,31 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
       refresh();
     };
     const resize = () => { selectedLine.current = null; size(); refresh(); };
+    const resizeObserver = new ResizeObserver(invalidate);
+    const mutations = new MutationObserver(records => {
+      if (records.some(record => record.target !== layer)) invalidate();
+    });
+    const transition = (event: TransitionEvent) => {
+      if (!event.target) return;
+      if (event.type === "transitionrun") {
+        const properties = transitions.get(event.target) ?? new Set<string>();
+        properties.add(event.propertyName);
+        transitions.set(event.target, properties);
+      } else {
+        const properties = transitions.get(event.target);
+        properties?.delete(event.propertyName);
+        if (!properties?.size) transitions.delete(event.target);
+      }
+      invalidate();
+    };
     hover = target(Array.from(document.querySelectorAll(":hover")).at(-1) ?? null);
     focus = document.activeElement?.matches(":focus-visible") ? target(document.activeElement) : null;
     size();
     refresh();
+    mutations.observe(document.documentElement, { subtree: true, childList: true, attributes: true, characterData: true });
+    document.addEventListener("transitionrun", transition);
+    document.addEventListener("transitionend", transition);
+    document.addEventListener("transitioncancel", transition);
     // Reduced motion gets a steady rim, then a single redraw to clear it.
     const burstEnd = supernova > 0 ? window.setTimeout(redraw, Math.max(0, supernova + SUPERNOVA_DURATION - performance.now())) : undefined;
     document.addEventListener("pointerdown", refresh);
@@ -375,10 +443,14 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
     document.addEventListener("input", refresh);
     document.addEventListener("keyup", refresh);
     document.addEventListener("selectionchange", selectionChanged);
-    document.addEventListener("transitionend", refresh);
     window.addEventListener("resize", resize);
     motion.addEventListener("change", refresh);
     return () => {
+      mutations.disconnect();
+      resizeObserver.disconnect();
+      document.removeEventListener("transitionrun", transition);
+      document.removeEventListener("transitionend", transition);
+      document.removeEventListener("transitioncancel", transition);
       cancelAnimationFrame(frame);
       window.clearTimeout(burstEnd);
       ctx.clearRect(0, 0, width, height);
@@ -392,7 +464,6 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
       document.removeEventListener("input", refresh);
       document.removeEventListener("keyup", refresh);
       document.removeEventListener("selectionchange", selectionChanged);
-      document.removeEventListener("transitionend", refresh);
       window.removeEventListener("resize", resize);
       motion.removeEventListener("change", refresh);
     };
