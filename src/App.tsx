@@ -82,6 +82,7 @@ import type { FormatAction } from "./richMarkdown";
 import { addFolders, type EditorMode } from "./folders";
 import VoiceControl from "./VoiceControl";
 import NovaMark from "./NovaMark";
+import SignalBell from "./SignalBell";
 import GalaxyMark from "./GalaxyMark";
 import { useAppUpdate } from "./useAppUpdate";
 import { initialScrollTop } from "./scrollSpace";
@@ -1664,6 +1665,7 @@ export default function App() {
             <span />
             {folders.length} {folders.length === 1 ? "folder" : "folders"} ·
             {mobile ? "available offline" : "on this device"}
+            <SignalBell />
           </div>
           <p>{mobile ? "Cloud notes save and sync automatically." : "Drag folder handles to organize your space."}</p>
           <div className="sidebar-actions">

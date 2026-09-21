@@ -28,6 +28,8 @@
 .app-shell[data-compact="true"] .workspace-label { margin-top: 20px; }
 .app-shell[data-compact="true"] :is(.icon-button, .root-menu summary, .file-open, .directory-title, .root-title) { min-height: 44px; }
 .app-shell[data-compact="true"] .icon-button { min-width: 44px; }
+.app-shell[data-compact="true"] .sidebar-actions { display: flex; gap: 10px; }
+.app-shell[data-compact="true"] .sidebar-action { width: 44px; height: 44px; }
 .app-shell[data-compact="true"] :is(.file-star, .file-edit) { opacity: 1; }
 .app-shell[data-compact="true"] :is(.folder-drag-handle, .sidebar-action.focus-toggle, .search-trigger kbd, .rail-footer, .bookmark-tip, .panel-toggle-zone, .status-terminal-controls, .terminal-panel) { display: none; }
 .app-shell[data-compact="true"] .tab-bar { height: 50px; padding: 0 6px; }
