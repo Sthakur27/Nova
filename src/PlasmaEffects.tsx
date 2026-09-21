@@ -3,6 +3,7 @@ import { EditorView } from "@codemirror/view";
 import { overflowClip } from "./overflowClip";
 
 const SUPERNOVA_DURATION = 3000;
+const INTERACTION_DURATION = 700;
 const targets = "button:not(:disabled), a, summary, select, input, .bookmark-card, .note-tab, .file-row, .root-header";
 type Edge = { x: number; y: number; width: number; height: number; radius?: number; selected?: boolean; burst?: number; clip?: ReturnType<typeof overflowClip> };
 type SelectedLine = { kind: "reader"; element: Element; row: number } | { kind: "editor"; element: HTMLElement };
@@ -35,6 +36,7 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
     let focus: Element | null = null;
     let frame = 0;
     let last = 0;
+    let animateUntil = 0;
     let width = innerWidth;
     let height = innerHeight;
     const size = () => {
@@ -304,10 +306,16 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
             motion.matches ? 0 : elapsed / 1000, i * 2.4);
         });
       }
-      if (!motion.matches && (active || bursting)) frame = requestAnimationFrame(paint);
+      // Leave the last painted glow in place once an interaction settles. Focus
+      // alone must not keep repainting the full-window canvas while reading.
+      if (!motion.matches && ((active && now < animateUntil) || bursting)) frame = requestAnimationFrame(paint);
+    };
+    const redraw = () => {
+      if (!frame) frame = requestAnimationFrame(paint);
     };
     const refresh = () => {
-      if (!frame) frame = requestAnimationFrame(paint);
+      animateUntil = performance.now() + INTERACTION_DURATION;
+      redraw();
     };
     const target = (element: EventTarget | null) => {
       if (!(element instanceof Element)) return null;
@@ -356,7 +364,8 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
     size();
     refresh();
     // Reduced motion gets a steady rim, then a single redraw to clear it.
-    const burstEnd = supernova > 0 ? window.setTimeout(refresh, Math.max(0, supernova + SUPERNOVA_DURATION - performance.now())) : undefined;
+    const burstEnd = supernova > 0 ? window.setTimeout(redraw, Math.max(0, supernova + SUPERNOVA_DURATION - performance.now())) : undefined;
+    document.addEventListener("pointerdown", refresh);
     document.addEventListener("pointerover", over);
     document.addEventListener("pointerout", out);
     document.addEventListener("focusin", focused);
@@ -373,6 +382,7 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
       cancelAnimationFrame(frame);
       window.clearTimeout(burstEnd);
       ctx.clearRect(0, 0, width, height);
+      document.removeEventListener("pointerdown", refresh);
       document.removeEventListener("pointerover", over);
       document.removeEventListener("pointerout", out);
       document.removeEventListener("focusin", focused);
