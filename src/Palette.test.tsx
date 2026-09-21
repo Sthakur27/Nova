@@ -21,7 +21,7 @@ it.each(["everywhere", "current"] as const)(
       />,
     );
     expect(markup).toContain("Draft.md");
-    expect(markup).toContain("Search files, bookmarks, and text");
+    expect(markup).toContain("Search files, bookmarks, text, and settings");
     expect(getActiveText).not.toHaveBeenCalled();
   },
 );

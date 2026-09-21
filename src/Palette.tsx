@@ -12,6 +12,7 @@ import {
   LayoutGrid,
   Command,
   Search,
+  Settings2,
   TextSearch,
   X,
 } from "lucide-react";
@@ -86,7 +87,7 @@ export default function Palette({
   }, [onClose]);
   const files = useMemo(
     () =>
-      filter === "Text" || filter === "Bookmarks"
+      filter === "Settings" || filter === "Text" || filter === "Bookmarks"
         ? []
         : filenameMatches(
             searchFolders.flatMap((folder) =>
@@ -102,7 +103,7 @@ export default function Palette({
   );
   const localHits = useMemo(
     () =>
-      activeNote && currentOnly && query.trim() && filter !== "Files" && filter !== "Bookmarks"
+      activeNote && currentOnly && query.trim() && filter !== "Settings" && filter !== "Files" && filter !== "Bookmarks"
         ? searchCurrentNote({ ...activeNote, text: getActiveText() }, query)
         : [],
     [activeNote, currentOnly, query, filter, getActiveText],
@@ -126,18 +127,18 @@ export default function Palette({
     [activeNote, currentOnly, query],
   );
   const textHits =
-    filter === "Files" || filter === "Bookmarks"
+    filter === "Settings" || filter === "Files" || filter === "Bookmarks"
       ? []
       : currentOnly
         ? localHits
         : hits;
   const bookmarkHits =
-    filter === "Files" || filter === "Text"
+    filter === "Settings" || filter === "Files" || filter === "Text"
       ? []
       : currentOnly
         ? localBookmarks
         : bookmarks;
-  const matchingCommands = filter === "All" ? commands.filter((command) =>
+  const matchingCommands = (filter === "Settings" || (filter === "All" && query.trim())) ? commands.filter((command) =>
     query.trim().toLowerCase().split(/\s+/).every((word) =>
       `${command.label} ${command.keywords ?? ""}`.toLowerCase().includes(word)),
   ) : [];
@@ -166,7 +167,7 @@ export default function Palette({
     setBookmarks([]);
     setError("");
     setIndex(0);
-    if (currentOnly || !query.trim() || filter === "Files") {
+    if (currentOnly || !query.trim() || filter === "Files" || filter === "Settings") {
       setBusy(false);
       return;
     }
@@ -245,12 +246,12 @@ export default function Palette({
               ),
             );
           }
-          if (e.key === "Enter" && e.target === input.current && matchingCommands[index]) {
+          if (e.key === "Enter" && e.target === input.current && matchingCommands[index - rows.length]) {
             e.preventDefault();
-            runCommand(matchingCommands[index]);
-          } else if (e.key === "Enter" && e.target === input.current && rows[index - matchingCommands.length]) {
+            runCommand(matchingCommands[index - rows.length]);
+          } else if (e.key === "Enter" && e.target === input.current && rows[index]) {
             e.preventDefault();
-            const row = rows[index - matchingCommands.length];
+            const row = rows[index];
             select(
               row.root,
               row.path,
@@ -275,6 +276,11 @@ export default function Palette({
           }
         }}
       >
+        <div className="console-header">
+          <span className="console-emblem" aria-hidden="true"><Command size={15} /></span>
+          <span>Command console</span>
+          <span className="console-status"><i aria-hidden="true" />{busy ? "Searching" : "Ready"}</span>
+        </div>
         <div className="search-scope">
           <ScopeToggle
             label="Search scope"
@@ -298,6 +304,7 @@ export default function Palette({
             { name: "Files", Icon: FileText },
             { name: "Bookmarks", Icon: BookmarkIcon },
             { name: "Text", Icon: TextSearch },
+            { name: "Settings", Icon: Settings2 },
           ].map(({ name: f, Icon }) => (
             <button
               key={f}
@@ -314,7 +321,7 @@ export default function Palette({
             </button>
           ))}
           <span>
-            {currentOnly
+            {filter === "Settings" ? "Global settings" : currentOnly
               ? "Searching current text"
               : `Searching ${folders.length} ${folders.length === 1 ? "folder" : "folders"}`}
           </span>
@@ -327,11 +334,11 @@ export default function Palette({
             autoCapitalize="none"
             autoFocus
             ref={input}
-            aria-label="Search files, bookmarks, and text"
+            aria-label="Search files, bookmarks, text, and settings"
             placeholder={
-              currentOnly
+              filter === "Settings" ? "Find a setting…" : currentOnly
                 ? "Find in this note…"
-                : "A filename, a bookmark, a command…"
+                : "A filename, a bookmark, a setting…"
             }
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -350,23 +357,6 @@ export default function Palette({
           role="listbox"
           aria-label="Search results"
         >
-          {matchingCommands.length > 0 && <div className="section-label">Commands</div>}
-          {matchingCommands.map((command, i) => (
-            <button
-              role="option"
-              aria-selected={i === index}
-              className="search-result"
-              key={command.id}
-              onClick={() => runCommand(command)}
-            >
-              <Command size={17} aria-hidden="true" />
-              <span>
-                <strong>{command.label}</strong>
-                <small>{command.description}</small>
-              </span>
-              <kbd>↵</kbd>
-            </button>
-          ))}
           {files.length > 0 && (
             <div className="section-label">
               {query ? "File names" : "Your files"} <span>{files.length}</span>
@@ -375,7 +365,7 @@ export default function Palette({
           {files.map((f, i) => (
             <button
               role="option"
-              aria-selected={matchingCommands.length + i === index}
+              aria-selected={i === index}
               className="search-result"
               key={f.root + ":" + f.path}
               onClick={() => select(f.root, f.path)}
@@ -398,7 +388,7 @@ export default function Palette({
           {bookmarkHits.map((hit, i) => (
             <button
               role="option"
-              aria-selected={matchingCommands.length + files.length + i === index}
+              aria-selected={files.length + i === index}
               className="search-result"
               key={hit.root + ":" + hit.path + ":" + hit.bookmark.id}
               onClick={() =>
@@ -427,7 +417,7 @@ export default function Palette({
           {textHits.map((hit, i) => (
             <button
               role="option"
-              aria-selected={matchingCommands.length + files.length + bookmarkHits.length + i === index}
+              aria-selected={files.length + bookmarkHits.length + i === index}
               className="search-result"
               key={hit.root + ":" + hit.path + ":" + hit.line + ":" + i}
               onClick={() =>
@@ -453,6 +443,23 @@ export default function Palette({
               </span>
             </button>
           ))}
+          {matchingCommands.length > 0 && <div className="section-label">Settings</div>}
+          {matchingCommands.map((command, i) => (
+            <button
+              role="option"
+              aria-selected={rows.length + i === index}
+              className="search-result"
+              key={command.id}
+              onClick={() => runCommand(command)}
+            >
+              <Settings2 size={17} aria-hidden="true" />
+              <span>
+                <strong>{command.label}</strong>
+                <small>{command.description}</small>
+              </span>
+              <kbd>↵</kbd>
+            </button>
+          ))}
           {!currentOnly && busy && (
             <p className="search-message">Looking inside your files…</p>
           )}
@@ -475,7 +482,7 @@ export default function Palette({
             <kbd>Esc</kbd> to close
           </span>
           <span>
-            {currentOnly
+            {filter === "Settings" ? "Applies across your workspace" : currentOnly
               ? "Includes unsaved edits"
               : "Text search uses saved files"}
           </span>

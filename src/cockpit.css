@@ -1,0 +1,300 @@
+/* Regular mode omits the decorative cockpit furniture. */
+.console-header, .focus-flight-label, .waypoint-id i { display: none; }
+.app-shell[data-galaxy="true"] .sidebar-actions {
+  display: grid;
+  gap: 0;
+  grid-template-areas: ". add ." "settings . sync" ". focus .";
+  grid-template-columns: repeat(3, 36px);
+  grid-template-rows: repeat(3, 36px);
+  width: max-content;
+  margin-inline: auto;
+  padding-bottom: 16px;
+}
+.app-shell[data-galaxy="true"] .sidebar-actions > .sidebar-action:nth-child(1) { grid-area: add; --action-accent: #d6bd88; }
+.app-shell[data-galaxy="true"] .sidebar-actions > .sidebar-action:nth-child(2) { grid-area: settings; --action-accent: #a990c8; }
+.app-shell[data-galaxy="true"] .sidebar-actions > .sidebar-action:nth-child(3) { grid-area: sync; --action-accent: #8fb8ce; }
+.app-shell[data-galaxy="true"] .sidebar-actions > .sidebar-action:nth-child(4) { grid-area: focus; --action-accent: #94bba5; }
+.app-shell[data-galaxy="true"] .sidebar-actions > .sidebar-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(145deg, #ffffff09, #ffffff02);
+  border: 1px solid #ffffff12;
+  border-radius: 50%;
+  box-shadow: 0 3px 0 #00000030, inset 0 1px 0 #ffffff08;
+  width: 36px;
+  flex-shrink: 0;
+  font-size: 12px;
+  height: 36px;
+  padding: 0;
+  color: #a8a6b4;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+}
+.app-shell[data-galaxy="true"] .sidebar-actions > .sidebar-action svg {
+  flex-shrink: 0;
+  color: #a990c8;
+}
+.app-shell[data-galaxy="true"] .sidebar-actions > .sidebar-action:hover {
+  background: #bda0ed0c;
+  border-color: var(--action-accent);
+  color: #e2d8ef;
+}
+.app-shell[data-galaxy="true"] .sidebar-actions > .sidebar-action:hover svg { color: var(--action-accent); }
+.app-shell[data-galaxy="true"] .sidebar-actions > .sidebar-action:focus-visible {
+  outline: 2px solid var(--action-accent);
+  outline-offset: 4px;
+}
+.app-shell[data-galaxy="true"] .sidebar-actions > .sidebar-action:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #00000030, inset 0 1px 3px #00000024;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell[data-galaxy="true"] .sidebar-actions > .sidebar-action { transition: none; }
+}
+/* Cockpit prototype: instruments around a quiet writing surface. */
+.app-shell[data-galaxy="true"] .palette {
+  border-color: #bfa0ed45;
+  border-radius: 16px;
+  background: linear-gradient(155deg, #292432, #17171e 65%);
+  box-shadow: 0 28px 100px #000a, 0 0 45px #b193d210, inset 0 1px #e2caff12;
+}
+.app-shell[data-galaxy="true"] .console-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 19px;
+  border-bottom: 1px solid #c4a4ef18;
+  color: #d5c0ed;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  background: linear-gradient(90deg, #c9a7ff09, transparent);
+}
+.app-shell[data-galaxy="true"] .console-emblem {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #c5a2ef35;
+  border-radius: 8px;
+  box-shadow: inset 0 1px #ffffff0a, 0 2px 0 #0004;
+}
+.app-shell[data-galaxy="true"] .console-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+  color: #9db5ad;
+  font-size: 8px;
+  letter-spacing: 1px;
+}
+.app-shell[data-galaxy="true"] .console-status i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #a4cfba;
+  box-shadow: 0 0 7px #a4cfba60;
+}
+.app-shell[data-galaxy="true"] .palette .palette-filters button {
+  border-radius: 50%;
+  width: 34px;
+  height: 34px;
+  border-color: #ffffff12;
+  box-shadow: 0 2px 0 #0004, inset 0 1px #ffffff08;
+}
+.app-shell[data-galaxy="true"] .palette .palette-filters button.selected {
+  box-shadow: 0 2px 0 #0004, 0 0 12px #b497dc18, inset 0 1px #ffffff12;
+}
+.app-shell[data-galaxy="true"] .palette .search-result {
+  position: relative;
+  border: 1px solid transparent;
+  margin-block: 2px;
+  padding-left: 17px;
+}
+.app-shell[data-galaxy="true"] .palette .search-result[aria-selected="true"] {
+  background: linear-gradient(90deg, #bea1e524, #bea1e507);
+  border-color: #c5a4ec30;
+  box-shadow: inset 2px 0 #d4b4fc;
+}
+.app-shell[data-galaxy="true"] .palette .search-result[aria-selected="true"] > svg {
+  color: #dfc6ff;
+  filter: drop-shadow(0 0 5px #c5a4ec55);
+}
+.app-shell[data-galaxy="true"] .palette .search-result:focus-visible {
+  outline: 2px solid #c5a4ec;
+  outline-offset: -2px;
+}
+.app-shell[data-galaxy="true"] .palette .search-result small { color: #a69aaf; }
+.app-shell[data-galaxy="true"] .palette :is(.palette-footer, .palette-filters > span) { color: #a396ae; }
+.app-shell[data-galaxy="true"] .palette kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 19px;
+  min-height: 20px;
+  padding: 1px 4px;
+  border: 1px solid #d4b4fc25;
+  border-bottom-width: 3px;
+  border-radius: 5px;
+  background: #ffffff05;
+  color: #cbb7de;
+}
+.app-shell[data-galaxy="true"] .palette .palette-footer { align-items: center; background: #00000016; }
+
+/* Bookmark cards read like a route with numbered beacons. */
+.app-shell[data-galaxy="true"] .bookmark-list { padding-left: 13px; }
+.app-shell[data-galaxy="true"] .bookmark-card {
+  border-color: #c8abec1a;
+  background: linear-gradient(120deg, #b99cdb08, transparent);
+}
+.app-shell[data-galaxy="true"] .bookmark-card::before {
+  content: "";
+  position: absolute;
+  top: 26px;
+  bottom: -40px;
+  left: -10px;
+  width: 1px;
+  background: #b89bdd30;
+  pointer-events: none;
+}
+.app-shell[data-galaxy="true"] .bookmark-card:last-child::before { bottom: 26px; }
+.app-shell[data-galaxy="true"] .bookmark-card::after {
+  content: "";
+  position: absolute;
+  top: 22px;
+  left: -13px;
+  width: 7px;
+  height: 7px;
+  border: 1px solid #bca0dd90;
+  border-radius: 50%;
+  background: #24202c;
+  pointer-events: none;
+}
+.app-shell[data-galaxy="true"] .bookmark-card.current {
+  border-color: #c8abec50;
+  background: linear-gradient(120deg, #b99cdb16, #b99cdb03);
+  box-shadow: inset 0 1px #d9bfff0b;
+}
+.app-shell[data-galaxy="true"] .bookmark-card.current::after {
+  background: #d4b4fc;
+  box-shadow: 0 0 9px #c6a1f680;
+}
+.app-shell[data-galaxy="true"] .waypoint-id { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.app-shell[data-galaxy="true"] .waypoint-id i {
+  width: 6px;
+  height: 6px;
+  border: 1px solid currentColor;
+  transform: rotate(45deg);
+}
+.app-shell[data-galaxy="true"] .bookmark-card.current .waypoint-id { color: #d4b4fc; }
+.app-shell[data-galaxy="true"] .bookmark-jump:focus-visible { outline: 2px solid #c5a4ec; outline-offset: -2px; border-radius: 7px; }
+
+/* Active tabs are lit instruments; inactive tabs stay quiet. */
+.app-shell[data-galaxy="true"] .note-tab.active {
+  border-top-color: #cfb0f5;
+  background: linear-gradient(180deg, #b393df1c, #b393df03);
+  box-shadow: inset 0 1px #e5d1ff12;
+}
+.app-shell[data-galaxy="true"] .note-tab.active > [role="tab"]::before {
+  content: "";
+  width: 5px;
+  height: 5px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #d8bbfc;
+  box-shadow: 0 0 7px #c6a1f680;
+}
+.app-shell[data-galaxy="true"] .top-sync-button::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  opacity: .75;
+}
+.app-shell[data-galaxy="true"] .top-sync-button[data-synced="true"]::before {
+  background: #a2cbb5;
+  border-color: #a2cbb5;
+  box-shadow: 0 0 6px #a2cbb540;
+}
+.app-shell[data-galaxy="true"] .top-sync-button[data-transferring="true"]::before {
+  border-color: #c5a4ec30;
+  border-top-color: #d8bbfc;
+  animation: cockpit-orbit 1s linear infinite;
+}
+.app-shell[data-galaxy="true"] .sidebar-action.focus-mode-exit {
+  width: auto;
+  padding: 0 14px;
+  gap: 9px;
+  border-radius: 20px;
+  border-color: #c5a4ec30;
+  --action-accent: #c5a4ec;
+}
+.app-shell[data-galaxy="true"] .focus-flight-label { font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; }
+@keyframes cockpit-orbit { to { transform: rotate(360deg); } }
+@keyframes console-arrive {
+  from { opacity: 0; transform: translateY(8px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes waypoint-acquire {
+  from { box-shadow: inset 0 0 0 1px #d4b4fc80, 0 0 14px #c6a1f630; }
+  to { box-shadow: inset 0 0 0 1px #d4b4fc00, 0 0 0 #c6a1f600; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .app-shell[data-galaxy="true"] .palette { animation: console-arrive 180ms ease-out; }
+  .app-shell[data-galaxy="true"] .bookmark-card.current { animation: waypoint-acquire 650ms ease-out; }
+  .app-shell[data-galaxy="true"] .focus-mode-exit { animation: console-arrive 260ms ease-out; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell[data-galaxy="true"] .top-sync-button[data-transferring="true"]::before { animation: none; }
+}
+.app-shell[data-galaxy="true"][data-compact="true"] .console-header { padding: 12px 16px; letter-spacing: 1px; }
+.app-shell[data-galaxy="true"][data-compact="true"] .palette-footer { flex-wrap: wrap; gap: 8px 12px; }
+.app-shell[data-galaxy="true"][data-compact="true"] .palette-footer > span:last-child { flex-basis: 100%; margin-left: 0; }
+
+.app-shell[data-galaxy="true"] .focus-flight-label { display: inline; }
+.app-shell[data-galaxy="true"] .waypoint-id i { display: inline-block; }
+.app-shell[data-galaxy="true"][data-compact="true"] .sidebar-actions { display: flex; gap: 10px; }
+.app-shell[data-galaxy="true"][data-compact="true"] .sidebar-actions > .sidebar-action { width: 44px; height: 44px; }
+.app-shell[data-galaxy="true"][data-compact="true"] .sidebar-action.focus-toggle { display: none; }
+
+/* Capture the panels separately so they can retreat while the workspace expands. */
+.app-shell[data-focus-flight] > .sidebar { view-transition-name: nova-navigation; }
+.app-shell[data-focus-flight] > .bookmark-rail { view-transition-name: nova-bookmarks; }
+.app-shell[data-focus-flight] > .main-panel { view-transition-name: nova-workspace; }
+.app-shell[data-focus-flight] .top-bars { view-transition-name: nova-top-bars; }
+.app-shell[data-focus-flight] .status-bar { view-transition-name: nova-status; }
+html[data-nova-focus-flight]::view-transition { pointer-events: none; }
+html[data-nova-focus-flight]::view-transition-group(*) {
+  animation-duration: 480ms;
+  animation-timing-function: cubic-bezier(.22, 1, .36, 1);
+}
+html[data-nova-focus-flight]::view-transition-old(nova-workspace),
+html[data-nova-focus-flight]::view-transition-new(nova-workspace) {
+  height: 100%;
+  object-fit: none;
+  object-position: top center;
+  animation-duration: 320ms;
+}
+/* Avoid two overlapping copies of the note while its width changes. */
+html[data-nova-focus-flight]::view-transition-old(nova-workspace) { animation: none; opacity: 0; }
+html[data-nova-focus-flight]::view-transition-new(nova-workspace) { animation: focus-workspace-arrive 240ms ease-out both; }
+html[data-nova-focus-flight="enter"]::view-transition-old(nova-navigation) { animation: focus-left-out 380ms ease-in both; }
+html[data-nova-focus-flight="enter"]::view-transition-old(nova-bookmarks) { animation: focus-right-out 380ms ease-in both; }
+html[data-nova-focus-flight="exit"]::view-transition-new(nova-navigation) { animation: focus-left-out 440ms cubic-bezier(.22, 1, .36, 1) reverse both; }
+html[data-nova-focus-flight="exit"]::view-transition-new(nova-bookmarks) { animation: focus-right-out 440ms cubic-bezier(.22, 1, .36, 1) reverse both; }
+html[data-nova-focus-flight="enter"]::view-transition-old(nova-top-bars) { animation: focus-top-out 300ms ease-in both; }
+html[data-nova-focus-flight="enter"]::view-transition-old(nova-status) { animation: focus-bottom-out 220ms ease-in both; }
+html[data-nova-focus-flight="exit"]::view-transition-new(nova-top-bars) { animation: focus-top-out 400ms ease-out reverse both; }
+html[data-nova-focus-flight="exit"]::view-transition-new(nova-status) { animation: focus-bottom-out 300ms ease-out reverse both; }
+@keyframes focus-left-out { to { opacity: 0; transform: translateX(-70px) scale(.97); filter: blur(3px); } }
+@keyframes focus-right-out { to { opacity: 0; transform: translateX(70px) scale(.97); filter: blur(3px); } }
+@keyframes focus-top-out { to { opacity: 0; transform: translateY(-40px); } }
+@keyframes focus-bottom-out { to { opacity: 0; transform: translateY(20px); } }
+@keyframes focus-workspace-arrive { from { opacity: .45; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  html[data-nova-focus-flight]::view-transition-group(*),
+  html[data-nova-focus-flight]::view-transition-old(*),
+  html[data-nova-focus-flight]::view-transition-new(*) { animation: none !important; }
+}

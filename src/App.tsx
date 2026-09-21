@@ -1,3 +1,5 @@
+import SettingDialog from "./SettingDialog";
+import { settingChoices, toggleSetting } from "./settingCommands";
 import ViewOptions from "./ViewOptions";
 import TabButton from "./TabButton";
 import { openAfterTabClose } from "./closeTabNavigation";
@@ -10,6 +12,7 @@ import ReadFind from "./ReadFind";
 import FileTitle from "./FileTitle";
 import { mobile, supportsFrosted } from "./platform";
 import { useCompactLayout } from "./useCompactLayout";
+import { useFocusTransition } from "./useFocusTransition";
 import SyncSettings from "./SyncSettings";
 import { useDriveUploads } from "./useDriveUploads";
 import { useDriveConnection } from "./useDriveConnection";
@@ -145,6 +148,7 @@ export default function App() {
   const compact = useCompactLayout();
   const [mobileView, setMobileView] = useState<"notes" | "editor" | "bookmarks">("editor");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activeSettingId, setActiveSettingId] = useState<string | null>(null);
   const [defaultExtension, setDefaultExtension, extensionError] = usePreference<string>("default-extension", ".txt");
   const starQueue = useRef(Promise.resolve());
   const createdNotes = useRef(new Map<string, { root: string; path: string }>());
@@ -1206,7 +1210,8 @@ export default function App() {
     setDirty(true);
     preserveDraft();
   };
-  const changeFocusMode = useCallback((focused: boolean) => {
+  const transitionFocus = useFocusTransition(galaxyMode && !compact);
+  const changeFocusMode = useCallback((focused: boolean) => transitionFocus(focused, () => {
     if (!focused) {
       setNavigation(true);
       setRail(true);
@@ -1214,9 +1219,9 @@ export default function App() {
       setStatusBar(true);
     }
     setFocusMode(focused);
-  }, [setFocusMode, setNavigation, setRail, setTopBars, setStatusBar]);
+  }), [transitionFocus, setFocusMode, setNavigation, setRail, setTopBars, setStatusBar]);
   useEffect(() => {
-    if (compact || syncFolder || settingsOpen || palette || bookmarkDraft || renameTarget || fileAction) return;
+    if (compact || syncFolder || settingsOpen || activeSettingId || palette || bookmarkDraft || renameTarget || fileAction) return;
     return installPanelShortcuts(window, mod === "⌘", panel => {
       if (focusMode) setFocusMode(false);
       if (panel === "left") setNavigation(focusMode || !navigation);
@@ -1224,17 +1229,17 @@ export default function App() {
       else if (panel === "top") setTopBars(focusMode || !topBars);
       else changeTerminalOpen(focusMode || !(terminalOpen && statusBar));
     });
-  }, [compact, syncFolder, settingsOpen, palette, bookmarkDraft, renameTarget, fileAction, focusMode, navigation, rail, topBars, terminalOpen, statusBar, changeTerminalOpen, setFocusMode, setNavigation, setRail, setTopBars]);
+  }, [compact, syncFolder, settingsOpen, activeSettingId, palette, bookmarkDraft, renameTarget, fileAction, focusMode, navigation, rail, topBars, terminalOpen, statusBar, changeTerminalOpen, setFocusMode, setNavigation, setRail, setTopBars]);
   useEffect(() => {
     const toggleFocus = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "g" || event.isComposing) return;
       event.preventDefault();
       event.stopPropagation();
-      if (!event.repeat && !syncFolder && !settingsOpen && !palette && !bookmarkDraft && !renameTarget && !fileAction) changeFocusMode(!focusModeActive);
+      if (!event.repeat && !syncFolder && !settingsOpen && !activeSettingId && !palette && !bookmarkDraft && !renameTarget && !fileAction) changeFocusMode(!focusModeActive);
     };
     window.addEventListener("keydown", toggleFocus, { capture: true });
     return () => window.removeEventListener("keydown", toggleFocus, { capture: true });
-  }, [focusModeActive, changeFocusMode, syncFolder, settingsOpen, palette, bookmarkDraft, renameTarget, fileAction]);
+  }, [focusModeActive, changeFocusMode, syncFolder, settingsOpen, activeSettingId, palette, bookmarkDraft, renameTarget, fileAction]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (syncFolder || (mobile && !drive.status.connected)) return;
@@ -1251,15 +1256,15 @@ export default function App() {
             url.searchParams.set("new-window", "true");
             window.open(url.href, "_blank", "noopener");
           }
-        } else if (!syncFolder && !settingsOpen && !palette && !bookmarkDraft && !renameTarget && !fileAction) void newTab();
+        } else if (!syncFolder && !settingsOpen && !activeSettingId && !palette && !bookmarkDraft && !renameTarget && !fileAction) void newTab();
         return;
       }
       if (e.key === ",") {
         e.preventDefault();
-        if (!palette && !bookmarkDraft) setSettingsOpen(true);
+        if (!palette && !bookmarkDraft) { setActiveSettingId(null); setSettingsOpen(true); }
         return;
       }
-      if (settingsOpen || renameTarget || fileAction) return;
+      if (settingsOpen || activeSettingId || renameTarget || fileAction) return;
       if (e.key.toLowerCase() === "k") {
         e.preventDefault();
         setPalette((p) => !p);
@@ -1275,7 +1280,7 @@ export default function App() {
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [drive.status.connected, save, beginBookmark, syncFolder, settingsOpen, palette, bookmarkDraft, renameTarget, fileAction, newTab]);
+  }, [drive.status.connected, save, beginBookmark, syncFolder, settingsOpen, activeSettingId, palette, bookmarkDraft, renameTarget, fileAction, newTab]);
   useEffect(() => {
     const preserveSession = async () => {
       const c = current.current;
@@ -1578,6 +1583,29 @@ export default function App() {
   const lastSyncedLabel = lastSyncedAt
     ? `Last synced at ${new Date(lastSyncedAt).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"})}`
     : "Not synced this session";
+  const settingCommands = [
+    { id: "open-settings", label: "Open settings", description: "All app preferences, including the default file extension", keywords: "preferences default file extension", run: () => setSettingsOpen(true) },
+    toggleSetting("galaxy", "Galaxy mode", galaxyMode, setGalaxyMode, "appearance glow"),
+    ...settingChoices("background", "Background", backgroundMode, availableBackgroundModes, setBackgroundMode, backgroundLabels, "appearance translucency transparency opaque galaxy"),
+    ...(supportsFrosted ? [toggleSetting("frosted-panes", "Frosted panels", frostedPanes, setFrostedPanes, "appearance blur translucency")] : []),
+    ...settingChoices("font", "Font", editorFont, editorFonts, setEditorFont, { "dm-sans": "DM Sans", lora: "Lora", mono: "Monospace" }, "typography typeface"),
+    ...settingChoices("text-size", "Text size", fontSize, textSizes, setFontSize, undefined, "font size typography"),
+    ...settingChoices("text-width", "Text width", textWidth, textWidths, setTextWidth, { full: "Full width" }, "editor width"),
+    ...settingChoices("line-spacing", "Line spacing", lineSpacing, lineSpacings, setLineSpacing, undefined, "line height typography"),
+    ...settingChoices("reading-layout", "Reading layout", readingLayout, ["continuous", "pages"] as const, setReadingLayout),
+    toggleSetting("line-numbers", "Line numbers", showLineNumbers, setShowLineNumbers, "numbering gutter"),
+    toggleSetting("line-highlight", "Line highlight", showLineHighlight, setShowLineHighlight, "current line"),
+    toggleSetting("word-wrap", "Word wrap", wordWrap, setWordWrap, "long lines"),
+    toggleSetting("spellcheck", "Spellcheck", spellcheck, setSpellcheck, "spelling"),
+    toggleSetting("bookmarks-panel", "Bookmarks panel", rail, setRail, "sidebar"),
+    ...(!compact ? [
+      toggleSetting("navigation-panel", "Navigation panel", navigation, setNavigation, "sidebar files"),
+      toggleSetting("top-bars", "Top bars", topBars, setTopBars, "toolbar tabs"),
+      toggleSetting("status-bar", "Status bar", statusBar, setStatusBar),
+      toggleSetting("focus-mode", "Focus mode", focusMode, setFocusMode),
+    ] : []),
+  ];
+  const activeSetting = settingCommands.find(command => command.id === activeSettingId)?.configuration;
   return (
     <div className="app-shell" data-compact={compact} data-mobile={mobile} data-mobile-view={mobileView} data-top-bars={compact || topBars} data-focus-mode={!compact && focusMode} data-window-focused={windowFocused} data-galaxy={galaxyMode} data-background={supportsTranslucency ? backgroundMode : "off"} data-frosted-panes={supportsFrosted && frostedPanes} data-editor-size={fontSize} data-editor-font={editorFont} data-text-width={textWidth} data-line-spacing={lineSpacing}
       onPointerMove={(event) => {
@@ -1595,12 +1623,13 @@ export default function App() {
         <button className="sidebar-action focus-toggle focus-mode-exit" aria-label="Exit focus mode" aria-pressed={true}
           aria-describedby="exit-focus-tooltip" aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+G`} onClick={() => changeFocusMode(false)}>
           <BlackHoleIcon />
+          <span className="focus-flight-label" aria-hidden="true">Focus</span>
           <span className="focus-tooltip" id="exit-focus-tooltip" role="tooltip">
             <span>Exit focus mode</span><span className="focus-tooltip-keys"><kbd>{mod}</kbd><kbd>G</kbd></span>
           </span>
         </button>
       )}
-      <PlasmaEffects active={!compact && galaxyMode && windowFocused} supernova={supernova} dirty={dirty} lineHighlight={showLineHighlight} />
+      {galaxyMode && <PlasmaEffects active={!compact && windowFocused} supernova={supernova} dirty={dirty} lineHighlight={showLineHighlight} />}
       {compact && <nav className="mobile-navigation" aria-label="Main navigation">
         <button aria-label="Your notes" aria-pressed={mobileView === "notes"} onClick={() => setMobileView("notes")}><FolderOpen size={20} /><span>Notes</span></button>
         <button aria-label="Write note" aria-pressed={mobileView === "editor"} onClick={() => setMobileView("editor")}><Pencil size={20} /><span>Write</span></button>
@@ -1665,7 +1694,7 @@ export default function App() {
             <span />
             {folders.length} {folders.length === 1 ? "folder" : "folders"} ·
             {mobile ? "available offline" : "on this device"}
-            <SignalBell />
+            {galaxyMode && <SignalBell />}
           </div>
           <p>{mobile ? "Cloud notes save and sync automatically." : "Drag folder handles to organize your space."}</p>
           <div className="sidebar-actions">
@@ -1710,7 +1739,7 @@ export default function App() {
             onClick={() => dropTab(tabId({ root: workspace.root, path }), { pane: activePane, edge: "right", before: null })}><PanelsTopLeft size={17} /></button>
           <button className="icon-button new-tab-button" onClick={() => void newTab()} aria-label="New tab" title="New tab (Ctrl T)"><Plus size={16} /></button>
           <div className="tab-bar-space" />
-          {drive.status.connected && <div className="top-drive-actions"><button className="top-sync-button" data-pending={hasUnsyncedChanges || syncNeedsAttention} aria-label={`Sync settings · ${syncStatus} · ${lastSyncedLabel}`}
+          {drive.status.connected && <div className="top-drive-actions"><button className="top-sync-button" data-pending={hasUnsyncedChanges || syncNeedsAttention} data-transferring={!!uploads.transferringRoot && !syncNeedsAttention} data-synced={syncStatus === "Up to date"} aria-label={`Sync settings · ${syncStatus} · ${lastSyncedLabel}`}
             title={`${syncStatus} · ${lastSyncedLabel}\nConnected as ${drive.status.email}${lastSyncedAt ? ` · Last synced ${new Date(lastSyncedAt).toLocaleString()}` : ""}`} aria-haspopup="dialog" onClick={() => showSync(workspace)}>
             <Cloud size={16} aria-hidden="true" /><span>{syncStatus}</span>
           </button><button className="icon-button" aria-label="Open workspace in Google Drive"
@@ -1888,7 +1917,7 @@ export default function App() {
         {data && mode === "read" && <ReadFind
           key={JSON.stringify([workspace.root, path, data.revision])}
           text={preview}
-          disabled={!!(syncFolder || settingsOpen || palette || bookmarkDraft || renameTarget || fileAction)}
+          disabled={!!(syncFolder || settingsOpen || activeSettingId || palette || bookmarkDraft || renameTarget || fileAction)}
           onJump={jump}
         />}
         <EditorPanes layout={paneLayout} active={activePane} compact={compact}
@@ -1964,7 +1993,7 @@ export default function App() {
                   }}
                 >
                   <div className="bookmark-meta">
-                    <span>{String(i + 1).padStart(2, "0")}</span>
+                    <span className="waypoint-id"><i aria-hidden="true" />{String(i + 1).padStart(2, "0")}</span>
                     <span>
                       {b.unresolved
                         ? "Needs a new anchor"
@@ -2043,13 +2072,9 @@ export default function App() {
       {palette && (
         <Palette
           folders={folders}
-          commands={[{
-            id: "line-numbers",
-            label: "Toggle line numbers",
-            description: showLineNumbers ? "Currently on · Hide line numbers" : "Currently off · Show line numbers",
-            keywords: "show hide numbering gutter",
-            run: toggleLineNumbers,
-          }]}
+          commands={settingCommands.map(command => command.configuration
+            ? { ...command, run: () => setActiveSettingId(command.id) }
+            : command)}
           scope={searchScope}
           onScopeChange={setSearchScope}
           activeNote={data?{root:workspace.root,path,bookmarks:marksRef.current}:null}
@@ -2098,6 +2123,10 @@ export default function App() {
           onClose={() => setRenameTarget(null)}
         />
       )}
+      {activeSetting && <SettingDialog configuration={activeSetting}
+        onClose={() => setActiveSettingId(null)}
+        onOpenSettings={() => { setActiveSettingId(null); setSettingsOpen(true); }}
+        storageError={editorFontError || spacingError || widthError || galaxyError || translucencyError || frostedPanesError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
       {settingsOpen && <Settings onResetLocal={mobile ? resetLocalState : undefined} resetDisabled={!drive.status.connected || drive.busy || !!uploads.activeRoot || cloud.loading || saving} updater={desktop ? appUpdate : undefined} syncConnected={drive.status.connected} onSyncSetup={() => { setSettingsOpen(false); showSync(workspace); }} onClose={() => setSettingsOpen(false)}
         onOpenDrive={() => void uploads.openFolder(workspace.root)} openDriveDisabled={!!uploads.activeRoot || workspace.root === "demo"}
         galaxy={galaxyMode} onGalaxy={setGalaxyMode}
