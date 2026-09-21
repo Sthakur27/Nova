@@ -243,6 +243,9 @@ kbd {
   gap: 8px;
   padding-bottom: 16px;
 }
+.local-indicator + .sidebar-actions {
+  margin-top: 16px;
+}
 .sidebar-action {
   display: flex;
   align-items: center;

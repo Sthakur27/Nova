@@ -1691,7 +1691,7 @@ export default function App() {
             {mobile ? "available offline" : "on this device"}
             {galaxyMode && <SignalBell />}
           </div>
-          <p>{mobile ? "Cloud notes save and sync automatically." : "Drag folder handles to organize your space."}</p>
+          {mobile && <p>Cloud notes save and sync automatically.</p>}
           <div className="sidebar-actions">
             <button className="sidebar-action" hidden={mobile} aria-label="Add folders" title="Add folders" onClick={openFolder}>
               <Plus size={17} aria-hidden="true" />
