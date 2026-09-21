@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import PlasmaEffects from "./PlasmaEffects";
+import type { GalaxyPerformance } from "./galaxyPerformance";
 
 let container: HTMLDivElement, root: Root;
 let now: number, nextFrame: number;
@@ -20,10 +21,10 @@ function advance(milliseconds: number, step = 40) {
     vi.advanceTimersByTime(step);
   }
 }
-async function render(active = true, supernova = 0) {
+async function render(active = true, supernova = 0, performanceMode: GalaxyPerformance | null = "saver") {
   await act(async () => root.render(<div className="app-shell">
     <button className="brand-emblem">Nova</button>
-    <PlasmaEffects active={active} dirty={false} lineHighlight={false} supernova={supernova} />
+    <PlasmaEffects performanceMode={performanceMode ?? undefined} active={active} dirty={false} lineHighlight={false} supernova={supernova} />
   </div>));
 }
 beforeEach(() => {
@@ -200,4 +201,71 @@ it.each([false, true])("bounds particle work for large effects (supernova: %s)",
   await render(!burst, burst ? now : 0);
   advance(40);
   expect(drawImage).toHaveBeenCalledTimes(burst ? 240 : 32);
+});
+
+function hoverControl() {
+  const button = container.querySelector("button")!;
+  const matches = button.matches.bind(button);
+  vi.spyOn(button, "matches").mockImplementation(selector => selector === ":hover" || matches(selector));
+  button.dispatchEvent(new MouseEvent("pointerover", { bubbles: true }));
+  return button;
+}
+
+it("defaults to high performance and keeps a stationary hover animated until it leaves", async () => {
+  await render(true, 0, null);
+  const button = hoverControl();
+  advance(2000);
+  expect(frames.size + vi.getTimerCount()).toBeGreaterThan(0);
+  button.dispatchEvent(new MouseEvent("pointerout", { bubbles: true }));
+  advance(1000);
+  expect(frames.size + vi.getTimerCount()).toBe(0);
+});
+
+it("settles a stationary hover in Saver and applies mode changes immediately", async () => {
+  await render(true, 0, "high"); hoverControl(); advance(1000);
+  expect(frames.size + vi.getTimerCount()).toBeGreaterThan(0);
+  await render(true, 0, "saver"); hoverControl(); advance(1000);
+  expect(frames.size + vi.getTimerCount()).toBe(0);
+  await render(true, 0, "high"); hoverControl(); advance(1000);
+  expect(frames.size + vi.getTimerCount()).toBeGreaterThan(0);
+  await render(false, 0, "high");
+  expect(frames.size + vi.getTimerCount()).toBe(0);
+});
+
+it("respects reduced motion even for a persistent hover in high performance", async () => {
+  Object.defineProperty(motion, "matches", { value: true });
+  await render(true, 0, "high"); hoverControl(); advance(1000);
+  expect(stroke).toHaveBeenCalled();
+  expect(frames.size + vi.getTimerCount()).toBe(0);
+});
+
+it("allows smoother high-performance effects without exceeding 60 FPS", async () => {
+  await render(true, 0, "high"); hoverControl(); advance(1000);
+  const paintedAt = new Set<number>();
+  stroke.mockImplementation(() => paintedAt.add(now));
+  advance(1000, 8);
+  expect(paintedAt.size).toBeGreaterThan(24);
+  expect(paintedAt.size).toBeLessThanOrEqual(60);
+});
+
+it("keeps keyboard-focused controls animated in high performance", async () => {
+  await render(true, 0, "high");
+  const button = container.querySelector("button")!;
+  const matches = button.matches.bind(button);
+  vi.spyOn(button, "matches").mockImplementation(selector => selector === ":focus-visible" || matches(selector));
+  button.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+  advance(2000);
+  expect(frames.size + vi.getTimerCount()).toBeGreaterThan(0);
+  button.dispatchEvent(new FocusEvent("focusout", { bubbles: true }));
+  advance(1000);
+  expect(frames.size + vi.getTimerCount()).toBe(0);
+});
+
+it("stops high-performance hover animation when its target is removed", async () => {
+  await render(true, 0, "high");
+  const button = hoverControl(); advance(1000);
+  expect(frames.size + vi.getTimerCount()).toBeGreaterThan(0);
+  await act(async () => { button.remove(); });
+  advance(1000);
+  expect(frames.size + vi.getTimerCount()).toBe(0);
 });

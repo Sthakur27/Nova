@@ -94,6 +94,7 @@ import { initialScrollTop } from "./scrollSpace";
 import { readFileMode, saveFileMode } from "./fileModes";
 import { RICH_DOCUMENT_LIMIT, supportsDocumentView } from "./documentLimits";
 import PlasmaEffects from "./PlasmaEffects";
+import { DEFAULT_GALAXY_PERFORMANCE, galaxyPerformanceModes, galaxyPerformanceLabels, type GalaxyPerformance } from "./galaxyPerformance";
 import {
   chooseWorkspaces,
   createNote,
@@ -168,6 +169,7 @@ export default function App() {
   const [renameTarget, setRenameTarget] = useState<{ folder: Workspace; path: string } | null>(null);
   const [readingLayout, setReadingLayout] = usePreference<"continuous" | "pages">("reading-layout", "continuous", ["continuous", "pages"]);
   const [readControls, setReadControls] = useState<HTMLDivElement | null>(null);
+  const [galaxyPerformance, setGalaxyPerformance, galaxyPerformanceError] = usePreference<GalaxyPerformance>("galaxy-performance", DEFAULT_GALAXY_PERFORMANCE, galaxyPerformanceModes);
   const [galaxyMode, setGalaxyMode, galaxyError] = usePreference<boolean>("galaxy", true);
   const [savedBackgroundMode, setBackgroundMode, translucencyError] = usePreference<typeof backgroundModes[number]>("translucent", "on", backgroundModes);
   const backgroundMode = !supportsFrosted && savedBackgroundMode === "frosted" ? "off" : savedBackgroundMode;
@@ -1589,6 +1591,7 @@ export default function App() {
   const settingCommands = [
     { id: "open-settings", label: "Open settings", description: "All app preferences, including the default file extension", keywords: "preferences default file extension", run: () => setSettingsOpen(true) },
     toggleSetting("galaxy", "Galaxy mode", galaxyMode, setGalaxyMode, "appearance glow"),
+    ...settingChoices("galaxy-performance", "Galaxy performance", galaxyPerformance, galaxyPerformanceModes, setGalaxyPerformance, galaxyPerformanceLabels, "appearance animation motion battery energy fps"),
     ...settingChoices("background", "Background", backgroundMode, availableBackgroundModes, setBackgroundMode, backgroundLabels, "appearance translucency transparency opaque galaxy"),
     ...(supportsFrosted ? [toggleSetting("frosted-panes", "Frosted panels", frostedPanes, setFrostedPanes, "appearance blur translucency")] : []),
     ...settingChoices("font", "Font", editorFont, editorFonts, setEditorFont, { "dm-sans": "DM Sans", lora: "Lora", mono: "Monospace" }, "typography typeface"),
@@ -1631,7 +1634,7 @@ export default function App() {
           </span>
         </button>
       )}
-      {galaxyMode && <PlasmaEffects active={!compact && windowFocused} supernova={supernova} dirty={dirty} lineHighlight={showLineHighlight} />}
+      {galaxyMode && <PlasmaEffects performanceMode={galaxyPerformance} active={!compact && windowFocused} supernova={supernova} dirty={dirty} lineHighlight={showLineHighlight} />}
       {compact && <nav className="mobile-navigation" aria-label="Main navigation">
         <button aria-label="Your notes" aria-pressed={mobileView === "notes"} onClick={() => setMobileView("notes")}><FolderOpen size={20} /><span>Notes</span></button>
         <button aria-label="Write note" aria-pressed={mobileView === "editor"} onClick={() => setMobileView("editor")}><Pencil size={20} /><span>Write</span></button>
@@ -2105,10 +2108,11 @@ export default function App() {
       {activeSetting && <SettingDialog configuration={activeSetting}
         onClose={() => setActiveSettingId(null)}
         onOpenSettings={() => { setActiveSettingId(null); setSettingsOpen(true); }}
-        storageError={editorFontError || spacingError || widthError || galaxyError || translucencyError || frostedPanesError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
+        storageError={editorFontError || spacingError || widthError || galaxyError || galaxyPerformanceError || translucencyError || frostedPanesError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
       {settingsOpen && <Settings onResetLocal={mobile ? resetLocalState : undefined} resetDisabled={!drive.status.connected || drive.busy || !!uploads.activeRoot || cloud.loading || saving} updater={desktop ? appUpdate : undefined} syncConnected={drive.status.connected} onSyncSetup={() => { setSettingsOpen(false); showSync(workspace); }} onClose={() => setSettingsOpen(false)}
         onOpenDrive={() => void uploads.openFolder(workspace.root)} openDriveDisabled={!!uploads.activeRoot || workspace.root === "demo"}
         galaxy={galaxyMode} onGalaxy={setGalaxyMode}
+        galaxyPerformance={galaxyPerformance} onGalaxyPerformance={setGalaxyPerformance}
         lineHighlight={showLineHighlight} onLineHighlight={setShowLineHighlight}
         lineNumbers={showLineNumbers} onLineNumbers={setShowLineNumbers} wordWrap={wordWrap} onWordWrap={setWordWrap}
         spellcheck={spellcheck} onSpellcheck={setSpellcheck} bookmarks={rail} onBookmarks={setRail}
@@ -2117,7 +2121,7 @@ export default function App() {
         editorFont={editorFont} onEditorFont={setEditorFont}
         textWidth={textWidth} onTextWidth={setTextWidth}
         lineSpacing={lineSpacing} onLineSpacing={setLineSpacing}
-        storageError={editorFontError || extensionError || spacingError || widthError || galaxyError || translucencyError || frostedPanesError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
+        storageError={editorFontError || extensionError || spacingError || widthError || galaxyError || galaxyPerformanceError || translucencyError || frostedPanesError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
       {bookmarkDraft && (
         <div
           className="overlay"

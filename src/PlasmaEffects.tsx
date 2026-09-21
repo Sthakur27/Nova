@@ -1,16 +1,16 @@
 import { useEffect, useRef } from "react";
 import { EditorView } from "@codemirror/view";
 import { overflowClip } from "./overflowClip";
+import { DEFAULT_GALAXY_PERFORMANCE, type GalaxyPerformance } from "./galaxyPerformance";
 
 const SUPERNOVA_DURATION = 3000;
 const INTERACTION_DURATION = 700;
-const FRAME_INTERVAL = 1000 / 24;
 const targets = "button:not(:disabled), a, summary, select, input, .bookmark-card, .note-tab, .file-row, .root-header";
 type Edge = { x: number; y: number; width: number; height: number; radius?: number; selected?: boolean; burst?: number; clip?: ReturnType<typeof overflowClip> };
 type SelectedLine = { kind: "reader"; element: Element; row: number } | { kind: "editor"; element: HTMLElement };
 
 /** A fixed violet-blue rim emits energy dots inward, clipped to each box. */
-export default function PlasmaEffects({ active, dirty, lineHighlight, supernova = 0 }: { active: boolean; dirty: boolean; lineHighlight: boolean; supernova?: number }) {
+export default function PlasmaEffects({ active, dirty, lineHighlight, supernova = 0, performanceMode = DEFAULT_GALAXY_PERFORMANCE }: { performanceMode?: GalaxyPerformance; active: boolean; dirty: boolean; lineHighlight: boolean; supernova?: number }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const selectedLine = useRef<SelectedLine | null>(null);
   useEffect(() => {
@@ -40,6 +40,8 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
     let last = -Infinity;
     let animateUntil = 0;
     let geometryDirty = true;
+    const frameInterval = 1000 / (performanceMode === "high" ? 60 : 24);
+    let keepAnimatingInteraction = false;
     let cachedEdges: Edge[] = [];
     let cachedShells: Edge[] = [];
     let painted: Edge[] = [];
@@ -218,6 +220,8 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
       };
       if (active && hover?.matches(":hover")) addControl(hover);
       if (active && focus?.matches(":focus-visible")) addControl(focus);
+      const interactiveElements = new Set(elements);
+      keepAnimatingInteraction = false;
       const emblem = document.querySelector(".brand-emblem");
       if (active && emblem) elements.add(emblem);
       const save = active && dirty ? document.querySelector('[data-unsaved="true"]') : null;
@@ -227,6 +231,7 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
         const r = element.getBoundingClientRect();
         const clip = overflowClip(element, width, height);
         if (r.right <= clip.left || r.left >= clip.right || r.bottom <= clip.top || r.top >= clip.bottom) continue;
+        if (interactiveElements.has(element)) keepAnimatingInteraction = true;
         edges.push({ x: r.left, y: r.top, width: r.width, height: r.height,
           clip,
           radius: parseFloat(getComputedStyle(element).borderTopLeftRadius) || 0 });
@@ -333,6 +338,7 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
     };
     const paint = (now: number) => {
       frame = 0;
+      if (!motion.matches && now - last < frameInterval - 0.5) { redraw(); return; }
       last = now;
       if (geometryDirty || transitions.size) measure();
       const elapsed = now - supernova;
@@ -349,15 +355,16 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
           drawEdge({ ...edge, burst: intensity }, motion.matches ? 0 : elapsed / 1000, i * 2.4);
         });
       }
-      // Leave the last painted glow in place once an interaction settles. Focus
-      // alone must not keep repainting the full-window canvas while reading.
-      if (!motion.matches && ((active && now < animateUntil) || bursting || transitions.size > 0)) redraw();
+      // High performance keeps visible hover/keyboard-focus effects alive.
+      // Saver settles to a static glow; window focus alone never runs forever.
+      const interacting = now < animateUntil || (performanceMode === "high" && keepAnimatingInteraction);
+      if (!motion.matches && ((active && interacting) || bursting || transitions.size > 0)) redraw();
     };
     const redraw = () => {
       if (frame || frameTimer !== undefined) return;
-      // Sleep between decorative frames instead of waking on every display
-      // refresh just to skip work, especially on high-refresh-rate screens.
-      const wait = motion.matches ? 0 : Math.max(0, FRAME_INTERVAL - (performance.now() - last));
+      // Saver sleeps between frames; High performance follows display refresh
+      // for smoother motion, with paint enforcing its 60 FPS ceiling.
+      const wait = motion.matches || performanceMode === "high" ? 0 : Math.max(0, frameInterval - (performance.now() - last));
       if (wait > 0) {
         frameTimer = window.setTimeout(() => {
           frameTimer = undefined;
@@ -475,6 +482,6 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
       window.removeEventListener("resize", resize);
       motion.removeEventListener("change", refresh);
     };
-  }, [active, dirty, lineHighlight, supernova]);
+  }, [active, dirty, lineHighlight, supernova, performanceMode]);
   return <canvas ref={canvas} className="plasma-effects" aria-hidden="true" />;
 }

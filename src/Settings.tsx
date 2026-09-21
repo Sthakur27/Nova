@@ -1,3 +1,4 @@
+import { galaxyPerformanceLabels, galaxyPerformanceModes, type GalaxyPerformance } from "./galaxyPerformance";
 import { confirmCloudReset } from "./confirmCloudReset";
 import AppUpdate from "./AppUpdate";
 import type { useAppUpdate } from "./useAppUpdate";
@@ -27,6 +28,7 @@ type Props = {
   onClose: () => void;
   syncConnected?: boolean; onSyncSetup?: () => void;
   onOpenDrive?: () => void; openDriveDisabled?: boolean;
+  galaxyPerformance: GalaxyPerformance; onGalaxyPerformance: (value: GalaxyPerformance) => void;
   galaxy: boolean; onGalaxy: (value: boolean) => void;
   lineHighlight: boolean; onLineHighlight: (value: boolean) => void;
   lineNumbers: boolean; onLineNumbers: (value: boolean) => void;
@@ -79,6 +81,13 @@ export default function Settings(props: Props) {
       {props.updater && <AppUpdate updater={props.updater} />}
       <section aria-labelledby="settings-appearance"><h2 id="settings-appearance">Appearance</h2>
         <Toggle title="Galaxy mode" description="A translucent backdrop with motion and glow around your workspace." checked={props.galaxy} onChange={props.onGalaxy} />
+        <div className="settings-row"><div><label htmlFor="settings-galaxy-performance">Galaxy performance</label>
+          <p id="settings-galaxy-performance-help">High performance keeps hovered and focused glows moving at up to 60 FPS. Saver uses up to 24 FPS and settles effects when you pause.</p></div>
+          <select id="settings-galaxy-performance" value={props.galaxyPerformance} aria-describedby="settings-galaxy-performance-help"
+            onChange={event => props.onGalaxyPerformance(event.target.value as GalaxyPerformance)}>
+            {galaxyPerformanceModes.map(mode => <option key={mode} value={mode}>{galaxyPerformanceLabels[mode]}</option>)}
+          </select>
+        </div>
       </section>
       <section aria-labelledby="settings-editor"><h2 id="settings-editor">Editor</h2>
         <div className="settings-row"><div><label htmlFor="settings-font">Font</label><p>Choose the text font. Default keeps the original typography.</p></div>
