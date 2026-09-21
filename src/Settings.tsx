@@ -30,6 +30,7 @@ type Props = {
   onOpenDrive?: () => void; openDriveDisabled?: boolean;
   galaxyPerformance: GalaxyPerformance; onGalaxyPerformance: (value: GalaxyPerformance) => void;
   galaxy: boolean; onGalaxy: (value: boolean) => void;
+  tooltips: boolean; onTooltips: (value: boolean) => void;
   lineHighlight: boolean; onLineHighlight: (value: boolean) => void;
   lineNumbers: boolean; onLineNumbers: (value: boolean) => void;
   wordWrap: boolean; onWordWrap: (value: boolean) => void;
@@ -80,6 +81,7 @@ export default function Settings(props: Props) {
       <fieldset disabled={resetting} style={{border:0, padding:0, margin:0, minWidth:0}}>
       {props.updater && <AppUpdate updater={props.updater} />}
       <section aria-labelledby="settings-appearance"><h2 id="settings-appearance">Appearance</h2>
+        <Toggle title="Show tooltips" description="Show helpful hints when hovering over controls." checked={props.tooltips} onChange={props.onTooltips} />
         <Toggle title="Galaxy mode" description="A translucent backdrop with motion and glow around your workspace." checked={props.galaxy} onChange={props.onGalaxy} />
         <div className="settings-row"><div><label htmlFor="settings-galaxy-performance">Galaxy performance</label>
           <p id="settings-galaxy-performance-help">High performance keeps hovered and focused glows moving at up to 60 FPS. Saver uses up to 24 FPS and settles effects when you pause.</p></div>

@@ -28,6 +28,7 @@ import { installPanelShortcuts } from "./panelShortcuts";
 import SidePanelControls from "./SidePanelControls";
 import TextWidthControl, { textWidths, type TextWidth } from "./TextWidthControl";
 import { usePreference } from "./preferences";
+import { useTooltips } from "./useTooltips";
 import { DEFAULT_EXTENSION } from "./fileExtensions";
 import { useBackgroundBlur } from "./useBackgroundBlur";
 import ScopeToggle from "./ScopeToggle";
@@ -171,6 +172,8 @@ export default function App() {
   const [readControls, setReadControls] = useState<HTMLDivElement | null>(null);
   const [galaxyPerformance, setGalaxyPerformance, galaxyPerformanceError] = usePreference<GalaxyPerformance>("galaxy-performance", DEFAULT_GALAXY_PERFORMANCE, galaxyPerformanceModes);
   const [galaxyMode, setGalaxyMode, galaxyError] = usePreference<boolean>("galaxy", true);
+  const [showTooltips, setShowTooltips, tooltipsError] = usePreference<boolean>("tooltips", true);
+  useTooltips(showTooltips);
   const [savedBackgroundMode, setBackgroundMode, translucencyError] = usePreference<typeof backgroundModes[number]>("translucent", "on", backgroundModes);
   const backgroundMode = !supportsFrosted && savedBackgroundMode === "frosted" ? "off" : savedBackgroundMode;
   const [frostedPanes, setFrostedPanes, frostedPanesError] = usePreference<boolean>("frosted-panes", false);
@@ -2112,6 +2115,7 @@ export default function App() {
       {settingsOpen && <Settings onResetLocal={mobile ? resetLocalState : undefined} resetDisabled={!drive.status.connected || drive.busy || !!uploads.activeRoot || cloud.loading || saving} updater={desktop ? appUpdate : undefined} syncConnected={drive.status.connected} onSyncSetup={() => { setSettingsOpen(false); showSync(workspace); }} onClose={() => setSettingsOpen(false)}
         onOpenDrive={() => void uploads.openFolder(workspace.root)} openDriveDisabled={!!uploads.activeRoot || workspace.root === "demo"}
         galaxy={galaxyMode} onGalaxy={setGalaxyMode}
+        tooltips={showTooltips} onTooltips={setShowTooltips}
         galaxyPerformance={galaxyPerformance} onGalaxyPerformance={setGalaxyPerformance}
         lineHighlight={showLineHighlight} onLineHighlight={setShowLineHighlight}
         lineNumbers={showLineNumbers} onLineNumbers={setShowLineNumbers} wordWrap={wordWrap} onWordWrap={setWordWrap}
@@ -2121,7 +2125,7 @@ export default function App() {
         editorFont={editorFont} onEditorFont={setEditorFont}
         textWidth={textWidth} onTextWidth={setTextWidth}
         lineSpacing={lineSpacing} onLineSpacing={setLineSpacing}
-        storageError={editorFontError || extensionError || spacingError || widthError || galaxyError || galaxyPerformanceError || translucencyError || frostedPanesError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
+        storageError={tooltipsError || editorFontError || extensionError || spacingError || widthError || galaxyError || galaxyPerformanceError || translucencyError || frostedPanesError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
       {bookmarkDraft && (
         <div
           className="overlay"

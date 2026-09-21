@@ -11,6 +11,7 @@ it("shows reset last only when enabled, confirms, locks controls, and surfaces f
   HTMLDialogElement.prototype.close = vi.fn();
   const noop = vi.fn();
   const props: ComponentProps<typeof Settings> = {
+    tooltips:true,onTooltips:noop,
     onClose:noop, galaxyPerformance:"high",onGalaxyPerformance:noop,galaxy:false,onGalaxy:noop,lineHighlight:false,onLineHighlight:noop,
     lineNumbers:false,onLineNumbers:noop,wordWrap:true,onWordWrap:noop,spellcheck:false,onSpellcheck:noop,
     bookmarks:true,onBookmarks:noop,editorFont:"default",onEditorFont:noop,fontSize:"default",onFontSize:noop,

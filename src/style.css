@@ -1999,6 +1999,10 @@ kbd {
 .cm-editor.live-edit .md-h6 { font-size: 1em; }
 
 .focus-toggle:not(.focus-mode-exit) { position: relative; }
+body[data-tooltips="hidden"] [role="tooltip"] {
+  display: none !important;
+}
+
 .focus-tooltip {
   position: absolute;
   left: 0;
