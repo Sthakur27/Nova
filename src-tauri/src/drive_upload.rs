@@ -329,6 +329,28 @@ pub async fn drive_open_folder(app: tauri::AppHandle, root: String, access: Stat
     }).await.map_err(crate::err)?
 }
 
+fn file_url(registry: &Value, account: &str, path: &str) -> Result<String, String> {
+    let tracked = identities::at_path(registry, account, path);
+    if tracked.is_null() || tracked["pending"] == true {
+        return Err("This note hasn’t uploaded to Google Drive yet. Wait for sync to finish, then try again.".into());
+    }
+    let file_id = id(tracked)?;
+    Ok(format!("https://drive.google.com/file/d/{file_id}/view"))
+}
+
+#[tauri::command]
+pub async fn drive_open_file(app: tauri::AppHandle, root: String, path: String, access: State<'_,Access>, auth: State<'_,DriveAuth>) -> Result<(),String> {
+    let root = crate::root_path(&access,&root)?;
+    let guard = drive_auth::transfer_guard(&auth)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = guard;
+        let account = drive_auth::account_key()?;
+        let url = file_url(&crate::read_registry(&root)?, &account, &path)?;
+        #[cfg(desktop)] { let _ = app; webbrowser::open(&url).map_err(|_| "Could not open the browser.".to_string()) }
+        #[cfg(target_os = "ios")] { app.state::<tauri_plugin_nova_auth::Auth<tauri::Wry>>().call("openDrive", json!({"url":url})).map(|_| ()) }
+    }).await.map_err(crate::err)?
+}
+
 #[derive(Serialize)]
 pub struct CloudWorkspace { id: String, name: String }
 #[tauri::command]
@@ -443,6 +465,23 @@ pub async fn drive_restore(parent: String, workspace_id: String, access: State<'
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn file_links_follow_identity_and_require_an_uploaded_copy() {
+        let mut registry = serde_json::json!({});
+        super::identities::record(&mut registry, "account", "file-id", "nested/note.md", "old.md", "hash", &serde_json::Value::Null);
+        assert_eq!(super::file_url(&registry, "account", "nested/note.md").unwrap(), "https://drive.google.com/file/d/file-id/view");
+        assert!(super::file_url(&registry, "other-account", "nested/note.md").is_err());
+        assert!(super::file_url(&registry, "account", "missing.md").is_err());
+        registry["driveObjects"]["account"]["file-id"]["pending"] = serde_json::json!(true);
+        assert!(super::file_url(&registry, "account", "nested/note.md").unwrap_err().contains("hasn’t uploaded"));
+        registry["driveObjects"]["account"]["file-id"]["pending"] = serde_json::json!(false);
+        super::identities::relocate(&mut registry, "nested/note.md", Some("renamed.md")).unwrap();
+        assert!(super::file_url(&registry, "account", "nested/note.md").is_err());
+        assert!(super::file_url(&registry, "account", "renamed.md").unwrap().contains("file-id"));
+        super::identities::relocate(&mut registry, "renamed.md", None).unwrap();
+        assert!(super::file_url(&registry, "account", "renamed.md").is_err());
+    }
+
     use super::*;
     #[test]
     fn restore_names_stay_inside_the_new_folder() {

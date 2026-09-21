@@ -154,7 +154,7 @@ type Props = {
   onOpen: (folder: Workspace, path: string, pinned?: boolean) => void;
   onRename: (folder: Workspace, path: string) => void;
   onStar: (folder: Workspace, path: string, starred: boolean) => void;
-  onFileAction: (folder: Workspace, path: string, action: "move" | "delete" | "reveal") => void;
+  onFileAction: (folder: Workspace, path: string, action: "move" | "delete" | "reveal" | "drive") => void;
   onChange: (folders: Workspace[]) => void;
   onRemove: (root: string) => void;
   onRefresh: (root: string) => void;
@@ -419,7 +419,7 @@ export default function Explorer({
                     active={folder.root === activeRoot ? activePath : ""}
                     onOpen={(path, pinned) => onOpen(folder, path, pinned)}
                     onRename={(path) => onRename(folder, path)}
-                    onContextMenu={(event, path) => { event.preventDefault(); const trigger = event.currentTarget.closest(".file-row")!.querySelector<HTMLElement>(".file-open")!; const rect = trigger.getBoundingClientRect(); setMenu({ folder, path, trigger, x: Math.max(8, Math.min(event.clientX || rect.left, window.innerWidth - 228)), y: Math.max(8, Math.min(event.clientY || rect.bottom, window.innerHeight - 170)) }); }}
+                    onContextMenu={(event, path) => { event.preventDefault(); const trigger = event.currentTarget.closest(".file-row")!.querySelector<HTMLElement>(".file-open")!; const rect = trigger.getBoundingClientRect(); setMenu({ folder, path, trigger, x: Math.max(8, Math.min(event.clientX || rect.left, window.innerWidth - 228)), y: Math.max(8, Math.min(event.clientY || rect.bottom, window.innerHeight - 230)) }); }}
                     syncPolicy={folder.syncError ? undefined : folder.syncPolicy}
                     syncDisabled={syncBusy || !!folder.syncError}
                     onToggleSync={onToggleSync ? path => onToggleSync(folder, path) : undefined}
@@ -452,7 +452,7 @@ export default function Explorer({
       </nav>
       {menu && createPortal(<div ref={menuRef} className="file-context-menu" role="menu" aria-label={`Actions for ${menu.path}`} style={{ left: menu.x, top: menu.y }} onKeyDown={event => {
         event.stopPropagation();
-        const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")];
+        const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled):not([hidden])")];
         const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
         if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) { event.preventDefault(); buttons[event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (index + (event.key === "ArrowDown" ? 1 : -1) + buttons.length) % buttons.length]?.focus(); }
         if (event.key === "Escape" || event.key === "Tab") { event.preventDefault(); menu.trigger.focus(); setMenu(null); }
@@ -461,6 +461,7 @@ export default function Explorer({
         <button role="menuitem" onClick={() => { menu.trigger.focus(); setMenu(null); onRename(menu.folder, menu.path); }}>Rename…</button>
         <button role="menuitem" onClick={() => { menu.trigger.focus(); setMenu(null); onFileAction(menu.folder, menu.path, "move"); }}>Move…</button>
         <button hidden={mobile} role="menuitem" disabled={menu.folder.root === "demo"} title={menu.folder.root === "demo" ? "Sample notes have no file location" : undefined} onClick={() => { menu.trigger.focus(); setMenu(null); onFileAction(menu.folder, menu.path, "reveal"); }}>Open in File Location</button>
+        {menu.folder.cloudSpace && <button role="menuitem" onClick={() => { menu.trigger.focus(); setMenu(null); onFileAction(menu.folder, menu.path, "drive"); }}>Open in Google Drive</button>}
         <button role="menuitem" className="danger" onClick={() => { menu.trigger.focus(); setMenu(null); onFileAction(menu.folder, menu.path, "delete"); }}>Delete…</button>
       </div>, document.body)}
       <span role="status" className="sr-only">

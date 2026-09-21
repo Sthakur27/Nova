@@ -288,15 +288,6 @@ kbd {
   flex-direction: column;
   background: #1e1f23;
 }
-.tab-bar {
-  height: 49px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  border-bottom: 1px solid #ffffff07;
-  background: #1a1b1f;
-  padding-right: 12px;
-}
 .file-tab {
   height: 100%;
   display: flex;
@@ -313,11 +304,22 @@ kbd {
 .file-tab svg {
   color: #a58abf;
 }
-.tab-bar-space {
-  flex: 1;
+/* Keep creation available without adding permanent chrome to the tab strip. */
+.note-tabs .new-tab-button {
+  flex: 0 0 28px;
+  align-self: center;
+  margin: 0 6px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
 }
-.new-tab-button {
-  margin-left: 12px;
+.note-tabs:hover .new-tab-button,
+.note-tabs .new-tab-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (hover: none) {
+  .note-tabs .new-tab-button { opacity: 1; pointer-events: auto; }
 }
 .dirty-dot {
   height: 6px;
@@ -770,23 +772,6 @@ kbd {
   font-size: 10px;
   margin: 4px 0 20px;
   flex-shrink: 0;
-}
-.bookmark-tip {
-  margin-top: auto;
-  display: flex;
-  gap: 10px;
-  padding: 25px 1px 15px;
-  color: #676372;
-  font-size: 10px;
-  line-height: 1.8;
-}
-.bookmark-tip p {
-  margin: 0;
-}
-.tip-icon {
-  color: #9b83af;
-  font-size: 19px;
-  line-height: 1.2;
 }
 .rail-footer {
   display: flex;
@@ -1808,7 +1793,7 @@ kbd {
 .app-shell[data-galaxy="true"][data-frosted-panes="true"] :is(.sidebar, .bookmark-rail, .top-bars, .editor-group .note-tabs, .terminal-panel, .status-bar) {
   background: rgba(9, 9, 17, 0.5);
 }
-.app-shell[data-galaxy="true"] :is(.tab-bar, .document-toolbar, .format-toolbar, .terminal-tab-bar) {
+.app-shell[data-galaxy="true"] :is(.document-toolbar, .format-toolbar, .terminal-tab-bar) {
   background: transparent;
 }
 .app-shell[data-galaxy="true"] :is(.palette, .bookmark-dialog, .voice-popover, .root-menu > div, .toast, .cm-panels) {
@@ -2293,12 +2278,13 @@ kbd {
 .panel-toggle-right { right: calc(var(--bookmarks-width) - 12px); }
 .panel-toggle-left, .panel-toggle-right { width: 24px; }
 .panel-resizer { inset: 0; }
-/* Keep the bookmarks controls entirely beyond the editor's scrollbar. */
+/* Keep the resize area beyond the editor's scrollbar; center the chevron on the divider. */
 .panel-toggle-right[data-expanded="true"] {
   right: calc(var(--bookmarks-width) - 24px);
   justify-content: flex-start;
 }
 .panel-toggle-right[data-expanded="true"] .panel-resizer::after { left: 0; }
+.panel-toggle-right[data-expanded="true"] > .panel-toggle { transform: translateX(-50%); }
 .app-shell[data-panel-resizing] .panel-resizer .focus-tooltip { visibility: hidden; opacity: 0; }
 .panel-toggle-top, .panel-toggle-bottom { pointer-events: none; }
 .panel-toggle-top .panel-toggle, .panel-toggle-bottom .panel-toggle { position: relative; z-index: 1; }
@@ -2398,18 +2384,13 @@ kbd {
 .global-sync-button > span { flex: 1; display: flex; flex-direction: column; gap: 4px; }
 .global-sync-button strong { font-size: 13px; font-weight: 500; }
 .global-sync-button small { font-size: 11px; color: #aaa2b6; }
-.global-sync-button:hover, .top-sync-button:hover { background: #b497dc19; }
-.top-sync-button {
-  display: flex; align-items: center; gap: 5px; flex-shrink: 0; padding: 4px 6px;
-  border: 1px solid transparent; border-radius: 6px; margin: 0 5px;
-  background: transparent; color: #c8b2e4; cursor: pointer; font: inherit; font-size: 12px;
-}
-.top-drive-actions { display: flex; align-items: center; flex-shrink: 0; margin-right: 5px; }
+.global-sync-button:hover { background: #b497dc19; }
+
 .settings-drive-link { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .note-tab .tab-sync { display: flex; align-items: center; padding: 7px; border-radius: 4px; color: #82798e; }
 .note-tab .tab-sync[data-selected="true"] { color: #c8b2e4; }
 .note-tab .tab-sync:hover { background: #ffffff15; color: #e5d5fa; }
-.global-sync-button:focus-visible, .top-sync-button:focus-visible { outline: 2px solid #c8a8ed; outline-offset: 2px; }
+.global-sync-button:focus-visible { outline: 2px solid #c8a8ed; outline-offset: 2px; }
 .sync-filters { display: flex; gap: 12px; padding: 8px 24px; }
 .sync-filters label { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; color: #aaa2b6; font-size: 12px; }
 .sync-filters select, .sync-filters input { box-sizing: border-box; width: 100%; min-width: 0; padding: 8px; border: 1px solid #ffffff20; border-radius: 6px; background: #242329; color: #ded7e9; font: inherit; }
@@ -2422,7 +2403,7 @@ kbd {
   .sync-list { padding: 8px 4px; }
   .sync-row { gap: 6px; }
   .sync-row select { max-width: 46%; }
-  .top-sync-button { padding: 8px; }
+
   .note-tab .tab-sync { min-width: 30px; min-height: 36px; justify-content: center; }
 }
 
@@ -2700,7 +2681,6 @@ kbd {
 .explorer-section + .explorer-section { margin-top: 8px; }
 .explorer-add-local { margin: 4px 12px 8px; }
 
-.top-sync-button[data-pending="true"] { color: #e8bc79; border-color: #e8bc7940; }
 
 /* Portaled so tab-strip scrolling and split panes do not clip the path. */
 .tab-path-tooltip {
@@ -2795,4 +2775,15 @@ kbd {
   width: calc(100% - 36px);
   margin-inline: 0 auto;
   justify-content: center;
+}
+
+.note-tab .tab-sync[data-state="synced"] { color: #a2cbb5; }
+.note-tab .tab-sync[data-state="pending"],
+.note-tab .tab-sync[data-state="error"] { color: #e8bc79; }
+.note-tab .tab-sync[data-state="syncing"] { animation: tab-sync-pulse 1.2s ease-in-out infinite; }
+.note-tab .tab-sync:focus-visible { outline: 2px solid #c8a8ed; outline-offset: -2px; }
+@keyframes tab-sync-pulse { 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) {
+  .note-tab .tab-sync[data-state="syncing"] { animation: none; }
+  .note-tabs .new-tab-button { transition: none; }
 }

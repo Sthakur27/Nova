@@ -14,6 +14,7 @@ import { mobile, supportsFrosted } from "./platform";
 import { useCompactLayout } from "./useCompactLayout";
 import { useFocusTransition } from "./useFocusTransition";
 import SyncSettings from "./SyncSettings";
+import { driveTransfer } from "./driveTransfer";
 import { useDriveUploads } from "./useDriveUploads";
 import { useDriveConnection } from "./useDriveConnection";
 import { syncIncluded } from "./syncPolicy";
@@ -45,7 +46,6 @@ import {
 import {
   Cloud,
   CloudOff,
-  ExternalLink,
   Bookmark as BookmarkIcon,
   BookOpen,
   ChevronRight,
@@ -60,7 +60,6 @@ import {
   PanelsTopLeft,
   Plus,
   Search,
-  PanelRight,
   TerminalSquare,
   Pencil,
   Trash2,
@@ -265,13 +264,15 @@ export default function App() {
   const [topBars, setTopBars, topBarsError] = usePreference<boolean>("top-bars", true);
   const [statusBar, setStatusBar, statusBarError] = usePreference<boolean>("status-bar", true);
   const changeTerminalOpen = useCallback((open: boolean) => {
-    if (open) setTerminalStarted(true);
-    setStatusBar(open);
+    if (open) {
+      setTerminalStarted(true);
+      setStatusBar(true);
+    }
     setTerminalOpen(open);
   }, [setStatusBar]);
   const toggleTerminal = () => changeTerminalOpen(!(terminalOpen && statusBar));
   const [focusMode, setFocusMode, focusModeError] = usePreference<boolean>("focus-mode", false);
-  const focusModeActive = focusMode || (!navigation && !rail && !topBars && !(terminalOpen && statusBar));
+  const focusModeActive = focusMode || (!navigation && !rail && !topBars && !statusBar);
   const [hoveredBottom, setHoveredBottom] = useState(false);
   const [hoveredTop, setHoveredTop] = useState(false);
   const [hoveredEdge, setHoveredEdge] = useState<"left" | "right" | null>(null);
@@ -1422,6 +1423,16 @@ export default function App() {
               const name = tab.path.split("/").at(-1);
               const tabFolder = folders.find(folder => folder.root === tab.root);
               const selectedForSync = !tabFolder?.syncError && syncIncluded(tabFolder?.syncPolicy, tab.path);
+              const tabDirty = tabId(tab) === tabId({ root: workspace.root, path }) ? dirty : paneSessions.current.get(tabId(tab))?.dirty;
+              const syncError = tabFolder?.syncError || cloud.error || uploads.errors[tab.root];
+              const syncState = syncError ? "error"
+                : !selectedForSync ? "local"
+                : uploads.transferringRoot === tab.root ? "syncing"
+                : tabDirty || uploads.pending[tab.root] ? "pending"
+                : uploads.completed[tab.root] ? "synced" : "pending";
+              const syncStatus = { error: "Sync needs attention", local: "Local only", syncing: "Syncing…", pending: "Waiting to sync", synced: "Up to date" }[syncState];
+              const lastSyncedAt = uploads.lastSyncedAt[tab.root];
+              const syncDetails = [syncStatus, syncError, lastSyncedAt ? `Last synced ${new Date(lastSyncedAt).toLocaleString()}` : "Not synced this session", `Connected as ${drive.status.email}`, "Click for sync settings and Google Drive"].filter(Boolean).join(" · ");
               return (
                 <div
                   key={tabId(tab)}
@@ -1457,9 +1468,9 @@ export default function App() {
                     <span>{name}</span>
                     {active && (tabId(tab) === tabId({ root: workspace.root, path }) ? dirty : paneSessions.current.get(tabId(tab))?.dirty) && <span className="dirty-dot" />}
                   </TabButton>
-                  {drive.status.connected && tabFolder?.cloudSpace && <button className="tab-sync" data-selected={selectedForSync}
-                    aria-label={`Sync settings for ${name}: ${selectedForSync ? "selected for sync" : "local only"}`}
-                    title={selectedForSync ? (uploads.items[`${tab.root}\n${tab.path}`]?.message ?? "Selected · Waiting for sync") : "Local only · Choose sync settings"}
+                  {drive.status.connected && tabFolder?.cloudSpace && <button className="tab-sync" data-selected={selectedForSync} data-state={syncState}
+                    aria-label={`Sync settings for ${name}: ${syncStatus}`}
+                    title={syncDetails}
                     aria-haspopup="dialog" disabled={!tabFolder}
                     onClick={() => { if (tabFolder) showSync(tabFolder, tab.path); }}>
                     {selectedForSync ? <Cloud size={13} /> : <CloudOff size={13} />}
@@ -1474,6 +1485,8 @@ export default function App() {
                 </div>
               );
             })}
+            <button className="icon-button new-tab-button" onClick={() => { if (activatePane(pane.id)) void newTab(); }}
+              aria-label="New tab" title="New tab (Ctrl T)" aria-keyshortcuts="Control+t"><Plus size={16} /></button>
           </div>
   ); }
   function renderPaneDocument(pane: Pane) {
@@ -1570,22 +1583,6 @@ export default function App() {
       );
     }
   }
-  const cloudRoots = folders.filter(folder => folder.cloudSpace?.account === drive.status.account).map(folder => folder.root);
-  const hasUnsyncedChanges = cloudRoots.some(root => uploads.pending[root])
-    || !!(workspace.cloudSpace && dirty)
-    || Array.from(paneSessions.current.entries()).some(([id, session]) =>
-      id !== tabId({root: workspace.root, path}) && session.workspace.cloudSpace && session.dirty);
-  const syncNeedsAttention = !!cloud.error || cloudRoots.some(root => !!uploads.errors[root]);
-  const syncStatus = syncNeedsAttention ? "Sync needs attention"
-    : uploads.transferringRoot ? "Syncing…"
-    : hasUnsyncedChanges ? "Unsynced changes"
-    : cloudRoots.length && cloudRoots.every(root => uploads.completed[root]) ? "Up to date"
-    : "Waiting to sync";
-  const syncedTimes = cloudRoots.map(root => uploads.lastSyncedAt[root]);
-  const lastSyncedAt = syncedTimes.length && syncedTimes.every(Boolean) ? Math.min(...syncedTimes) : null;
-  const lastSyncedLabel = lastSyncedAt
-    ? `Last synced at ${new Date(lastSyncedAt).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"})}`
-    : "Not synced this session";
   const settingCommands = [
     { id: "open-settings", label: "Open settings", description: "All app preferences, including the default file extension", keywords: "preferences default file extension", run: () => setSettingsOpen(true) },
     toggleSetting("galaxy", "Galaxy mode", galaxyMode, setGalaxyMode, "appearance glow"),
@@ -1672,6 +1669,7 @@ export default function App() {
           }}
           onFileAction={(folder, path, action) => {
             if (action === "reveal") void revealNote(folder.root, path).catch(error => setNotice(String(error)));
+            else if (action === "drive") void driveTransfer(() => invoke("drive_open_file", { root: folder.root, path })).catch(error => setNotice(String(error)));
             else setFileAction({ folder, path, action });
           }}
           onSync={drive.status.connected ? folder => showSync(folder) : undefined}
@@ -1736,30 +1734,6 @@ export default function App() {
         onPointerLeave={() => { setHoveredTop(false); setHoveredBottom(false); }}>
         <div className="top-bars-container">
         <div id="top-bars" className="top-bars" hidden={!compact && !topBars}>
-        <header className="tab-bar">
-          <button hidden={compact} className="icon-button" aria-label="Split editor right" title="Move current tab to a pane on the right"
-            disabled={!data || (paneLeaves(paneLayout).find(p => p.id === activePane)?.tabs.length ?? 0) < 2}
-            onClick={() => dropTab(tabId({ root: workspace.root, path }), { pane: activePane, edge: "right", before: null })}><PanelsTopLeft size={17} /></button>
-          <button className="icon-button new-tab-button" onClick={() => void newTab()} aria-label="New tab" title="New tab (Ctrl T)"><Plus size={16} /></button>
-          <div className="tab-bar-space" />
-          {drive.status.connected && <div className="top-drive-actions"><button className="top-sync-button" data-pending={hasUnsyncedChanges || syncNeedsAttention} data-transferring={!!uploads.transferringRoot && !syncNeedsAttention} data-synced={syncStatus === "Up to date"} aria-label={`Sync settings · ${syncStatus} · ${lastSyncedLabel}`}
-            title={`${syncStatus} · ${lastSyncedLabel}\nConnected as ${drive.status.email}${lastSyncedAt ? ` · Last synced ${new Date(lastSyncedAt).toLocaleString()}` : ""}`} aria-haspopup="dialog" onClick={() => showSync(workspace)}>
-            <Cloud size={16} aria-hidden="true" /><span>{syncStatus}</span>
-          </button><button className="icon-button" aria-label="Open workspace in Google Drive"
-            title="Open workspace in Google Drive" disabled={!workspace.cloudSpace}
-            onClick={() => void uploads.openFolder(workspace.root)}><ExternalLink size={15} aria-hidden="true" /></button></div>}
-          <button hidden={compact} className="icon-button" onClick={toggleTerminal}
-            aria-label={terminalOpen ? "Collapse terminal" : "Open terminal"} title={`Toggle terminal (${mod}↓)`} aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+ArrowDown`}
-            aria-expanded={terminalOpen} aria-controls="terminal-panel"><TerminalSquare size={17} /></button>
-          <button
-            className="icon-button"
-            onClick={() => compact ? setMobileView("bookmarks") : setRail(!rail)}
-            aria-label="Toggle bookmarks"
-            title={`Toggle bookmarks (${mod}→)`} aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+ArrowRight`}
-          >
-            <PanelRight size={17} />
-          </button>
-        </header>
         <div className="document-toolbar">
           <div className="breadcrumbs">
             <span>{workspace.name}</span>
@@ -1835,6 +1809,9 @@ export default function App() {
               Click for {frostedPanes ? "black" : "frosted"}
             </span>
           </button>}
+          {!compact && <button className="icon-button toolbar-icon" onClick={toggleTerminal}
+            aria-label={terminalOpen && statusBar ? "Collapse terminal" : "Open terminal"} title={`Toggle terminal (${mod}↓)`} aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+ArrowDown`}
+            aria-expanded={terminalOpen && statusBar} aria-controls="terminal-panel"><TerminalSquare size={17} /></button>}
           {!mobile && <VoiceControl
             disabled={!data || loading || saving}
             onBegin={() => {
@@ -2045,13 +2022,6 @@ export default function App() {
             <Plus size={15} />
             Bookmark a passage
           </button>
-          <div className="bookmark-tip">
-            <span className="tip-icon">✧</span>
-            <p>
-              Not just headings.
-              <br />A sentence, a paragraph, a thought.
-            </p>
-          </div>
           <footer className="rail-footer">
             <kbd>{mod}</kbd>
             <kbd>⇧</kbd>

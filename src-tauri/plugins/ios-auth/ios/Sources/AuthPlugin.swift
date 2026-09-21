@@ -49,7 +49,7 @@ final class NovaAuthPlugin: Plugin, ASWebAuthenticationPresentationContextProvid
         let args = try invoke.parseArgs(OpenArgs.self)
         DispatchQueue.main.async {
             guard let url = URL(string: args.url), url.scheme == "https", url.host == "drive.google.com",
-                  url.path.hasPrefix("/drive/folders/") else { invoke.reject("Invalid Drive folder."); return }
+                  (url.path.hasPrefix("/drive/folders/") || url.path.hasPrefix("/file/d/")) else { invoke.reject("Invalid Drive location."); return }
             UIApplication.shared.open(url) { opened in
                 if opened { invoke.resolve([:]) } else { invoke.reject("Could not open Google Drive.") }
             }

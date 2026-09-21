@@ -64,3 +64,29 @@ it("puts Cloud first, creates there while Local is active, and collapses section
     expect(host.querySelector<HTMLElement>('#explorer-cloud')!.hidden).toBe(false);
   } finally { await act(async()=>root.unmount());host.remove();localStorage.clear();vi.unstubAllGlobals(); }
 });
+
+it("offers a direct Drive action only for Cloud files and restores focus after selecting it", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  localStorage.clear();
+  const host = document.createElement("div"), root = createRoot(host);
+  document.body.append(host);
+  const local: Workspace = { root: "/local", name: "Local", collapsed: false, files: [{ name: "local.md", path: "local.md" }] };
+  const cloud: Workspace = { root: "/cloud", name: "Cloud", collapsed: false, closedDirectories: [], files: [{ name: "cloud.md", path: "nested/cloud.md" }], cloudSpace: { id: "space", name: "Cloud", account: "account" } };
+  const onFileAction = vi.fn(), noop = () => {};
+  try {
+    await act(async () => root.render(<Explorer folders={[local, cloud]} activeRoot="" activePath=""
+      onOpen={noop} onRename={noop} onStar={noop} onFileAction={onFileAction}
+      onChange={noop} onRemove={noop} onRefresh={noop} onAdd={noop} externalDrag={false} />));
+    const cloudFile = host.querySelector<HTMLButtonElement>('[data-folder-root="/cloud"] .file-open')!;
+    await act(async () => cloudFile.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true })));
+    const action = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(button => button.textContent === "Open in Google Drive")!;
+    expect(action).toBeDefined();
+    await act(async () => action.click());
+    expect(onFileAction).toHaveBeenCalledExactlyOnceWith(cloud, "nested/cloud.md", "drive");
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+    expect(document.activeElement).toBe(cloudFile);
+    await act(async () => host.querySelector('[data-folder-root="/local"] .file-open')!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true })));
+    expect(document.querySelector('[role="menu"]')!.textContent).not.toContain("Open in Google Drive");
+    expect(document.querySelector('[role="menu"]')!.textContent).toContain("Open in File Location");
+  } finally { await act(async () => root.unmount()); host.remove(); localStorage.clear(); vi.unstubAllGlobals(); }
+});

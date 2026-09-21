@@ -204,25 +204,9 @@
   background: #d8bbfc;
   box-shadow: 0 0 7px #c6a1f680;
 }
-.app-shell[data-galaxy="true"] .top-sync-button::before {
-  content: "";
-  width: 7px;
-  height: 7px;
-  flex-shrink: 0;
-  border: 1px solid currentColor;
-  border-radius: 50%;
-  opacity: .75;
-}
-.app-shell[data-galaxy="true"] .top-sync-button[data-synced="true"]::before {
-  background: #a2cbb5;
-  border-color: #a2cbb5;
-  box-shadow: 0 0 6px #a2cbb540;
-}
-.app-shell[data-galaxy="true"] .top-sync-button[data-transferring="true"]::before {
-  border-color: #c5a4ec30;
-  border-top-color: #d8bbfc;
-  animation: cockpit-orbit 1s linear infinite;
-}
+
+
+
 .app-shell[data-galaxy="true"] .sidebar-action.focus-mode-exit {
   border-radius: 50%;
   border-color: #c5a4ec30;
@@ -243,7 +227,7 @@
   .app-shell[data-galaxy="true"] .focus-mode-exit { animation: console-arrive 260ms ease-out; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .app-shell[data-galaxy="true"] .top-sync-button[data-transferring="true"]::before { animation: none; }
+
 }
 .app-shell[data-galaxy="true"][data-compact="true"] .console-header { padding: 12px 16px; letter-spacing: 1px; }
 .app-shell[data-galaxy="true"][data-compact="true"] .palette-footer { flex-wrap: wrap; gap: 8px 12px; }
