@@ -1,3 +1,4 @@
+import type { Bookmark } from "./model";
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -7,7 +8,7 @@ import { pageForLine, type ReadPage } from "./readPages";
 
 export type LargeReadHandle = { jump: (line: number) => void };
 
-export default forwardRef<LargeReadHandle, { text: string; markdown: boolean; layout: "continuous" | "pages"; controlsContainer: HTMLDivElement | null; onToggleTask?: TaskToggle }>(function LargeRead({ text, markdown, layout, controlsContainer, onToggleTask }, ref) {
+export default forwardRef<LargeReadHandle, { bookmarks?: Bookmark[]; text: string; markdown: boolean; layout: "continuous" | "pages"; controlsContainer: HTMLDivElement | null; onToggleTask?: TaskToggle }>(function LargeRead({ bookmarks, text, markdown, layout, controlsContainer, onToggleTask }, ref) {
   const [result, setResult] = useState<{ text: string; markdown: boolean; pages: ReadPage[] } | null>(null);
   const [error, setError] = useState("");
   const [page, setPage] = useState(0);
@@ -97,8 +98,8 @@ export default forwardRef<LargeReadHandle, { text: string; markdown: boolean; la
       <button aria-label="Next page" title="Next page" disabled={currentPage >= pages.length - 1} onClick={() => changePage(currentPage + 1)}><ChevronRight size={14} aria-hidden="true" /></button>
     </nav>, controlsContainer)}
     <div ref={content} className={markdown ? undefined : "plain-preview"}>
-      {layout === "pages" ? <Markdown tree={active.tree} onToggleTask={onToggleTask} />
-        : pages.map((chunk, index) => <ReadChunk key={index} page={chunk} index={index}
+      {layout === "pages" ? <Markdown bookmarks={bookmarks} tree={active.tree} onToggleTask={onToggleTask} />
+        : pages.map((chunk, index) => <ReadChunk bookmarks={bookmarks} key={index} page={chunk} index={index}
           forced={target != null && pageForLine(pages, target.line) === index} onToggleTask={onToggleTask} />)}
     </div>
   </>;

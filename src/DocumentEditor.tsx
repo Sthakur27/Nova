@@ -128,7 +128,13 @@ export class DocumentEditor {
             const mapping = documentPositions(state.doc, owner.source);
             return DecorationSet.create(state.doc, [...selected, ...owner.bookmarks.flatMap(mark => {
               const from = mapping.toDocument(mark.from), to = mapping.toDocument(mark.to);
-              return mark.unresolved || from >= to ? [] : [Decoration.inline(from, to, { class: "bookmark-highlight", title: mark.name })];
+              if (mark.unresolved || from >= to) return [];
+              const start = state.doc.resolve(from);
+              const pos = start.depth ? start.before(start.depth) : from;
+              const node = state.doc.nodeAt(pos);
+              return node ? [Decoration.node(pos, pos + node.nodeSize, {
+                class: "document-bookmarked", title: `Bookmarked: ${mark.name}`,
+              })] : [];
             })]);
           } },
         })];

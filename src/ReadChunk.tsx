@@ -1,11 +1,12 @@
+import type { Bookmark } from "./model";
 import { memo, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Markdown, { type TaskToggle } from "./Markdown";
 import type { ReadPage } from "./readPages";
 
 // Keep only nearby Markdown mounted. Measured placeholders preserve scroll
 // position when a chunk leaves the viewport; parsing stays in the worker.
-export default memo(function ReadChunk({ page, index, forced, onToggleTask }: {
-  page: ReadPage; index: number; forced: boolean; onToggleTask?: TaskToggle;
+export default memo(function ReadChunk({ bookmarks, page, index, forced, onToggleTask }: {
+  bookmarks?: Bookmark[]; page: ReadPage; index: number; forced: boolean; onToggleTask?: TaskToggle;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const [nearby, setNearby] = useState(index === 0);
@@ -43,6 +44,6 @@ export default memo(function ReadChunk({ page, index, forced, onToggleTask }: {
   }, [visible, page]);
   return <div ref={root} className="read-chunk" data-read-chunk={index}
     style={visible ? undefined : { height }} aria-hidden={visible ? undefined : true}>
-    {visible && <Markdown tree={page.tree} onToggleTask={onToggleTask} />}
+    {visible && <Markdown bookmarks={bookmarks} tree={page.tree} onToggleTask={onToggleTask} />}
   </div>;
 });

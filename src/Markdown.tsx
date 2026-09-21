@@ -3,7 +3,8 @@ import remarkGfm from "remark-gfm";
 import remarkNestedNumbers from "./remarkNestedNumbers";
 import remarkTaskOffsets from "./remarkTaskOffsets";
 import { memo, useMemo, type ComponentProps } from "react";
-import type { Root } from "hast";
+import type { Root, Element } from "hast";
+import type { Bookmark } from "./model";
 const tags = [
   "p",
   "h1",
@@ -29,9 +30,34 @@ const components = Object.fromEntries(
   ]),
 );
 export type TaskToggle = (offset: number, checked: boolean) => void;
-export default memo(function Markdown({ text = "", tree, onToggleTask }: { text?: string; tree?: Root; onToggleTask?: TaskToggle }) {
+export default memo(function Markdown({ text = "", tree, onToggleTask, bookmarks }: { text?: string; tree?: Root; onToggleTask?: TaskToggle; bookmarks?: Bookmark[] }) {
   // Keep ReactMarkdown’s HTML escaping and safe URL handling for worker output.
-  const plugins = useMemo(() => tree ? [() => () => structuredClone(tree)] : [], [tree]);
+  const plugins = useMemo(() => [
+    ...(tree ? [() => () => structuredClone(tree)] : []),
+    () => (root: Root) => {
+      if (!bookmarks?.length) return;
+      const blocks: Element[] = [];
+      const visit = (node: Root | Element) => {
+        if (node.type === "element" && ([...tags, "div"] as string[]).includes(node.tagName)) blocks.push(node);
+        for (const child of node.children) if (child.type === "element") visit(child);
+      };
+      visit(root);
+      blocks.reverse();
+      for (const mark of bookmarks) {
+        if (mark.unresolved || mark.to <= mark.from) continue;
+        // Later descendants win, so nested lists mark the actual item.
+        const block = blocks.find(node => {
+          const start = node.position?.start.offset, end = node.position?.end.offset;
+          return start !== undefined && end !== undefined ? start <= mark.from && mark.from < end
+            : Number(node.properties["data-line"]) === mark.line;
+        });
+        if (block) {
+          block.properties.className = [...(Array.isArray(block.properties.className) ? block.properties.className : []), "document-bookmarked"];
+          block.properties.title = `Bookmarked: ${mark.name}`;
+        }
+      }
+    },
+  ], [tree, bookmarks]);
   return (
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkNestedNumbers, remarkTaskOffsets]}

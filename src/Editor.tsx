@@ -26,7 +26,6 @@ import {
   StateField,
 } from "@codemirror/state";
 import {
-  Decoration,
   EditorView,
   keymap,
   lineNumbers,
@@ -34,7 +33,6 @@ import {
   drawSelection,
   gutter,
   GutterMarker,
-  type DecorationSet,
 } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, undo, redo, selectAll } from "@codemirror/commands";
 import { searchKeymap, highlightSelectionMatches, openSearchPanel } from "@codemirror/search";
@@ -61,15 +59,16 @@ const sourceHighlightStyle = HighlightStyle.define([
 ]);
 
 class BookmarkEntry extends GutterMarker {
-  constructor(private readonly onBookmark: () => void) {
+  constructor(private readonly onBookmark?: () => void, private readonly name?: string) {
     super();
   }
   toDOM() {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "line-bookmark-button";
-    button.title = "Bookmark this line or selection";
-    button.setAttribute("aria-label", "Bookmark this line or selection");
+    const button = document.createElement(this.onBookmark ? "button" : "span");
+    if (button instanceof HTMLButtonElement) button.type = "button";
+    button.className = `line-bookmark-button${this.name ? " is-bookmarked" : ""}`;
+    button.title = this.name ? `Bookmarked: ${this.name}` : "Bookmark this line or selection";
+    button.setAttribute("aria-label", button.title);
+    if (!this.onBookmark) button.setAttribute("role", "img");
     const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     icon.setAttribute("viewBox", "0 0 24 24");
     icon.setAttribute("aria-hidden", "true");
@@ -81,7 +80,7 @@ class BookmarkEntry extends GutterMarker {
     button.addEventListener("mousedown", (event) => event.preventDefault());
     button.addEventListener("click", (event) => {
       event.preventDefault();
-      this.onBookmark();
+      this.onBookmark?.();
     });
     return button;
   }
@@ -107,22 +106,6 @@ export const bookmarkField = StateField.define<Bookmark[]>({
       if (effect.is(setMarks)) next = effect.value;
     return next;
   },
-});
-const decorations = StateField.define<DecorationSet>({
-  create: () => Decoration.none,
-  update(_, tr) {
-    const ranges = tr.state
-      .field(bookmarkField)
-      .filter((b) => !b.unresolved && b.to > b.from)
-      .map((b) =>
-        Decoration.mark({
-          class: "bookmark-highlight",
-          attributes: { title: b.name },
-        }).range(b.from, b.to),
-      );
-    return Decoration.set(ranges, true);
-  },
-  provide: (field) => EditorView.decorations.from(field),
 });
 export type EditorSnapshot = { state: EditorState; scrollTop: number };
 export type EditorHandle = {
@@ -295,6 +278,9 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
         class: "cm-bookmark-entry",
         renderEmptyElements: true,
         lineMarker: (v, line) => {
+          const saved = v.state.field(bookmarkField).filter(mark =>
+            !mark.unresolved && mark.to > mark.from && v.state.doc.lineAt(mark.from).from === line.from);
+          if (saved.length) return new BookmarkEntry(undefined, saved.map(mark => mark.name).join(", "));
           const selection = v.state.selection.main;
           const activeLine = v.state.doc.lineAt(selection.head);
           return line.from === activeLine.from &&
@@ -302,7 +288,8 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
             ? bookmarkEntry
             : null;
         },
-        lineMarkerChange: (update) => update.selectionSet || update.docChanged,
+        lineMarkerChange: (update) => update.selectionSet || update.docChanged ||
+          update.startState.field(bookmarkField) !== update.state.field(bookmarkField),
       }),
       syntaxHighlighting(sourceHighlightStyle),
       highlighting.current.of(p.showLineHighlight ? highlightActiveLine() : []),
@@ -315,7 +302,6 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
       bookmarkField,
       dictationAnchor,
       dictationPreview,
-      decorations,
       keymap.of([
         { key: "Ctrl-a", run: selectAll },
         {

@@ -1534,13 +1534,13 @@ export default function App() {
                 <FileTitle key={path} path={path} onRename={name => renameFile(workspace, path, name)} />
                 <Suspense fallback={<p>Rendering your note…</p>}>
                   {readingLayout === "pages" || preview.length > RICH_DOCUMENT_LIMIT ? (
-                    <LargeRead layout={readingLayout} ref={isActive ? largeRead : undefined} text={preview} markdown={isMarkdown} controlsContainer={isActive ? readControls : null} onToggleTask={toggleReadTask} />
+                    <LargeRead bookmarks={bookmarks} layout={readingLayout} ref={isActive ? largeRead : undefined} text={preview} markdown={isMarkdown} controlsContainer={isActive ? readControls : null} onToggleTask={toggleReadTask} />
                   ) : isMarkdown ? (
-                    <Markdown text={preview} onToggleTask={toggleReadTask} />
+                    <Markdown bookmarks={bookmarks} text={preview} onToggleTask={toggleReadTask} />
                   ) : (
                     <pre className="plain-preview">
                       {preview.split("\n").map((line, i) => (
-                        <div data-line={i + 1} key={i}>
+                        <div data-line={i + 1} key={i} className={bookmarks.some(mark => !mark.unresolved && mark.to > mark.from && mark.line === i + 1) ? "document-bookmarked" : undefined}>
                           {line || "\u00a0"}
                         </div>
                       ))}
@@ -1685,11 +1685,6 @@ export default function App() {
           externalDrag={externalDrag}
         />
         <div className="sidebar-bottom">
-          {drive.status.connected && <button className="global-sync-button" aria-haspopup="dialog" onClick={() => showSync(workspace)}>
-            <Cloud size={18} aria-hidden="true" />
-            <span><strong>Cloud</strong><small>{uploads.transferringRoot ? "Syncing…" : Object.values(uploads.errors).some(Boolean) ? "Sync needs attention" : drive.status.email}</small></span>
-            <ChevronRight size={14} aria-hidden="true" />
-          </button>}
           <div className="local-indicator">
             <span />
             {folders.length} {folders.length === 1 ? "folder" : "folders"} ·

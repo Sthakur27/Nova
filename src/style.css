@@ -802,10 +802,6 @@ kbd {
   line-height: 1.8;
   display: block;
 }
-.bookmark-highlight {
-  background: #b392d821;
-  border-bottom: 1px solid #b392d852;
-}
 .jump-target {
   background: #b392d821;
   border-radius: 3px;
@@ -2562,9 +2558,55 @@ kbd {
 .cloud-setup p { margin: 0; line-height: 1.6; }
 .cloud-setup-detail { color: #a49cb0; font-size: 14px; }
 .cloud-setup button { min-height: 44px; padding: 10px 18px; border-radius: 10px; background: #b497dc; color: #211a2e; }
-.cloud-space-card { padding: 16px 0; border-top: 1px solid #ffffff16; }
-.cloud-space-card h2 { font-size: 16px; }
-.cloud-space-card button { margin: 8px 8px 0 0; }
+/* Shared modal controls keep Cloud and preferences in the workspace palette. */
+.settings-dialog .settings-action, .settings-row > button:not(.settings-switch), .settings-footer button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  min-height: 34px; padding: 8px 12px; border: 1px solid #b497dc30;
+  border-radius: 9px; background: #b497dc0c; color: #d8c9eb;
+  font: inherit; font-size: 12px; font-weight: 500; line-height: 1.4;
+  flex-shrink: 0; cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.settings-dialog .settings-action:hover:not(:disabled), .settings-row > button:not(.settings-switch):hover:not(:disabled), .settings-footer button:hover:not(:disabled) {
+  background: #b497dc20; border-color: #b497dc60; color: #eee4fa;
+}
+.settings-dialog button:focus-visible { outline: 2px solid #bda0ed; outline-offset: 3px; }
+.settings-dialog button:disabled { opacity: .45; cursor: default; }
+.settings-footer { flex-shrink: 0; line-height: 1.5; }
+.settings-footer button { min-width: 76px; background: #b598da20; }
+.settings-header { flex-shrink: 0; }
+.settings-header > div:not(.settings-emblem) { min-width: 0; }
+.settings-header p { line-height: 1.5; }
+.settings-emblem { flex-shrink: 0; }
+.settings-header > .icon-button { width: 30px; height: 30px; border-radius: 9px; color: #a69aB5; }
+.settings-row > div { min-width: 0; }
+.sync-dialog { width: min(640px, calc(100vw - 32px)); }
+.sync-dialog .sync-intro { padding: 24px; }
+.cloud-account-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.cloud-connection .drive-account { display: flex; flex-direction: column; gap: 5px; }
+.cloud-connection .drive-account strong { overflow-wrap: anywhere; }
+.cloud-eyebrow { font-size: 10px; font-weight: 600; letter-spacing: 1.2px; text-transform: uppercase; color: #9f91ae; }
+.cloud-connection > .settings-action { margin: 8px 8px 0 0; }
+.sync-intro .cloud-description { margin: 18px 0 24px; font-size: 12px; line-height: 1.7; color: #a49aac; }
+.cloud-spaces-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.cloud-spaces-heading h2 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: #b7a2d0; }
+.cloud-spaces { display: grid; gap: 12px; }
+.cloud-space-card { padding: 18px; border: 1px solid #ffffff10; border-radius: 12px; background: #ffffff03; }
+.cloud-space-card h2 { margin: 0; font-size: 14px; font-weight: 500; }
+.cloud-space-card p { font-size: 12px; overflow-wrap: anywhere; }
+.cloud-space-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+.sync-intro [role="alert"] { color: #edb3b3; overflow-wrap: anywhere; }
+.cloud-empty { padding: 16px; border: 1px dashed #ffffff16; border-radius: 10px; text-align: center; }
+@media (max-width: 520px) {
+  .sync-dialog .sync-intro { padding: 16px; }
+  .cloud-account-heading { flex-wrap: wrap; gap: 12px; }
+  .settings-row { gap: 14px; flex-wrap: wrap; }
+  .settings-row > div { flex: 1 1 180px; }
+  .settings-footer { align-items: center; padding: 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .settings-dialog .settings-action, .settings-row > button, .settings-footer button { transition: none; }
+}
 
 /* Editor groups use stable hosts so rearranging splits retains editor history. */
 .editor-panes, .editor-split, .editor-group, .pane-slot, .pane-host, .pane-content, .split-child {
@@ -2709,4 +2751,20 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
   .app-shell[data-galaxy="true"] .signal-bell-strike { animation: none; background: #c5a2ff18; }
   .signal-bell:active { transform: none; }
+}
+
+.line-bookmark-button.is-bookmarked { color: #fff; cursor: default; }
+.line-bookmark-button.is-bookmarked svg { fill: currentColor; }
+.line-bookmark-button.is-bookmarked:hover { background: transparent; }
+.prose .document-bookmarked { position: relative; }
+.prose .document-bookmarked::before {
+  content: "";
+  position: absolute;
+  left: -26px;
+  top: .3em;
+  width: 15px;
+  height: 15px;
+  background: #fff;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z'/%3E%3C/svg%3E") center / contain no-repeat;
+  pointer-events: none;
 }

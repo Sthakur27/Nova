@@ -298,3 +298,20 @@ it("tracks marks and block formatting as the caret and selection move", () => {
   editor.select(2, source.indexOf(" and") + 4, false);
   expect(editor.activeFormatting()).not.toContain("bold");
 });
+
+it("keeps bookmark markers on the saved block in Edit and Read without highlighting text", () => {
+  const source = "First paragraph.\n\n- First item\n- Saved item";
+  const { editor, mount, change } = create(source);
+  const from = source.indexOf("Saved item");
+  editor.setBookmarks([{ id: "saved", name: "Saved passage", from, to: source.length, quote: "Saved item" }]);
+  for (const editable of [true, false, true]) {
+    editor.setEditable(editable, false);
+    expect(mount.querySelectorAll(".document-bookmarked")).toHaveLength(1);
+    expect(mount.querySelector(".document-bookmarked")?.textContent).toBe("Saved item");
+    expect(mount.querySelector(".bookmark-highlight")).toBeNull();
+  }
+  editor.setBookmarks([]);
+  expect(mount.querySelector(".document-bookmarked")).toBeNull();
+  expect(editor.source).toBe(source);
+  expect(change).not.toHaveBeenCalled();
+});
