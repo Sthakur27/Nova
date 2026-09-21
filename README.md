@@ -5,6 +5,8 @@
 Nova is a notes app for Mac and Windows that gives your words room to breathe. Write, collect ideas, and return to the passages that matter—all in ordinary text and Markdown files on your computer.
 
 **[Download Nova](#download-nova)** · **[Take a look](#make-yourself-at-home)** · **[Get started](#your-first-few-minutes)**
+<img width="1324" height="636" alt="image" src="https://github.com/user-attachments/assets/02c5b372-9b34-4b29-ac88-d2a848455f0c" />
+
 
 ![Nova's full workspace with a translucent Markdown editor, folder explorer, starred notes, and bookmarks panel](docs/screenshots/nova-showcase.png)
 
