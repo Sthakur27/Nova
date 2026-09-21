@@ -1655,14 +1655,6 @@ kbd {
 
 .read-controls:empty { display: none; }
 .read-controls { flex-shrink: 0; }
-.document-toolbar[data-paginated="true"] {
-  height: auto;
-  min-height: 59px;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding-top: 10px;
-  padding-bottom: 10px;
-}
 .read-pagination {
   display: flex;
   align-items: center;
@@ -2039,6 +2031,11 @@ kbd {
   opacity: 1;
   transform: translateY(0);
 }
+.panel-resizer:is(:hover, :focus-visible) .focus-tooltip {
+  visibility: visible;
+  opacity: 1;
+  transform: translateY(0);
+}
 .panel-toggle-top .focus-tooltip,
 .panel-toggle-terminal .focus-tooltip {
   left: 50%;
@@ -2283,6 +2280,13 @@ kbd {
 .panel-toggle-right { right: calc(var(--bookmarks-width) - 12px); }
 .panel-toggle-left, .panel-toggle-right { width: 24px; }
 .panel-resizer { inset: 0; }
+/* Keep the bookmarks controls entirely beyond the editor's scrollbar. */
+.panel-toggle-right[data-expanded="true"] {
+  right: calc(var(--bookmarks-width) - 24px);
+  justify-content: flex-start;
+}
+.panel-toggle-right[data-expanded="true"] .panel-resizer::after { left: 0; }
+.app-shell[data-panel-resizing] .panel-resizer .focus-tooltip { visibility: hidden; opacity: 0; }
 .panel-toggle-top, .panel-toggle-bottom { pointer-events: none; }
 .panel-toggle-top .panel-toggle, .panel-toggle-bottom .panel-toggle { position: relative; z-index: 1; }
 .panel-toggle-top[data-expanded="false"], .panel-toggle-bottom[data-expanded="false"] { width: auto; height: 48px; }
@@ -2652,3 +2656,21 @@ kbd {
   opacity: 1;
   transform: none;
 }
+
+/* Keep document actions compact; reading preferences have their own popover. */
+.view-options { position: relative; flex-shrink: 0; }
+.view-options-panel {
+  position: absolute; top: calc(100% + 10px); right: 0; z-index: 60;
+  width: min(310px, calc(100vw - 40px)); padding: 14px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px;
+  max-height: min(520px, 70vh); overflow-y: auto;
+  background: #17151e; border: 1px solid #b296cf38; border-radius: 12px;
+  box-shadow: 0 12px 36px #0008; color: #c5bcd1;
+}
+.view-option-row { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; }
+.view-option-row select { max-width: 155px; border: 1px solid #b296cf38; border-radius: 6px; padding: 6px; color: inherit; background: #24202c; }
+.view-option-row select:focus-visible { outline: 2px solid #c8a8ed; outline-offset: 2px; }
+.read-controls:not(:empty) { display: flex; justify-content: flex-end; padding: 5px 12px 10px; }
+.read-chunk { display: flow-root; }
+
+.read-pane:has(.read-chunk) { overflow-anchor: none; scroll-behavior: auto; }

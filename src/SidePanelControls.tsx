@@ -105,7 +105,7 @@ export default function SidePanelControls({ navigation, bookmarks, hoveredEdge, 
           aria-label={`Resize ${label}`} aria-orientation="vertical" aria-controls={controls}
           aria-valuemin={0} aria-valuemax={Math.round(maximum(side))}
           aria-valuenow={expanded ? Math.round(widths[side]) : 0} aria-valuetext={`${Math.round(widths[side])} pixels`}
-          title="Drag to resize. Double-click to reset."
+          aria-describedby={`${side}-panel-resize-tooltip`}
           onDoubleClick={() => persist(side, clamp(side, defaults[side]))}
           onKeyDown={(event) => {
             if (drag.current) return;
@@ -119,7 +119,11 @@ export default function SidePanelControls({ navigation, bookmarks, hoveredEdge, 
             event.preventDefault();
             if (!expanded) (side === "left" ? onNavigation : onBookmarks)();
             persist(side, clamp(side, next));
-          }} />
+          }}>
+          <span className="focus-tooltip" id={`${side}-panel-resize-tooltip`} role="tooltip">
+            Drag to resize. Double-click to reset.
+          </span>
+        </div>
         <button className="panel-toggle" aria-label={`${expanded ? "Collapse" : "Expand"} ${label}`}
           aria-describedby={`${side}-panel-tooltip`}
           aria-keyshortcuts={`${modifier}+${side === "left" ? "ArrowLeft" : "ArrowRight"}`} aria-expanded={expanded} aria-controls={controls}

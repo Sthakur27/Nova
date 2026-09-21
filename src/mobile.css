@@ -36,8 +36,8 @@
 .app-shell[data-compact="true"] .note-tab > button { min-height: 44px; }
 .app-shell[data-compact="true"] .note-tab .tab-close { min-width: 36px; opacity: 1; }
 .app-shell[data-compact="true"] .document-toolbar { gap: 6px; padding: 0 10px; height: 52px; }
-.app-shell[data-compact="true"] .document-toolbar > :is(.toolbar-preference, .line-numbers-toggle, .toolbar-icon, .voice-control) { display: none; }
-.app-shell[data-compact="true"] .document-toolbar > :not(.breadcrumbs, .view-switch, .read-controls, [aria-label="Save note"]) { display: none; }
+.app-shell[data-compact="true"] .document-toolbar > :is(.toolbar-preference, .line-numbers-toggle, .toolbar-icon:not(.transparency-control), .voice-control) { display: none; }
+.app-shell[data-compact="true"] .document-toolbar > :not(.breadcrumbs, .view-options, .transparency-control, .view-switch, .read-controls, [aria-label="Save note"]) { display: none; }
 .app-shell[data-compact="true"] .breadcrumbs > :not(:last-child) { display: none; }
 .app-shell[data-compact="true"] .view-switch button { min-width: 44px; min-height: 44px; padding: 8px; color: #b7b0c3; }
 .app-shell[data-compact="true"] .view-switch button.selected { color: #f0e5ff; background: #40364f; }
@@ -72,3 +72,9 @@
 html[data-mobile-keyboard="true"] .mobile-navigation { display: none; }
 html[data-mobile-keyboard="true"] .app-shell[data-compact="true"] { padding-bottom: 0; }
 html[data-mobile-keyboard="true"] .app-shell[data-compact="true"] .toast { bottom: 12px; }
+
+.app-shell[data-compact="true"] .document-toolbar { position: relative; }
+.app-shell[data-compact="true"] .view-options { position: static; margin-right: auto; }
+.app-shell[data-compact="true"] .view-options-panel { left: 10px; right: 10px; width: auto; }
+
+.app-shell[data-compact="true"] .document-toolbar > .transparency-control { min-width: 30px; }

@@ -1,3 +1,4 @@
+import ViewOptions from "./ViewOptions";
 import TabButton from "./TabButton";
 import { openAfterTabClose } from "./closeTabNavigation";
 import CloudSetup from "./CloudSetup";
@@ -156,6 +157,7 @@ export default function App() {
     setSyncFolder(folders.find(item => item.root === folder.root) ?? folders[0] ?? folder);
   }
   const [renameTarget, setRenameTarget] = useState<{ folder: Workspace; path: string } | null>(null);
+  const [readingLayout, setReadingLayout] = usePreference<"continuous" | "pages">("reading-layout", "continuous", ["continuous", "pages"]);
   const [readControls, setReadControls] = useState<HTMLDivElement | null>(null);
   const [galaxyMode, setGalaxyMode, galaxyError] = usePreference<boolean>("galaxy", true);
   const [savedBackgroundMode, setBackgroundMode, translucencyError] = usePreference<typeof backgroundModes[number]>("translucent", "on", backgroundModes);
@@ -250,11 +252,16 @@ export default function App() {
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalStarted, setTerminalStarted] = useState(false);
   const [terminalControls, setTerminalControls] = useState<HTMLDivElement | null>(null);
-  const toggleTerminal = () => { setTerminalStarted(true); setTerminalOpen(open => !open); };
   const [rail, setRail, railError] = usePreference<boolean>("bookmarks-panel", true);
   const [navigation, setNavigation, navigationError] = usePreference<boolean>("navigation-panel", true);
   const [topBars, setTopBars, topBarsError] = usePreference<boolean>("top-bars", true);
   const [statusBar, setStatusBar, statusBarError] = usePreference<boolean>("status-bar", true);
+  const changeTerminalOpen = useCallback((open: boolean) => {
+    if (open) setTerminalStarted(true);
+    setStatusBar(open);
+    setTerminalOpen(open);
+  }, [setStatusBar]);
+  const toggleTerminal = () => changeTerminalOpen(!(terminalOpen && statusBar));
   const [focusMode, setFocusMode, focusModeError] = usePreference<boolean>("focus-mode", false);
   const focusModeActive = focusMode || (!navigation && !rail && !topBars && !(terminalOpen && statusBar));
   const [hoveredBottom, setHoveredBottom] = useState(false);
@@ -1214,9 +1221,9 @@ export default function App() {
       if (panel === "left") setNavigation(focusMode || !navigation);
       else if (panel === "right") setRail(focusMode || !rail);
       else if (panel === "top") setTopBars(focusMode || !topBars);
-      else { setTerminalStarted(true); setTerminalOpen(open => focusMode || !open); }
+      else changeTerminalOpen(focusMode || !(terminalOpen && statusBar));
     });
-  }, [compact, syncFolder, settingsOpen, palette, bookmarkDraft, renameTarget, fileAction, focusMode, navigation, rail, topBars, setFocusMode, setNavigation, setRail, setTopBars]);
+  }, [compact, syncFolder, settingsOpen, palette, bookmarkDraft, renameTarget, fileAction, focusMode, navigation, rail, topBars, terminalOpen, statusBar, changeTerminalOpen, setFocusMode, setNavigation, setRail, setTopBars]);
   useEffect(() => {
     const toggleFocus = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "g" || event.isComposing) return;
@@ -1375,9 +1382,6 @@ export default function App() {
   });
   const toolbar = paneToolbar(visibleViews);
   const isMarkdown = /\.(md|markdown|mdx)$/i.test(path);
-  const documentView = isMarkdown && supportsDocumentView(
-    data?.text.length ?? 0, editorSnapshot?.state.doc.length ?? 0, preview.length,
-  );
   const toggleReadTask = (offset: number, checked: boolean) => {
     editor.current?.toggleTask(offset, checked);
     setPreview(editor.current?.text() ?? "");
@@ -1479,7 +1483,7 @@ export default function App() {
       const editorSnapshot = paneSnapshot;
       const bookmarks = isActive ? marksRef.current : session?.data.bookmarks ?? [];
       const isMarkdown = /\.(md|markdown|mdx)$/i.test(path);
-      const documentView = isMarkdown && supportsDocumentView(data?.text.length ?? 0, editorSnapshot?.state.doc.length ?? 0, preview.length);
+      const documentView = isMarkdown && !(mode === "read" && readingLayout === "pages") && supportsDocumentView(data?.text.length ?? 0, editorSnapshot?.state.doc.length ?? 0, preview.length);
       return (
         <div className="document-area">
           {loading && <div className="loading">Opening your note…</div>}
@@ -1523,8 +1527,8 @@ export default function App() {
                 </div>
                 <FileTitle key={path} path={path} onRename={name => renameFile(workspace, path, name)} />
                 <Suspense fallback={<p>Rendering your note…</p>}>
-                  {preview.length > RICH_DOCUMENT_LIMIT ? (
-                    <LargeRead ref={isActive ? largeRead : undefined} text={preview} markdown={isMarkdown} controlsContainer={isActive ? readControls : null} onToggleTask={toggleReadTask} />
+                  {readingLayout === "pages" || preview.length > RICH_DOCUMENT_LIMIT ? (
+                    <LargeRead layout={readingLayout} ref={isActive ? largeRead : undefined} text={preview} markdown={isMarkdown} controlsContainer={isActive ? readControls : null} onToggleTask={toggleReadTask} />
                   ) : isMarkdown ? (
                     <Markdown text={preview} onToggleTask={toggleReadTask} />
                   ) : (
@@ -1722,17 +1726,20 @@ export default function App() {
             <PanelRight size={17} />
           </button>
         </header>
-        <div className="document-toolbar" data-paginated={mode === "read" && !documentView && preview.length > RICH_DOCUMENT_LIMIT}>
+        <div className="document-toolbar">
           <div className="breadcrumbs">
             <span>{workspace.name}</span>
             <ChevronRight size={13} />
             <span>{path.split("/").at(-1)}</span>
           </div>
-          <div className="read-controls" ref={setReadControls} />
-          <FontControl toolbar value={editorFont} onChange={setEditorFont} />
-          <TextSizeControl toolbar value={fontSize} onChange={setFontSize} />
-          <TextWidthControl toolbar value={textWidth} onChange={setTextWidth} />
-          <LineSpacingControl toolbar value={lineSpacing} onChange={setLineSpacing} />
+          <ViewOptions>
+            <label className="view-option-row"><span>Reading layout</span><select aria-label="Reading layout" value={readingLayout} onChange={event => setReadingLayout(event.target.value as "continuous" | "pages")}>
+              <option value="continuous">Continuous</option><option value="pages">Pages</option>
+            </select></label>
+          <label className="view-option-row"><span>Font</span><FontControl value={editorFont} onChange={setEditorFont} /></label>
+          <label className="view-option-row"><span>Text size</span><TextSizeControl value={fontSize} onChange={setFontSize} /></label>
+          <label className="view-option-row"><span>Text width</span><TextWidthControl value={textWidth} onChange={setTextWidth} /></label>
+          <label className="view-option-row"><span>Line spacing</span><LineSpacingControl value={lineSpacing} onChange={setLineSpacing} /></label>
           {!mobile && <button
             className="icon-button toolbar-icon"
             aria-label="Open in File Location"
@@ -1768,8 +1775,9 @@ export default function App() {
               {showLineHighlight && <Check size={13} />}
             </span>
           </button>
+          </ViewOptions>
           {galaxyMode && <button
-            className="icon-button toolbar-icon focus-toggle"
+            className="icon-button toolbar-icon focus-toggle transparency-control"
             aria-label={`Background: ${backgroundLabels[backgroundMode]}. Switch to ${backgroundLabels[nextBackgroundMode]}`}
             aria-describedby="translucency-tooltip"
             onClick={() => setBackgroundMode(nextBackgroundMode)}
@@ -1781,7 +1789,7 @@ export default function App() {
             </span>
           </button>}
           {galaxyMode && supportsFrosted && <button
-            className="icon-button toolbar-icon focus-toggle"
+            className="icon-button toolbar-icon focus-toggle transparency-control"
             aria-label="Frosted panels"
             aria-pressed={frostedPanes}
             aria-describedby="pane-background-tooltip"
@@ -1856,6 +1864,7 @@ export default function App() {
             <Save size={15} />
           </button>
         </div>
+        <div className="read-controls" ref={setReadControls} />
         {toolbar.hasFormatting && (
           <FormatToolbar formattingDisabled={!data || !isMarkdown || mode === "read"} disabled={!data || mode === "read"}
             active={isMarkdown ? activeFormats : []} style={isMarkdown ? paragraphStyle : "paragraph"} onFormat={(style) => editor.current?.format(style)}
@@ -1884,7 +1893,7 @@ export default function App() {
           onActivate={activatePane} renderTabs={renderPaneTabs} renderDocument={renderPaneDocument}
           onResize={(id, ratio) => updatePaneLayout(mapPane(paneLayoutRef.current, id, node => node.kind === "split" ? { ...node, ratio } : node))} />
         {!mobile && <TerminalPanel hoveredEdge={hoveredBottom} started={terminalStarted} open={terminalOpen && statusBar} root={workspace.root} controlsContainer={terminalControls}
-          onOpenChange={(open) => { if (open) { setTerminalStarted(true); setStatusBar(true); } setTerminalOpen(open); }} onStorageError={() => setNotice("Terminal height changed, but could not be saved on this device.")} />}
+          onOpenChange={changeTerminalOpen} onStorageError={() => setNotice("Terminal height changed, but could not be saved on this device.")} />}
         <div className="status-bar-container">
         <footer id="status-bar" className="status-bar" hidden={!statusBar}>
           <span>
