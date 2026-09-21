@@ -1,3 +1,19 @@
+export const DEFAULT_EXTENSION = ".md";
+
+export const commonExtensions = [
+  [".md", "Markdown"],
+  [".txt", "Plain text"],
+  [".json", "JSON"],
+  [".yaml", "YAML"],
+  [".csv", "CSV"],
+  [".html", "HTML"],
+  [".css", "CSS"],
+  [".js", "JavaScript"],
+  [".ts", "TypeScript"],
+  [".py", "Python"],
+  [".xml", "XML"],
+] as const;
+
 export function normalizeExtension(value: string): string {
   const extension = value.trim().replace(/^\./, "");
   if (!extension || extension.length > 64 || /[\s/\\:*?"<>|\x00-\x1f\x7f]/.test(extension) ||

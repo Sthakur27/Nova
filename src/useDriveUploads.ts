@@ -3,7 +3,7 @@ import { invoke } from "./resetLocalState";
 import { listen } from "@tauri-apps/api/event";
 import { driveTransfer } from "./driveTransfer";
 import { driveSupported } from "./platform";
-export type UploadItem = { path: string; state: "uploading" | "uploaded" | "error"; message: string };
+export type UploadItem = { path: string; state: "uploading" | "uploaded" | "local" | "error"; message: string };
 export type SyncChange = { path: string; previousPath: string };
 type Report = { root: string; folderUrl: string; items: UploadItem[]; changes?: SyncChange[]; uploaded?: boolean };
 type SyncContext = { roots: string[]; focusedFile?: () => { root: string; path: string } | null; protectedPaths: (root: string) => string[]; onComplete: (root: string, changes: SyncChange[]) => Promise<void> };

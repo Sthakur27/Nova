@@ -171,6 +171,14 @@ fn allowed(root: &Path, path: &str) -> Result<bool, String> {
     let registry=crate::read_registry(root)?;
     Ok(registry["cloudSpace"].is_object() || crate::sync_policy::read(&registry)?.included(path))
 }
+// Use the bytes being uploaded, so a concurrent edit cannot turn an earlier
+// empty-file check into an accidental blank upload. Existing identities always
+// retain normal sync behavior, including clearing content and reserved-ID retries.
+fn defer_first_upload(registry: &Value, account: &str, path: &str, bytes: &[u8]) -> bool {
+    bytes.is_empty() && crate::is_untitled(Path::new(path))
+        && identities::at_path(registry, account, path).is_null()
+}
+
 fn upload_workspace(app: tauri::AppHandle, root: PathBuf, protected_paths: Vec<String>, only_path: Option<String>) -> Result<Report, String> {
     let drive = Drive::new()?;
     // Validate policy before creating anything remotely.
@@ -222,7 +230,6 @@ fn upload_workspace(app: tauri::AppHandle, root: PathBuf, protected_paths: Vec<S
         if blocked.contains(&file.path) || protected_paths.contains(&file.path) { continue; }
         if !allowed(&root, &file.path)? { continue; }
         let emit = |state: &str, message: &str| { let _ = app.emit("drive-upload-progress", json!({"root":report.root,"path":file.path,"state":state,"message":message})); };
-        emit("uploading", "Uploading saved file…");
         let result = (|| {
             let local = crate::scoped_path(&root,&file.path)?;
             if fs::metadata(&local).map_err(crate::err)?.len() > crate::MAX_FILE { return Err("File exceeds Nova’s 32 MB limit.".into()); }
@@ -230,6 +237,10 @@ fn upload_workspace(app: tauri::AppHandle, root: PathBuf, protected_paths: Vec<S
             fs::File::open(&local).map_err(crate::err)?.take(crate::MAX_FILE+1).read_to_end(&mut bytes).map_err(crate::err)?;
             if bytes.len() as u64 > crate::MAX_FILE { return Err("File exceeds Nova’s 32 MB limit.".into()); }
             std::str::from_utf8(&bytes).map_err(|_| "Only UTF-8 notes can be uploaded.".to_string())?;
+            if defer_first_upload(&crate::read_registry(&root)?, &account, &file.path, &bytes) {
+                return Ok(false);
+            }
+            emit("uploading", "Uploading saved file…");
             let mut parent = folder.clone();
             let parts: Vec<_> = file.path.split('/').collect();
             for (index, part) in parts[..parts.len()-1].iter().enumerate() {
@@ -301,10 +312,14 @@ fn upload_workspace(app: tauri::AppHandle, root: PathBuf, protected_paths: Vec<S
             if crate::revision(&fs::read(local).map_err(crate::err)?) != crate::revision(&bytes) {
                 return Err("File changed during upload. Save and upload again to send the latest version.".into());
             }
-            Ok(())
+            Ok(true)
         })();
-        if result.is_ok() { report.uploaded = true; }
-        let (state,message) = match result { Ok(()) => ("uploaded","Uploaded changes to Google Drive.".to_string()), Err(error) => ("error",error) };
+        if matches!(result, Ok(true)) { report.uploaded = true; }
+        let (state,message) = match result {
+            Ok(true) => ("uploaded","Uploaded changes to Google Drive.".to_string()),
+            Ok(false) => ("local","Saved on this device · Edit or rename to sync".to_string()),
+            Err(error) => ("error",error),
+        };
         emit(state,&message);
         report.items.push(Item { path:file.path,state:state.into(),message });
     }
@@ -465,6 +480,40 @@ pub async fn drive_restore(parent: String, workspace_id: String, access: State<'
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn untouched_notes_stay_local_until_saved_content_or_name_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let registry = serde_json::json!({});
+        for extension in [".txt", ".md", ".custom", ".d.ts"] {
+            let path = crate::create_untitled(root, extension).unwrap();
+            let local = root.join(&path);
+            assert!(super::defer_first_upload(&registry, "account", &path, &std::fs::read(&local).unwrap()));
+            // Removing the untouched local note needs no remote identity/tombstone.
+            std::fs::remove_file(&local).unwrap();
+            assert!(super::identities::at_path(&registry, "account", &path).is_null());
+            std::fs::write(&local, b"first edit").unwrap();
+            assert!(!super::defer_first_upload(&registry, "account", &path, &std::fs::read(&local).unwrap()));
+            std::fs::write(&local, b"").unwrap();
+            let renamed = crate::rename_file(&local, &format!("Notes{extension}")).unwrap();
+            assert!(!super::defer_first_upload(&registry, "account", renamed.file_name().unwrap().to_str().unwrap(), &std::fs::read(&renamed).unwrap()));
+        }
+        assert!(super::defer_first_upload(&registry, "account", "nested/Untitled 2.txt", b""));
+        assert!(!super::defer_first_upload(&registry, "account", "Untitled.txt", b" "));
+    }
+
+    #[test]
+    fn clearing_existing_notes_and_retrying_reserved_identities_still_syncs() {
+        let mut registry = serde_json::json!({});
+        super::identities::record(&mut registry, "account", "file-id", "Untitled.txt", "Untitled.txt", "hash", &serde_json::Value::Null);
+        assert!(!super::defer_first_upload(&registry, "account", "Untitled.txt", b""));
+        registry["driveObjects"]["account"]["file-id"] = serde_json::json!({"id":"file-id","localPath":"Untitled.txt","pending":true});
+        assert!(!super::defer_first_upload(&registry, "account", "Untitled.txt", b""));
+        // An old deleted identity must not make a newly created empty note sync.
+        registry["driveObjects"]["account"]["file-id"]["deleted"] = serde_json::json!(true);
+        assert!(super::defer_first_upload(&registry, "account", "Untitled.txt", b""));
+    }
+
     #[test]
     fn file_links_follow_identity_and_require_an_uploaded_copy() {
         let mut registry = serde_json::json!({});

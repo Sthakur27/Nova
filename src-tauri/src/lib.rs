@@ -658,7 +658,7 @@ fn create_untitled(root: &Path, extension: &str) -> Result<String, String> {
 #[tauri::command]
 fn create_note(root: String, extension: Option<String>, access: State<'_, Access>) -> Result<String, String> {
     let _guard = access.writes.lock().map_err(err)?;
-    create_untitled(&root_path(&access, &root)?, extension.as_deref().unwrap_or(".txt"))
+    create_untitled(&root_path(&access, &root)?, extension.as_deref().unwrap_or(".md"))
 }
 fn rename_file(source: &Path, name: &str) -> Result<PathBuf, String> {
     if name.trim().is_empty() || name == "." || name == ".." || name == ".nova"
@@ -758,14 +758,16 @@ fn move_note(root: String, path: String, directory: String, access: State<'_, Ac
     let _ = fs::remove_file(old_meta);
     Ok(next)
 }
-// Check while holding Access::writes, immediately before deleting the file.
-fn is_empty_untitled(path: &Path) -> Result<bool, String> {
+fn is_untitled(path: &Path) -> bool {
     let name = path.file_name().and_then(|name| name.to_str()).unwrap_or("");
     let stem = name.split_once('.').map(|(stem, _)| stem).unwrap_or("");
-    let generated = stem == "Untitled" || stem.strip_prefix("Untitled ")
+    stem == "Untitled" || stem.strip_prefix("Untitled ")
         .and_then(|number| number.parse::<u32>().ok())
-        .is_some_and(|number| (2..10_000).contains(&number));
-    if !generated { return Ok(false); }
+        .is_some_and(|number| (2..10_000).contains(&number))
+}
+// Check while holding Access::writes, immediately before deleting the file.
+fn is_empty_untitled(path: &Path) -> Result<bool, String> {
+    if !is_untitled(path) { return Ok(false); }
     match fs::symlink_metadata(path) {
         Ok(metadata) => Ok(metadata.is_file() && metadata.len() == 0),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),

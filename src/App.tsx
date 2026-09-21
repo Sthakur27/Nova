@@ -28,6 +28,7 @@ import { installPanelShortcuts } from "./panelShortcuts";
 import SidePanelControls from "./SidePanelControls";
 import TextWidthControl, { textWidths, type TextWidth } from "./TextWidthControl";
 import { usePreference } from "./preferences";
+import { DEFAULT_EXTENSION } from "./fileExtensions";
 import { useBackgroundBlur } from "./useBackgroundBlur";
 import ScopeToggle from "./ScopeToggle";
 import type {SearchScope} from "./currentSearch";
@@ -152,7 +153,7 @@ export default function App() {
   const [mobileView, setMobileView] = useState<"notes" | "editor" | "bookmarks">("editor");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeSettingId, setActiveSettingId] = useState<string | null>(null);
-  const [defaultExtension, setDefaultExtension, extensionError] = usePreference<string>("default-extension", ".txt");
+  const [defaultExtension, setDefaultExtension, extensionError] = usePreference<string>("default-extension", DEFAULT_EXTENSION);
   const starQueue = useRef(Promise.resolve());
   const createdNotes = useRef(new Map<string, { root: string; path: string }>());
   const [fileAction, setFileAction] = useState<{ folder: Workspace; path: string; action: "move" | "delete" } | null>(null);
@@ -1428,7 +1429,7 @@ export default function App() {
               const tabDirty = tabId(tab) === tabId({ root: workspace.root, path }) ? dirty : paneSessions.current.get(tabId(tab))?.dirty;
               const syncError = tabFolder?.syncError || cloud.error || uploads.errors[tab.root];
               const syncState = syncError ? "error"
-                : !selectedForSync ? "local"
+                : !selectedForSync || (!tabDirty && uploads.items[`${tab.root}\n${tab.path}`]?.state === "local") ? "local"
                 : uploads.transferringRoot === tab.root ? "syncing"
                 : tabDirty || uploads.pending[tab.root] ? "pending"
                 : uploads.completed[tab.root] ? "synced" : "pending";
@@ -1918,7 +1919,7 @@ export default function App() {
               ? "Saving…"
               : dirty
                 ? workspace.cloudSpace ? "Saving on this device…" : draftStatus === "saving" ? "Saving draft…" : draftStatus === "error" ? "Draft not saved" : "Draft saved · Unsaved to file"
-                : workspace.cloudSpace ? uploads.errors[workspace.root] ? "Saved on this device · Sync needs attention" : uploads.transferringRoot === workspace.root ? "Syncing…" : uploads.completed[workspace.root] ? "Up to date" : "Saved on this device · Waiting to sync" : "All changes saved"}
+                : workspace.cloudSpace ? uploads.errors[workspace.root] ? "Saved on this device · Sync needs attention" : uploads.items[`${workspace.root}\n${path}`]?.state === "local" ? "Saved on this device · Edit or rename to sync" : uploads.transferringRoot === workspace.root ? "Syncing…" : uploads.completed[workspace.root] ? "Up to date" : "Saved on this device · Waiting to sync" : "All changes saved"}
           </span>
           <span>
             {mode !== "read"

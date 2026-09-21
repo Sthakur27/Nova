@@ -110,8 +110,9 @@ it("preserves content, whitespace, and deliberately named empty notes", async ()
   expect((await openWorkspace("demo")).files.some(file => file.path === renamed)).toBe(true);
 });
 
-it("defaults to txt and creates, reopens, renames, and cleans up custom extensions", async () => {
-  expect(await createNote("demo")).toBe("Untitled.txt");
+it("defaults to Markdown and creates, reopens, renames, and cleans up custom extensions", async () => {
+  expect(await createNote("demo")).toBe("Untitled.md");
+  expect(await discardEmptyUntitled("demo", "Untitled.md")).toBe(true);
   for (const extension of [".md", "json", ".custom", ".d.ts"]) {
     const suffix = extension.startsWith(".") ? extension : `.${extension}`;
     const path = await createNote("demo", extension);

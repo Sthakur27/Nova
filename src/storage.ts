@@ -1,5 +1,5 @@
 import { parseSyncPolicy, setSyncChoice, type SyncChoice, type SyncPolicy } from "./syncPolicy";
-import { normalizeExtension, isUntitled } from "./fileExtensions";
+import { DEFAULT_EXTENSION, normalizeExtension, isUntitled } from "./fileExtensions";
 import { invoke, localResetInProgress } from "./resetLocalState";
 import { open } from "@tauri-apps/plugin-dialog";
 import { demoFiles } from "./demo";
@@ -227,7 +227,7 @@ export async function searchNotes(
 function persistDemoFiles() {
   localStorage.setItem("nova-demo-files-v1", JSON.stringify(demoWorkspace.files.map(f => f.path)));
 }
-export async function createNote(root: string, extension = ".txt"): Promise<string> {
+export async function createNote(root: string, extension = DEFAULT_EXTENSION): Promise<string> {
   extension = normalizeExtension(extension);
   if (root !== "demo") return invoke("create_note", { root, extension });
   let number = 1;

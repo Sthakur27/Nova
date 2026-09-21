@@ -8,6 +8,31 @@ import { useDriveUploads, type DriveUploads } from "./useDriveUploads";
 vi.mock("./platform", () => ({ driveSupported: true }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(async () => () => {}) }));
+it("keeps untouched notes local and replaces their status after the first upload", async () => {
+  vi.mocked(invoke).mockReset();
+  (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+  let uploads!: DriveUploads;
+  function Harness() { uploads = useDriveUploads(true); return null; }
+  const root = createRoot(document.createElement("div"));
+  try {
+    await act(async () => root.render(<Harness />));
+    vi.mocked(invoke).mockResolvedValueOnce({root:"/notes",folderUrl:"",uploaded:false,items:[
+      {path:"Untitled.txt",state:"local",message:"Saved on this device · Edit or rename to sync"},
+    ]});
+    await act(async () => { await uploads.upload("/notes"); });
+    expect(uploads.items["/notes\nUntitled.txt"].state).toBe("local");
+    expect(uploads.errors["/notes"]).toBeFalsy();
+    expect(uploads.transferringRoot).toBeNull();
+    await act(async () => { uploads.schedule("/notes"); });
+    expect(uploads.items["/notes\nUntitled.txt"]).toBeUndefined();
+    vi.mocked(invoke).mockResolvedValueOnce({root:"/notes",folderUrl:"",uploaded:true,items:[
+      {path:"Untitled.txt",state:"uploaded",message:"Uploaded changes to Google Drive."},
+    ]});
+    await act(async () => { await uploads.upload("/notes"); });
+    expect(uploads.items["/notes\nUntitled.txt"].state).toBe("uploaded");
+    expect(uploads.pending["/notes"]).toBe(false);
+  } finally { await act(async () => root.unmount()); }
+});
 it("reports uploads and failures, skips demo files, and stops after disconnect", async () => {
   (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
   let uploads!: DriveUploads;

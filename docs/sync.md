@@ -33,6 +33,10 @@ notes. They then upload automatically. The Save control remains for Local notes.
 Status distinguishes saving on this device, waiting to sync, syncing, up to date,
 and sync errors. Cloud settings expose retry and connection errors.
 
+New empty Untitled notes stay on the device until their saved content changes or
+they are renamed. Deleting an untouched note therefore creates no Drive copy.
+Notes that already have a Drive identity continue syncing even when emptied.
+
 Downloaded notes remain editable offline. Saved changes retry on foreground checks
 and periodic checks while Nova is visible. Discovery and reconciliation run every
 minute and when the app regains focus. The focused note is checked every five

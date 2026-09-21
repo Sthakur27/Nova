@@ -3,7 +3,7 @@ import AppUpdate from "./AppUpdate";
 import type { useAppUpdate } from "./useAppUpdate";
 import { FontControl, TextSizeControl, type EditorFont } from "./TypographyControls";
 import LineSpacingControl, { type LineSpacing } from "./LineSpacingControl";
-import { normalizeExtension } from "./fileExtensions";
+import { commonExtensions } from "./fileExtensions";
 import { useEffect, useId, useRef, useState } from "react";
 import TextWidthControl, { type TextWidth } from "./TextWidthControl";
 import { Check, ExternalLink, Settings2, X } from "lucide-react";
@@ -56,8 +56,6 @@ export default function Settings(props: Props) {
     finally { resetPending.current = false; setResetting(false); }
   }
   const dialog = useRef<HTMLDialogElement>(null);
-  const [extension, setExtension] = useState(props.defaultExtension);
-  const [extensionError, setExtensionError] = useState("");
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     const element = dialog.current!;
@@ -112,16 +110,13 @@ export default function Settings(props: Props) {
         </div>}
       </section>}
       <section aria-labelledby="settings-workspace"><h2 id="settings-workspace">Workspace</h2>
-        <div className="settings-row"><div><label htmlFor="settings-extension">Default file extension</label><p id="settings-extension-help">Use any extension for new text files. Default: .txt.</p>
-          {extensionError && <p id="settings-extension-error" role="alert">{extensionError}</p>}</div>
-          <input id="settings-extension" type="text" value={extension} placeholder=".txt" spellCheck={false}
-            aria-invalid={!!extensionError} aria-describedby={extensionError ? "settings-extension-help settings-extension-error" : "settings-extension-help"}
-            onChange={event => {
-              const value = event.target.value;
-              setExtension(value);
-              try { props.onDefaultExtension(normalizeExtension(value)); setExtensionError(""); }
-              catch (error) { setExtensionError((error as Error).message); }
-            }} onBlur={() => { if (!extensionError) setExtension(normalizeExtension(extension)); }} />
+        <div className="settings-row"><div><label htmlFor="settings-extension">Default file extension</label><p id="settings-extension-help">Choose the format for new files. Default: .md.</p></div>
+          <select id="settings-extension" value={props.defaultExtension} aria-describedby="settings-extension-help"
+            onChange={event => props.onDefaultExtension(event.target.value)}>
+            {commonExtensions.map(([extension, label]) => <option key={extension} value={extension}>{label} ({extension})</option>)}
+            {!commonExtensions.some(([extension]) => extension === props.defaultExtension) &&
+              <option value={props.defaultExtension}>Custom ({props.defaultExtension})</option>}
+          </select>
         </div>
         <Toggle title="Bookmarks panel" description="Keep your saved passages alongside your notes." checked={props.bookmarks} onChange={props.onBookmarks} />
       </section>
