@@ -4,6 +4,7 @@ import { overflowClip } from "./overflowClip";
 
 const SUPERNOVA_DURATION = 3000;
 const INTERACTION_DURATION = 700;
+const FRAME_INTERVAL = 1000 / 24;
 const targets = "button:not(:disabled), a, summary, select, input, .bookmark-card, .note-tab, .file-row, .root-header";
 type Edge = { x: number; y: number; width: number; height: number; radius?: number; selected?: boolean; burst?: number; clip?: ReturnType<typeof overflowClip> };
 type SelectedLine = { kind: "reader"; element: Element; row: number } | { kind: "editor"; element: HTMLElement };
@@ -35,7 +36,8 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
     let hover: Element | null = null;
     let focus: Element | null = null;
     let frame = 0;
-    let last = 0;
+    let frameTimer: number | undefined;
+    let last = -Infinity;
     let animateUntil = 0;
     let geometryDirty = true;
     let cachedEdges: Edge[] = [];
@@ -168,7 +170,7 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
         ctx.globalAlpha = opacity * breath;
         ctx.stroke();
       }
-      const count = Math.max(5, Math.min(supernovaMotion ? 440 : burst === undefined ? 64 : 220, Math.ceil(perimeter / (supernovaMotion ? 10 : 16))));
+      const count = Math.max(5, Math.min(supernovaMotion ? 240 : burst === undefined ? 32 : 120, Math.ceil(perimeter / (supernovaMotion ? 10 : 16))));
       const depth = Math.min(supernovaMotion ? 240 : burst === undefined ? 19 : 52, Math.min(w, h) * 0.35);
       for (let i = 0; i < count; i++) {
         // Stable, uneven spacing and lifetimes prevent synchronized rows of dots.
@@ -331,10 +333,6 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
     };
     const paint = (now: number) => {
       frame = 0;
-      if (!motion.matches && now - last < 32) {
-        frame = requestAnimationFrame(paint);
-        return;
-      }
       last = now;
       if (geometryDirty || transitions.size) measure();
       const elapsed = now - supernova;
@@ -353,10 +351,19 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
       }
       // Leave the last painted glow in place once an interaction settles. Focus
       // alone must not keep repainting the full-window canvas while reading.
-      if (!motion.matches && ((active && now < animateUntil) || bursting || transitions.size > 0)) frame = requestAnimationFrame(paint);
+      if (!motion.matches && ((active && now < animateUntil) || bursting || transitions.size > 0)) redraw();
     };
     const redraw = () => {
-      if (!frame) frame = requestAnimationFrame(paint);
+      if (frame || frameTimer !== undefined) return;
+      // Sleep between decorative frames instead of waking on every display
+      // refresh just to skip work, especially on high-refresh-rate screens.
+      const wait = motion.matches ? 0 : Math.max(0, FRAME_INTERVAL - (performance.now() - last));
+      if (wait > 0) {
+        frameTimer = window.setTimeout(() => {
+          frameTimer = undefined;
+          frame = requestAnimationFrame(paint);
+        }, Math.ceil(wait));
+      } else frame = requestAnimationFrame(paint);
     };
     const invalidate = () => { geometryDirty = true; redraw(); };
     const refresh = () => {
@@ -452,6 +459,7 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
       document.removeEventListener("transitionend", transition);
       document.removeEventListener("transitioncancel", transition);
       cancelAnimationFrame(frame);
+      window.clearTimeout(frameTimer);
       window.clearTimeout(burstEnd);
       ctx.clearRect(0, 0, width, height);
       document.removeEventListener("pointerdown", refresh);

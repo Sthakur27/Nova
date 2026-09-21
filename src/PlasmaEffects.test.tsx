@@ -9,15 +9,15 @@ let now: number, nextFrame: number;
 let frames: Map<number, FrameRequestCallback>;
 let motion: MediaQueryList;
 let onResize: ResizeObserverCallback;
-const clearRect = vi.fn(), stroke = vi.fn();
+const clearRect = vi.fn(), stroke = vi.fn(), drawImage = vi.fn();
 
-function advance(milliseconds: number) {
-  for (let elapsed = 0; elapsed < milliseconds; elapsed += 40) {
-    now += 40;
+function advance(milliseconds: number, step = 40) {
+  for (let elapsed = 0; elapsed < milliseconds; elapsed += step) {
+    now += step;
     const pending = [...frames.values()];
     frames.clear();
     pending.forEach(frame => frame(now));
-    vi.advanceTimersByTime(40);
+    vi.advanceTimersByTime(step);
   }
 }
 async function render(active = true, supernova = 0) {
@@ -29,7 +29,7 @@ async function render(active = true, supernova = 0) {
 beforeEach(() => {
   vi.useFakeTimers();
   now = 1000; nextFrame = 0; frames = new Map();
-  clearRect.mockClear(); stroke.mockClear();
+  clearRect.mockClear(); stroke.mockReset(); drawImage.mockClear();
   vi.spyOn(performance, "now").mockImplementation(() => now);
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
@@ -46,7 +46,7 @@ beforeEach(() => {
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
     clearRect, stroke, createLinearGradient: () => gradient, createRadialGradient: () => gradient,
     fillRect: vi.fn(), setTransform: vi.fn(), save: vi.fn(), restore: vi.fn(), beginPath: vi.fn(),
-    rect: vi.fn(), roundRect: vi.fn(), clip: vi.fn(), fill: vi.fn(), drawImage: vi.fn(),
+    rect: vi.fn(), roundRect: vi.fn(), clip: vi.fn(), fill: vi.fn(), drawImage,
     moveTo: vi.fn(), lineTo: vi.fn(),
   } as unknown as CanvasRenderingContext2D);
   const rect = { left: 0, top: 0, right: 100, bottom: 50, width: 100, height: 50 } as DOMRect;
@@ -75,11 +75,11 @@ it.each(["pointerover", "pointerdown", "input", "keyup", "scroll", "selectioncha
     await render(); advance(1000);
     document.dispatchEvent(new Event(event, { bubbles: true }));
     document.dispatchEvent(new Event(event, { bubbles: true }));
-    expect(frames.size).toBe(1);
+    expect(frames.size + vi.getTimerCount()).toBe(1);
     const paints = clearRect.mock.calls.length;
     advance(200);
     expect(clearRect.mock.calls.length).toBeGreaterThan(paints);
-    expect(frames.size).toBe(1);
+    expect(frames.size + vi.getTimerCount()).toBe(1);
     advance(1000);
     expect(frames.size).toBe(0);
   },
@@ -87,9 +87,9 @@ it.each(["pointerover", "pointerdown", "input", "keyup", "scroll", "selectioncha
 
 it("cancels animation and clears the glow on loss of focus", async () => {
   await render(); advance(200);
-  expect(frames.size).toBe(1);
+  expect(frames.size + vi.getTimerCount()).toBe(1);
   await render(false);
-  expect(frames.size).toBe(0);
+  expect(frames.size + vi.getTimerCount()).toBe(0);
   expect(clearRect).toHaveBeenLastCalledWith(0, 0, innerWidth, innerHeight);
   document.dispatchEvent(new Event("input"));
   expect(frames.size).toBe(0);
@@ -98,7 +98,7 @@ it("cancels animation and clears the glow on loss of focus", async () => {
 it("lets the explicit supernova finish after the interaction has settled", async () => {
   await render(true, now);
   advance(1200);
-  expect(frames.size).toBe(1);
+  expect(frames.size + vi.getTimerCount()).toBeGreaterThan(0);
   advance(2000);
   expect(frames.size).toBe(0);
 });
@@ -169,7 +169,7 @@ it.each(["transitionend", "transitioncancel", "removed"])("tracks moving geometr
   };
   transition("transitionrun");
   advance(80);
-  expect(frames.size).toBe(1);
+  expect(frames.size + vi.getTimerCount()).toBe(1);
   const boxes = vi.mocked(Element.prototype.getBoundingClientRect);
   boxes.mockClear(); advance(40);
   expect(boxes).toHaveBeenCalled();
@@ -177,4 +177,27 @@ it.each(["transitionend", "transitioncancel", "removed"])("tracks moving geometr
   else transition(ending);
   advance(80);
   expect(frames.size).toBe(0);
+});
+
+it("caps sustained interaction at 24 decorative frames per second on a fast display", async () => {
+  await render(); advance(1000);
+  const paintedAt = new Set<number>();
+  stroke.mockImplementation(() => paintedAt.add(now));
+  for (let i = 0; i < 12; i++) {
+    document.dispatchEvent(new Event("pointerdown"));
+    advance(80, 8); // Simulate a 125 Hz display during repeated interaction.
+  }
+  expect(paintedAt.size).toBeGreaterThan(10);
+  expect(paintedAt.size).toBeLessThanOrEqual(24);
+  advance(1200, 8);
+  expect(frames.size + vi.getTimerCount()).toBe(0);
+});
+
+it.each([false, true])("bounds particle work for large effects (supernova: %s)", async burst => {
+  vi.mocked(Element.prototype.getBoundingClientRect).mockReturnValue({
+    left: 0, top: 0, right: 1000, bottom: 700, width: 1000, height: 700,
+  } as DOMRect);
+  await render(!burst, burst ? now : 0);
+  advance(40);
+  expect(drawImage).toHaveBeenCalledTimes(burst ? 240 : 32);
 });
