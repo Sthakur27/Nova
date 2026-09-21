@@ -86,6 +86,7 @@ import { addFolders, type EditorMode } from "./folders";
 import VoiceControl from "./VoiceControl";
 import NovaMark from "./NovaMark";
 import SignalBell from "./SignalBell";
+import SidebarAppearance from "./SidebarAppearance";
 import GalaxyMark from "./GalaxyMark";
 import { useAppUpdate } from "./useAppUpdate";
 import { initialScrollTop } from "./scrollSpace";
@@ -123,6 +124,7 @@ const supportsTranslucency = !mobile;
 const backgroundModes = ["on", "off", "frosted"] as const;
 const availableBackgroundModes: readonly typeof backgroundModes[number][] = supportsFrosted ? backgroundModes : backgroundModes.filter(mode => mode !== "frosted");
 const backgroundLabels = { on: "Translucent", off: "Black", frosted: "Frosted" };
+const launchMessages = ["Thrusters active", "Orbit stabilized", "Hyperdrive humming", "Stardust calibrated", "Cosmic vibes nominal"];
 function BlackHoleIcon() {
   return (
     <svg className="black-hole-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -145,6 +147,7 @@ async function readRecoverableNote(root: string, path: string) {
 type PaneSession = { workspace: Workspace; path: string; data: DocumentData; mode: EditorMode; snapshot?: EditorSnapshot; dirty: boolean; cursor: [number, number]; preview: string; formats?: FormatAction[]; paragraph?: FormatAction };
 
 export default function App() {
+  const [launchMessage] = useState(() => launchMessages[Math.floor(Math.random() * launchMessages.length)]);
   const compact = useCompactLayout();
   const [mobileView, setMobileView] = useState<"notes" | "editor" | "bookmarks">("editor");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -1623,7 +1626,6 @@ export default function App() {
         <button className="sidebar-action focus-toggle focus-mode-exit" aria-label="Exit focus mode" aria-pressed={true}
           aria-describedby="exit-focus-tooltip" aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+G`} onClick={() => changeFocusMode(false)}>
           <BlackHoleIcon />
-          <span className="focus-flight-label" aria-hidden="true">Focus</span>
           <span className="focus-tooltip" id="exit-focus-tooltip" role="tooltip">
             <span>Exit focus mode</span><span className="focus-tooltip-keys"><kbd>{mod}</kbd><kbd>G</kbd></span>
           </span>
@@ -1685,25 +1687,26 @@ export default function App() {
           externalDrag={externalDrag}
         />
         <div className="sidebar-bottom">
-          <div className="local-indicator">
-            <span />
-            {folders.length} {folders.length === 1 ? "folder" : "folders"} ·
-            {mobile ? "available offline" : "on this device"}
-            {galaxyMode && <SignalBell />}
-          </div>
+          {galaxyMode && <div className="launch-indicator">
+            <span aria-hidden="true" />
+            {launchMessage}
+          </div>}
           {mobile && <p>Cloud notes save and sync automatically.</p>}
           <div className="sidebar-actions">
-            <button className="sidebar-action" hidden={mobile} aria-label="Add folders" title="Add folders" onClick={openFolder}>
+            <button className="sidebar-action" hidden={mobile} aria-label="Add folders" aria-describedby="add-folders-tip" onClick={openFolder}>
               <Plus size={17} aria-hidden="true" />
+              <span className="focus-tooltip" id="add-folders-tip" role="tooltip">Add folders</span>
             </button>
-            <button className="sidebar-action" aria-label="Settings" title={`Settings (${mod} ,)`}
+            <button className="sidebar-action" aria-label="Settings" aria-describedby="settings-button-tip"
               aria-haspopup="dialog" onClick={() => setSettingsOpen(true)}>
               <SettingsIcon size={17} aria-hidden="true" />
+              <span className="focus-tooltip" id="settings-button-tip" role="tooltip"><span>Settings</span><span className="focus-tooltip-keys"><kbd>{mod}</kbd><kbd>,</kbd></span></span>
             </button>
             <button className="sidebar-action" aria-label={drive.status.connected ? "Sync settings" : "Set up sync"}
-              title={drive.status.connected ? "Sync settings" : "Set up Google Drive sync"}
+              aria-describedby="cloud-button-tip"
               aria-haspopup="dialog" onClick={() => showSync(workspace)}>
               <Cloud size={17} aria-hidden="true" />
+              <span className="focus-tooltip" id="cloud-button-tip" role="tooltip">{drive.status.connected ? "Cloud" : "Set up Cloud"}</span>
             </button>
             <button className="sidebar-action focus-toggle" aria-label="Enter focus mode" aria-pressed={focusMode}
               aria-describedby="enter-focus-tooltip" aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+G`} onClick={() => changeFocusMode(true)}>
@@ -1713,6 +1716,11 @@ export default function App() {
               </span>
             </button>
           </div>
+          {galaxyMode && <div className="sidebar-corner-controls">
+            {!mobile && <SidebarAppearance background={backgroundMode} backgrounds={availableBackgroundModes} labels={backgroundLabels}
+              onBackground={setBackgroundMode} frosted={frostedPanes} onFrosted={setFrostedPanes} supportsFrosted={supportsFrosted} />}
+            <SignalBell />
+          </div>}
         </div>
       </aside>
       <main ref={tabStripRef} className="main-panel" hidden={compact && mobileView !== "editor"}

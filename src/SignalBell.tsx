@@ -66,7 +66,7 @@ export default function SignalBell() {
   }
 
   return <button type="button" className="sidebar-action signal-bell"
-    aria-label="Play a space ding" title="Just a little space ding" onClick={() => void ding()}>
+    aria-label="Play a space ding" onClick={() => void ding()}>
     <span key={strike} className={strike ? "signal-bell-strike" : undefined}>
       <Rocket size={15} aria-hidden="true" />
     </span>

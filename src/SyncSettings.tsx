@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Cloud, X, ExternalLink, RefreshCw } from "lucide-react";
 import { confirmSyncOff } from "./confirmSyncOff";
+import { mobile } from "./platform";
 import type { DriveUploads } from "./useDriveUploads";
 import type { DriveConnection } from "./useDriveConnection";
 import type { Workspace } from "./model";
@@ -21,6 +22,10 @@ export default function SyncSettings({drive, uploads, folders, onClose, cloudLoa
   return <dialog ref={dialog} className="settings-dialog sync-dialog" aria-labelledby="sync-title" onCancel={event=>{event.preventDefault();onClose();}}>
     <header className="settings-header"><div className="settings-emblem"><Cloud size={21} aria-hidden="true" /></div><div><h1 id="sync-title">Cloud</h1><p>Your notes, available on every connected device.</p></div><button autoFocus className="icon-button" aria-label="Close Cloud settings" onClick={onClose}><X size={18}/></button></header>
     <div className="sync-body"><div className="sync-intro">
+      <div className="local-indicator">
+        <span aria-hidden="true" />
+        {folders.length} {folders.length === 1 ? "folder" : "folders"} · {mobile ? "available offline" : "on this device"}
+      </div>
       <div className="drive-connection cloud-connection"><div className="cloud-account-heading"><div className="drive-account"><span className="cloud-eyebrow">Google Drive</span><strong>{drive.checking ? "Checking connection…" : drive.status.connected ? drive.status.email : "Connect your account"}</strong></div>
         {drive.status.connected && <button className="settings-action" disabled={drive.busy || !!uploads.activeRoot || cloudLoading} onClick={async()=>{if(await confirmSyncOff("this device")) await drive.disconnect();}}>Disconnect</button>}</div>
         {!drive.status.connected && <>

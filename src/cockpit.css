@@ -1,5 +1,5 @@
 /* Regular mode omits the decorative cockpit furniture. */
-.console-header, .focus-flight-label, .waypoint-id i { display: none; }
+.console-header, .waypoint-id i { display: none; }
 .app-shell[data-galaxy="true"] .sidebar-actions {
   display: grid;
   gap: 0;
@@ -224,14 +224,10 @@
   animation: cockpit-orbit 1s linear infinite;
 }
 .app-shell[data-galaxy="true"] .sidebar-action.focus-mode-exit {
-  width: auto;
-  padding: 0 14px;
-  gap: 9px;
-  border-radius: 20px;
+  border-radius: 50%;
   border-color: #c5a4ec30;
   --action-accent: #c5a4ec;
 }
-.app-shell[data-galaxy="true"] .focus-flight-label { font-size: 9px; letter-spacing: 1.5px; text-transform: uppercase; }
 @keyframes cockpit-orbit { to { transform: rotate(360deg); } }
 @keyframes console-arrive {
   from { opacity: 0; transform: translateY(8px) scale(.985); }
@@ -253,7 +249,6 @@
 .app-shell[data-galaxy="true"][data-compact="true"] .palette-footer { flex-wrap: wrap; gap: 8px 12px; }
 .app-shell[data-galaxy="true"][data-compact="true"] .palette-footer > span:last-child { flex-basis: 100%; margin-left: 0; }
 
-.app-shell[data-galaxy="true"] .focus-flight-label { display: inline; }
 .app-shell[data-galaxy="true"] .waypoint-id i { display: inline-block; }
 .app-shell[data-galaxy="true"][data-compact="true"] .sidebar-actions { display: flex; gap: 10px; }
 .app-shell[data-galaxy="true"][data-compact="true"] .sidebar-actions > .sidebar-action { width: 44px; height: 44px; }

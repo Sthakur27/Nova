@@ -214,9 +214,11 @@ kbd {
   gap: 6px;
 }
 .sidebar-bottom {
+  position: relative;
   padding: 22px 7px 0;
 }
-.local-indicator {
+.local-indicator,
+.launch-indicator {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -224,12 +226,20 @@ kbd {
   font-size: 11px;
 }
 .local-indicator > span,
+.launch-indicator > span,
 .status-dot {
   width: 5px;
   height: 5px;
   background: #84a78e;
   border-radius: 50%;
   display: inline-block;
+}
+.launch-indicator > span {
+  background: #b497dc;
+  flex-shrink: 0;
+}
+.launch-indicator + .sidebar-actions {
+  margin-top: 16px;
 }
 .sidebar-bottom p {
   font-size: 11px;
@@ -243,8 +253,8 @@ kbd {
   gap: 8px;
   padding-bottom: 16px;
 }
-.local-indicator + .sidebar-actions {
-  margin-top: 16px;
+.sync-intro > .local-indicator {
+  margin-bottom: 16px;
 }
 .sidebar-action {
   display: flex;
@@ -2293,7 +2303,7 @@ kbd {
 .panel-toggle-top, .panel-toggle-bottom { pointer-events: none; }
 .panel-toggle-top .panel-toggle, .panel-toggle-bottom .panel-toggle { position: relative; z-index: 1; }
 .panel-toggle-top[data-expanded="false"], .panel-toggle-bottom[data-expanded="false"] { width: auto; height: 48px; }
-.sidebar, .bookmark-rail { cursor: col-resize; }
+.sidebar, .bookmark-rail { cursor: default; }
 :is(.sidebar, .bookmark-rail, .top-bars) :is(button, a, input, select, textarea, [role="tab"]) { cursor: revert; }
 .app-shell[data-panel-dragging], .app-shell[data-panel-dragging] * { user-select: none !important; -webkit-user-select: none !important; cursor: col-resize !important; }
 .app-shell[data-snap-panel="left"] .sidebar, .app-shell[data-snap-panel="right"] .bookmark-rail { opacity: .3; }
@@ -2732,7 +2742,7 @@ kbd {
   border-color: transparent;
   background: transparent;
 }
-.signal-bell > span {
+.signal-bell > span:first-child {
   display: grid;
   place-items: center;
   width: 28px;
@@ -2770,4 +2780,19 @@ kbd {
   background: #fff;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z'/%3E%3C/svg%3E") center / contain no-repeat;
   pointer-events: none;
+}
+
+/* Small cockpit controls stay separate from the primary sidebar actions. */
+.sidebar-corner-controls { position: absolute; right: 0; bottom: 12px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.sidebar-corner-controls .signal-bell { margin-left: 0; }
+.sidebar-corner-controls .sidebar-action { width: 24px; height: 24px; border-radius: 50%; border: 1px solid #ffffff12; background: linear-gradient(145deg, #ffffff09, #ffffff02); box-shadow: 0 2px 0 #00000030, inset 0 1px 0 #ffffff08; }
+.sidebar-corner-controls .sidebar-action:hover, .sidebar-corner-controls .sidebar-action[aria-pressed="true"] { background: #b497dc18; border-color: #b497dc40; }
+.sidebar-corner-controls .signal-bell > span:first-child { width: 24px; height: 24px; }
+.sidebar .sidebar-action { position: relative; }
+.sidebar-action:hover > .focus-tooltip, .sidebar-action:focus-visible > .focus-tooltip { visibility: visible; opacity: 1; transform: translateY(0); }
+
+.app-shell[data-galaxy="true"][data-compact="false"] .sidebar-actions {
+  width: calc(100% - 36px);
+  margin-inline: 0 auto;
+  justify-content: center;
 }
