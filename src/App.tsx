@@ -1,6 +1,7 @@
 import SettingDialog from "./SettingDialog";
 import { settingChoices, toggleSetting } from "./settingCommands";
 import ViewOptions from "./ViewOptions";
+import { startEditorWindowDrag } from "./editorWindowDrag";
 import TabButton from "./TabButton";
 import { openAfterTabClose } from "./closeTabNavigation";
 import CloudSetup from "./CloudSetup";
@@ -1216,14 +1217,15 @@ export default function App() {
   };
   const transitionFocus = useFocusTransition(galaxyMode && !compact);
   const changeFocusMode = useCallback((focused: boolean) => transitionFocus(focused, () => {
-    if (!focused) {
+    // Restore panels only when exiting the all-panels-collapsed state; explicit focus mode preserves their settings.
+    if (!focused && !focusMode) {
       setNavigation(true);
       setRail(true);
       setTopBars(true);
       setStatusBar(true);
     }
     setFocusMode(focused);
-  }), [transitionFocus, setFocusMode, setNavigation, setRail, setTopBars, setStatusBar]);
+  }), [transitionFocus, focusMode, setFocusMode, setNavigation, setRail, setTopBars, setStatusBar]);
   useEffect(() => {
     if (compact || syncFolder || settingsOpen || activeSettingId || palette || bookmarkDraft || renameTarget || fileAction) return;
     return installPanelShortcuts(window, mod === "⌘", panel => {
@@ -1416,7 +1418,7 @@ export default function App() {
     return <CloudSetup drive={drive} loading={cloud.loading} error={cloud.error} retry={()=>void cloud.refresh()}/>;
   }
   function renderPaneTabs(pane: Pane) { return (
-          <div className="note-tabs" hidden={!compact && (!topBars || focusMode)} role="tablist" aria-label="Open notes">
+          <div className="note-tabs" hidden={!compact && (!topBars || focusMode)} role="tablist" aria-label="Open notes" onPointerDownCapture={startEditorWindowDrag}>
             {(compact ? tabs.map(tabId) : pane.tabs).map(id => tabs.find(tab => tabId(tab) === id)).filter((tab): tab is NoteTab => !!tab).map((tab) => {
               const active =
                 pane.selected === tabId(tab);
@@ -1726,14 +1728,16 @@ export default function App() {
           if (event.pointerType === "touch") return;
           const bounds = event.currentTarget.getBoundingClientRect();
           const top = event.currentTarget.querySelector(".top-bars-container")!.getBoundingClientRect();
-          setHoveredTop(event.clientY <= Math.max(top.bottom + 12, bounds.top + 48));
+          setHoveredTop(topBars
+            ? Math.abs(event.clientY - top.bottom) <= 12
+            : event.clientY >= bounds.top && event.clientY <= bounds.top + 48);
           const bottomPanel = event.currentTarget.querySelector(".terminal-panel");
           const bottomEdge = bottomPanel?.getBoundingClientRect().top ?? bounds.bottom;
           setHoveredBottom(Math.abs(event.clientY - bottomEdge) <= 32);
         }}
         onPointerLeave={() => { setHoveredTop(false); setHoveredBottom(false); }}>
         <div className="top-bars-container">
-        <div id="top-bars" className="top-bars" hidden={!compact && !topBars}>
+        <div id="top-bars" className="top-bars" hidden={!compact && !topBars} onPointerDownCapture={startEditorWindowDrag}>
         <div className="document-toolbar">
           <div className="breadcrumbs">
             <span>{workspace.name}</span>
@@ -1904,6 +1908,7 @@ export default function App() {
           onActivate={activatePane} renderTabs={renderPaneTabs} renderDocument={renderPaneDocument}
           onResize={(id, ratio) => updatePaneLayout(mapPane(paneLayoutRef.current, id, node => node.kind === "split" ? { ...node, ratio } : node))} />
         {!mobile && <TerminalPanel hoveredEdge={hoveredBottom} started={terminalStarted} open={terminalOpen && statusBar} root={workspace.root} controlsContainer={terminalControls}
+          bottomPanelOpen={statusBar} onBottomPanelOpenChange={setStatusBar}
           onOpenChange={changeTerminalOpen} onStorageError={() => setNotice("Terminal height changed, but could not be saved on this device.")} />}
         <div className="status-bar-container">
         <footer id="status-bar" className="status-bar" hidden={!statusBar}>

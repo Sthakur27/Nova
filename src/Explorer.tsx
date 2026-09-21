@@ -182,6 +182,23 @@ export default function Explorer({
   onToggleSync, syncBusy = false,
   externalDrag,
 }: Props) {
+  const treeRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const tree = treeRef.current;
+    if (!tree) return;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const onScroll = () => {
+      tree.classList.add("is-scrolling");
+      clearTimeout(timeout);
+      timeout = setTimeout(() => tree.classList.remove("is-scrolling"), 1000);
+    };
+    tree.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      clearTimeout(timeout);
+      tree.removeEventListener("scroll", onScroll);
+      tree.classList.remove("is-scrolling");
+    };
+  }, []);
   const [menu, setMenu] = useState<{ folder: Workspace; path: string; x: number; y: number; trigger: HTMLElement } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -273,6 +290,7 @@ export default function Explorer({
         </div>
       </div>
       <nav
+        ref={treeRef}
         className={
           "file-tree multi-explorer " + (externalDrag ? "external-drag" : "")
         }

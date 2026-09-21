@@ -12,7 +12,8 @@ function readHeight() {
     return Number.isFinite(value) && value >= 120 ? Math.min(1000, value) : defaultHeight;
   } catch { return defaultHeight; }
 }
-export default function TerminalPanel({ open, root, onOpenChange, onStorageError, controlsContainer, hoveredEdge = false, started = true }: {
+export default function TerminalPanel({ open, root, onOpenChange, bottomPanelOpen = open, onBottomPanelOpenChange = onOpenChange, onStorageError, controlsContainer, hoveredEdge = false, started = true }: {
+  bottomPanelOpen?: boolean; onBottomPanelOpenChange?: (open: boolean) => void;
   started?: boolean; hoveredEdge?: boolean;
   controlsContainer: HTMLElement | null;
   open: boolean; root: string; onOpenChange: (open: boolean) => void; onStorageError: () => void;
@@ -85,13 +86,13 @@ export default function TerminalPanel({ open, root, onOpenChange, onStorageError
   const actualHeight = draft ?? (open ? maximized ? maximum : clamp(height) : 0);
   return <section ref={panel} id="terminal-panel" className="terminal-panel" aria-label="Terminal"
     data-open={open} data-snap-collapse={draft === 0} style={{ height: actualHeight }}>
-    <div className="panel-toggle-zone panel-toggle-terminal" data-expanded={open} data-edge-hover={hoveredEdge}>
-      <button className="panel-toggle" aria-label={open ? "Collapse bottom panel" : "Expand bottom panel"}
-        aria-describedby="bottom-panel-tooltip" aria-expanded={open} aria-controls="terminal-body"
-        onClick={() => onOpenChange(!open)}>
-        {open ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
+    <div className="panel-toggle-zone panel-toggle-terminal" data-expanded={bottomPanelOpen} data-edge-hover={hoveredEdge}>
+      <button className="panel-toggle" aria-label={bottomPanelOpen ? "Collapse bottom panel" : "Expand bottom panel"}
+        aria-describedby="bottom-panel-tooltip" aria-expanded={bottomPanelOpen} aria-controls="terminal-body status-bar"
+        onClick={() => onBottomPanelOpenChange(!bottomPanelOpen)}>
+        {bottomPanelOpen ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
         <span className="focus-tooltip" id="bottom-panel-tooltip" role="tooltip">
-          <span>{open ? "Collapse" : "Expand"} bottom panel</span>
+          <span>{bottomPanelOpen ? "Collapse" : "Expand"} bottom panel</span>
         </span>
       </button>
     </div>

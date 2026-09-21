@@ -1060,17 +1060,21 @@ kbd {
   background: #ffffff13;
   border-radius: 10px;
 }
-/* Preserve the scroll gutter while hiding idle editor thumbs, including on hover. */
-.editor-mount :is(.cm-scroller, .document-pane) {
+/* Preserve the scroll gutter while hiding idle thumbs, including on hover. */
+.editor-mount :is(.cm-scroller, .document-pane),
+.multi-explorer {
   scrollbar-color: transparent transparent;
 }
-.editor-mount :is(.cm-scroller, .document-pane).is-scrolling {
+.editor-mount :is(.cm-scroller, .document-pane).is-scrolling,
+.multi-explorer.is-scrolling {
   scrollbar-color: #ffffff13 transparent;
 }
-.editor-mount :is(.cm-scroller, .document-pane)::-webkit-scrollbar-thumb {
+.editor-mount :is(.cm-scroller, .document-pane)::-webkit-scrollbar-thumb,
+.multi-explorer::-webkit-scrollbar-thumb {
   background: transparent;
 }
-.editor-mount :is(.cm-scroller, .document-pane).is-scrolling::-webkit-scrollbar-thumb {
+.editor-mount :is(.cm-scroller, .document-pane).is-scrolling::-webkit-scrollbar-thumb,
+.multi-explorer.is-scrolling::-webkit-scrollbar-thumb {
   background: #ffffff13;
 }
 ::selection {

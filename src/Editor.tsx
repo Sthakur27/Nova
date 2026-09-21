@@ -1,4 +1,5 @@
 import { mobile } from "./platform";
+import { startEditorWindowDrag } from "./editorWindowDrag";
 import { editorSearch } from "./editorSearch";
 import { codeExtensions, codeLanguage } from "./codeLanguages";
 import { DocumentEditor } from "./DocumentEditor";
@@ -531,7 +532,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
       "aria-label": "Note editor", spellcheck: String(props.spellcheck && !codeLanguage(props.filePath)),
     })) });
   }, [props.spellcheck, props.filePath]);
-  return <div className="editor-mount">
+  return <div className="editor-mount" onPointerDownCapture={startEditorWindowDrag}>
     {sourceTitleContainer && createPortal(<FileTitle key={props.filePath} path={props.filePath ?? ""} onRename={props.onRename} />, sourceTitleContainer)}
     <div className="source-editor-mount" ref={mount} hidden={!!props.documentMode} />
     <div className="document-pane" ref={documentPane} hidden={!props.documentMode} data-mode={props.documentMode}>

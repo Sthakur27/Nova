@@ -14,7 +14,9 @@ it("keeps terminal controls in the status bar and removes the collapsed tray", a
   document.body.append(host, status);
   const root = createRoot(host);
   const change = vi.fn();
-  const render = (open: boolean) => root.render(<TerminalPanel open={open} root="/notes" controlsContainer={status}
+  const changeBottomPanel = vi.fn();
+  const render = (open: boolean, bottomPanelOpen = true) => root.render(<TerminalPanel open={open} root="/notes" controlsContainer={status}
+    bottomPanelOpen={bottomPanelOpen} onBottomPanelOpenChange={changeBottomPanel}
     onOpenChange={change} onStorageError={() => {}} />);
   try {
     await act(async () => render(true));
@@ -24,10 +26,18 @@ it("keeps terminal controls in the status bar and removes the collapsed tray", a
     expect(shell).not.toBeNull();
     await act(async () => status.querySelector<HTMLButtonElement>('[aria-label="Collapse terminal panel"]')!.click());
     expect(change).toHaveBeenLastCalledWith(false);
+    expect(changeBottomPanel).not.toHaveBeenCalled();
     await act(async () => render(false));
     expect(host.querySelector<HTMLElement>("#terminal-panel")!.style.height).toBe("0px");
     expect(host.querySelector<HTMLElement>("#terminal-body")!.hidden).toBe(true);
     expect(host.querySelector('[data-testid="shell"]')).toBe(shell);
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Collapse bottom panel"]')!.click());
+    expect(changeBottomPanel).toHaveBeenLastCalledWith(false);
+    expect(change).toHaveBeenCalledTimes(1);
+    await act(async () => render(false, false));
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Expand bottom panel"]')!.click());
+    expect(changeBottomPanel).toHaveBeenLastCalledWith(true);
+    await act(async () => render(false));
     await act(async () => status.querySelector<HTMLButtonElement>('[aria-label="Expand terminal panel"]')!.click());
     expect(change).toHaveBeenLastCalledWith(true);
     await act(async () => render(true));
