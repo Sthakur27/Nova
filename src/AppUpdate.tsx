@@ -1,9 +1,19 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowDownToLine, RefreshCw } from "lucide-react";
+import { ArrowDownToLine, ExternalLink, RefreshCw } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
 import type { useAppUpdate } from "./useAppUpdate";
 
 export default function AppUpdate({ updater }: { updater: ReturnType<typeof useAppUpdate> }) {
   const [open, setOpen] = useState(false);
+  const [readmeError, setReadmeError] = useState("");
+  const [openingReadme, setOpeningReadme] = useState(false);
+  const openReadme = async () => {
+    setReadmeError("");
+    setOpeningReadme(true);
+    try { await invoke("open_readme"); }
+    catch { setReadmeError("Could not open the README. Check your default browser and try again."); }
+    finally { setOpeningReadme(false); }
+  };
   const dialog = useRef<HTMLDialogElement>(null);
   const title = useRef<HTMLHeadingElement>(null);
   const { phase, version, error, progress } = updater;
@@ -17,16 +27,23 @@ export default function AppUpdate({ updater }: { updater: ReturnType<typeof useA
     title.current?.focus();
     return () => { element.close(); previous?.focus(); };
   }, [open]);
-  if (!version || phase === "idle" || phase === "checking" || phase === "current") return null;
+  const showUpdate = !!version && phase !== "idle" && phase !== "checking" && phase !== "current";
   const label = phase === "ready" ? "Restart to update Nova" : `Nova ${version} available`;
   return <>
-    <section aria-labelledby="settings-updates"><h2 id="settings-updates">Update available</h2>
+    <section aria-labelledby="settings-updates"><h2 id="settings-updates">About Nova</h2>
       <div className="settings-row">
+        <div><label>Guide and features</label><p>Explore Nova’s README in your browser.</p></div>
+        <button className="settings-drive-link" disabled={openingReadme} onClick={() => void openReadme()}>
+          <ExternalLink size={15} aria-hidden="true" />Open README
+        </button>
+      </div>
+      {readmeError && <p role="alert">{readmeError}</p>}
+      {showUpdate && <div className="settings-row">
         <div><label>Nova {version}</label><p>{phase === "ready" ? "Downloaded and ready to install." : phase === "downloading" ? "Your update is downloading." : "A new version of Nova is available."}</p></div>
         <button className="settings-update-button" data-available={available} aria-label={label} aria-haspopup="dialog" onClick={() => setOpen(true)}>
           <ArrowDownToLine size={15} aria-hidden="true" />{phase === "ready" ? "Restart to update" : phase === "downloading" ? "View download" : "Update Nova"}
         </button>
-      </div>
+      </div>}
     </section>
     {open && <dialog ref={dialog} className="rename-dialog app-update-dialog" aria-labelledby="app-update-title"
       onCancel={event => { event.preventDefault(); event.stopPropagation(); if (phase !== "installing") setOpen(false); }}

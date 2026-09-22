@@ -6,12 +6,13 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 ## Unreleased
 
-The changes below are present in source through `7d47fbe`. Their availability in published installers has not been verified.
+Entries describe source changes; availability in published installers has not been verified. The initial backfill covers commits through `7d47fbe`.
 
 ### 2026-09-22
 
 #### Added
 
+- Desktop Settings now always offers **Open README** under **About Nova**, opening the guide in your default browser even when no update is available.
 - Filename search with Command-P / Ctrl-P, plus case-sensitive, whole-word, and regular-expression search and include/exclude path patterns. Matching options and path filters are remembered per workspace.
 - A dedicated starred-file view alongside passage bookmarks, with separate collapsible Local and Cloud groups. Double-click a starred file to keep its tab open.
 - Recent local folders with restored tabs, recovery drafts, and browsing state.

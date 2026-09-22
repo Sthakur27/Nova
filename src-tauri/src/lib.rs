@@ -887,6 +887,12 @@ fn quit_app(app: tauri::AppHandle, access: State<'_, Access>) {
 }
 #[cfg(desktop)]
 #[tauri::command]
+fn open_readme() -> Result<(), String> {
+    webbrowser::open("https://github.com/Sthakur27/Nova/blob/main/README.md")
+        .map_err(|_| "Could not open your default browser.".to_string())
+}
+#[cfg(desktop)]
+#[tauri::command]
 fn begin_update(app: tauri::AppHandle, access: State<'_, Access>) -> Result<(), String> {
     let mut updating = access.updating.lock().map_err(err)?;
     if *updating { return Err("An update is already being installed.".into()); }
@@ -1008,6 +1014,7 @@ pub fn run() {
             load_explorer,
             save_explorer,
             quit_app,
+            open_readme,
             begin_update,
             cancel_update,
             restart_after_update,
