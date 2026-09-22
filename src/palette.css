@@ -1,4 +1,8 @@
-/* The dialog has three distinct rows: scope, type shortcuts, and query. */
+/* Keep room for results when the advanced fields are expanded. */
+.overlay.palette-overlay { padding-top: 8vh; }
+.palette-overlay .palette { max-height: 84vh; overflow-y: auto; }
+.palette .search-results { min-height: 120px; flex: 1 1 auto; }
+.palette .palette-footer, .palette .console-header { flex-shrink: 0; }
 .palette .search-scope {
   padding: 16px 18px 0;
   flex-shrink: 0;
@@ -64,4 +68,42 @@
   .palette .palette-input {
     transition: none;
   }
+}
+
+.palette .palette-input { gap: 8px; margin-bottom: 6px; }
+.palette .palette-input input { min-width: 0; }
+.palette-match-options { display: flex; gap: 2px; flex-shrink: 0; }
+.palette-match-options button {
+  width: 28px; height: 28px; padding: 0; border: 1px solid transparent;
+  border-radius: 5px; color: #9992a5; font: 13px ui-monospace, monospace;
+}
+.palette-match-options button.whole-word { text-decoration: underline; text-underline-offset: 3px; }
+.palette-match-options button:hover { background: #ffffff08; color: #ded4eb; }
+.palette-match-options button[aria-pressed="true"] {
+  color: #d7c2f2; background: #b497dc18; border-color: #b497dc50;
+}
+.palette-match-options button:disabled { opacity: .4; }
+.palette-advanced { margin: 0 18px 10px; flex-shrink: 0; }
+.palette-advanced-toggle {
+  display: flex; align-items: center; gap: 6px; padding: 6px 0;
+  color: #aaa1b6; font-size: 12px;
+}
+.palette-advanced-toggle svg.expanded { transform: rotate(90deg); }
+.palette-filter-badge { color: #d7c2f2; font-size: 10px; margin-left: 6px; }
+.palette-advanced-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; padding: 8px 0 3px; }
+.palette-advanced-fields label { display: grid; gap: 5px; font-size: 12px; color: #b7afc2; }
+.palette-advanced-fields input {
+  width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid #ffffff16;
+  border-radius: 6px; background: #1c1c2280; color: inherit; font: inherit;
+}
+.palette-advanced-fields input::placeholder { color: #797183; }
+.palette-advanced-fields p { grid-column: 1 / -1; margin: 0; color: #92899f; font-size: 11px; line-height: 1.5; }
+.palette-match-options button:focus-visible,
+.palette-advanced-toggle:focus-visible,
+.palette-advanced-fields input:focus-visible { outline: 2px solid #bca0df; outline-offset: 2px; }
+@media (max-width: 480px) {
+  .palette-advanced-fields { grid-template-columns: minmax(0, 1fr); }
+  .palette .palette-input { padding: 9px 8px; gap: 5px; }
+  .palette .palette-input > svg { width: 17px; flex-shrink: 0; }
+  .palette-match-options button { width: 25px; }
 }

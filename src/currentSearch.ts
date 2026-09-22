@@ -1,3 +1,4 @@
+import { searchMatcher, defaultSearchOptions } from "./searchOptions";
 import type { Bookmark } from "./model";
 export type SearchScope = "everywhere" | "current";
 export type CurrentNote = {
@@ -6,7 +7,7 @@ export type CurrentNote = {
   text: string;
   bookmarks: Bookmark[];
 };
-export function searchCurrentNote(note: CurrentNote, query: string) {
+export function searchCurrentNote(note: CurrentNote, query: string, options = defaultSearchOptions) {
   const needle = query.trim();
   const hits: {
     root: string;
@@ -17,10 +18,9 @@ export function searchCurrentNote(note: CurrentNote, query: string) {
     to: number;
   }[] = [];
   if (!needle) return hits;
-  const pattern = new RegExp(
-    needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-    "giu",
-  );
+  const matcher = searchMatcher(query, options);
+  if (!matcher.acceptsPath(note.path)) return hits;
+  const pattern = new RegExp(matcher.pattern.source, matcher.pattern.flags + "g");
   let line = 1,
     lineStart = 0;
   for (const match of note.text.matchAll(pattern)) {

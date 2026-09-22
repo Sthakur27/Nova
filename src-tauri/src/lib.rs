@@ -1,3 +1,4 @@
+mod search_options;
 #[cfg(any(mobile, test))]
 mod mobile_storage;
 #[cfg(desktop)]
@@ -446,6 +447,7 @@ struct SearchResponse {
     bookmarks: Vec<BookmarkSearchHit>,
     warnings: Vec<String>,
 }
+#[cfg(test)]
 fn scan_search(
     roots: Vec<PathBuf>,
     query: String,
@@ -453,14 +455,24 @@ fn scan_search(
     ticket: u64,
     metadata_dir: PathBuf,
 ) -> SearchResponse {
+    scan_search_with_matcher(roots, query.clone(), generation, ticket, metadata_dir,
+        search_options::Matcher::new(&query, None).unwrap())
+}
+fn scan_search_with_matcher(
+    roots: Vec<PathBuf>,
+    query: String,
+    generation: Arc<AtomicU64>,
+    ticket: u64,
+    metadata_dir: PathBuf,
+    matcher: search_options::Matcher,
+) -> SearchResponse {
     let mut response = SearchResponse {
         hits: Vec::new(),
         bookmarks: Vec::new(),
         warnings: Vec::new(),
     };
-    let query = query.trim().to_lowercase();
     // An empty query lists all bookmark metadata without reading note text.
-    let listing = query.is_empty();
+    let listing = query.trim().is_empty();
     for root in roots {
         if generation.load(Ordering::Relaxed) != ticket {
             break;
@@ -478,6 +490,7 @@ fn scan_search(
             if !entry.file_type().is_file() { continue; }
             let path = entry.path().to_path_buf();
             let note = NoteFile { path: path.strip_prefix(&root).unwrap().to_string_lossy().replace('\\', "/"), name: entry.file_name().to_string_lossy().into_owned() };
+            if !matcher.accepts_path(&note.path) { continue; }
             if fs::metadata(&path)
                 .map(|m| m.len() > MAX_FILE)
                 .unwrap_or(true)
@@ -504,8 +517,8 @@ fn scan_search(
                 {
                     Ok(bookmarks) => {
                         for bookmark in bookmarks {
-                            if bookmark.name.to_lowercase().contains(&query)
-                                || bookmark.quote.to_lowercase().contains(&query)
+                            if matcher.matches(&bookmark.name)
+                                || matcher.matches(&bookmark.quote)
                             {
                                 response.bookmarks.push(BookmarkSearchHit {
                                     root: root.to_string_lossy().into_owned(),
@@ -542,7 +555,7 @@ fn scan_search(
                     return response;
                 }
                 let Ok(line) = line else { break };
-                if line.to_lowercase().contains(&query) {
+                if matcher.matches(&line) {
                     response.hits.push(SearchHit {
                         root: root.to_string_lossy().into_owned(),
                         path: note.path.clone(),
@@ -568,8 +581,10 @@ async fn search_notes(
     app: tauri::AppHandle,
     roots: Vec<String>,
     query: String,
+    spec: Option<search_options::SearchSpec>,
     access: State<'_, Access>,
 ) -> Result<SearchResponse, String> {
+    let matcher = search_options::Matcher::new(&query, spec)?;
     if roots.len() > 100 {
         return Err("Search supports up to 100 folders.".into());
     }
@@ -589,7 +604,7 @@ async fn search_notes(
     let ticket = generation.fetch_add(1, Ordering::Relaxed) + 1;
     let metadata_dir = app.path().app_data_dir().map_err(err)?.join("bookmarks");
     let mut response = tauri::async_runtime::spawn_blocking(move || {
-        scan_search(paths, query, generation, ticket, metadata_dir)
+        scan_search_with_matcher(paths, query, generation, ticket, metadata_dir, matcher)
     })
     .await
     .map_err(err)?;

@@ -1,3 +1,4 @@
+import { searchMatcher, searchSpec, defaultSearchOptions } from "./searchOptions";
 import { parseSyncPolicy, setSyncChoice, type SyncChoice, type SyncPolicy } from "./syncPolicy";
 import { DEFAULT_EXTENSION, normalizeExtension, isUntitled } from "./fileExtensions";
 import { invoke, localResetInProgress } from "./resetLocalState";
@@ -73,9 +74,9 @@ export function cancelSearch(filenames: boolean) {
   if (native) void invoke("cancel_search", { filenames }).catch(() => {});
 }
 export type FileSearchMatch = { root: string; path: string; name: string };
-export async function searchFiles(folders: Workspace[], query: string): Promise<{ files: FileSearchMatch[]; warnings: string[] }> {
+export async function searchFiles(folders: Workspace[], query: string, options = defaultSearchOptions): Promise<{ files: FileSearchMatch[]; warnings: string[] }> {
   const roots = folders.filter(folder => folder.directories && !folder.error).map(folder => folder.root);
-  return roots.length ? invoke("search_files", { roots, query }) : { files: [], warnings: [] };
+  return roots.length ? invoke("search_files", { roots, query, spec: searchSpec(query, options) }) : { files: [], warnings: [] };
 }
 export async function setFileStar(root: string, path: string, starred: boolean): Promise<string[]> {
   if (root !== "demo") return invoke("set_file_star", { root, path, starred });
@@ -234,26 +235,29 @@ export type FolderSearchResponse = {
 export async function searchNotes(
   folders: Workspace[],
   query: string,
+  options = defaultSearchOptions,
 ): Promise<FolderSearchResponse> {
+  const matcher = searchMatcher(query, options);
   const native = folders.filter((f) => f.root !== "demo" && !f.error);
   const result: FolderSearchResponse = native.length
-    ? await invoke("search_notes", { roots: native.map((f) => f.root), query })
+    ? await invoke("search_notes", { roots: native.map((f) => f.root), query, spec: searchSpec(query, options) })
     : { hits: [], bookmarks: [], warnings: [] };
   if (folders.some((f) => f.root === "demo")) {
     const hits: FolderSearchHit[] = [];
     const q = query.trim().toLowerCase();
     for (const { path } of demoWorkspace.files) {
+      if (!matcher.acceptsPath(path)) continue;
       const note = await readNote("demo", path);
       for (const bookmark of note.bookmarks) {
-        if (!q || bookmark.name.toLowerCase().includes(q) || bookmark.quote.toLowerCase().includes(q))
+        if (!q || matcher.matches(bookmark.name) || matcher.matches(bookmark.quote))
           result.bookmarks.push({ root: "demo", path, bookmark });
       }
     }
-    for (const { path } of demoWorkspace.files)
+    for (const { path } of demoWorkspace.files.filter(file => matcher.acceptsPath(file.path)))
       textFor(path)
         .split("\n")
         .forEach((snippet, i) => {
-          if (query.trim() && snippet.toLowerCase().includes(query.toLowerCase()))
+          if (query.trim() && matcher.matches(snippet))
             hits.push({ root: "demo", path, line: i + 1, snippet });
         });
     result.hits.push(...hits.slice(0, 80));

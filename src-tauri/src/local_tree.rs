@@ -118,18 +118,28 @@ pub(crate) struct FileMatches {
     warnings: Vec<String>,
 }
 
+#[cfg(test)]
 fn find_files(
     roots: Vec<std::path::PathBuf>,
     query: &str,
     generation: Arc<AtomicU64>,
     ticket: u64,
 ) -> FileMatches {
+    find_files_with_matcher(roots, query, generation, ticket,
+        crate::search_options::Matcher::new(query, None).unwrap())
+}
+fn find_files_with_matcher(
+    roots: Vec<std::path::PathBuf>,
+    query: &str,
+    generation: Arc<AtomicU64>,
+    ticket: u64,
+    matcher: crate::search_options::Matcher,
+) -> FileMatches {
     let mut result = FileMatches {
         files: vec![],
         warnings: vec![],
     };
-    let query = query.trim().to_lowercase();
-    if query.is_empty() {
+    if query.trim().is_empty() && !matcher.has_path_filters() {
         return result;
     }
     for root in roots {
@@ -160,7 +170,7 @@ fn find_files(
                 .to_string_lossy()
                 .replace('\\', "/");
             // Sniff only matching filenames, not every file in the workspace.
-            if !path.to_lowercase().contains(&query) || !supported(entry.path()) {
+            if !matcher.accepts_path(&path) || !matcher.matches(&path) || !supported(entry.path()) {
                 continue;
             }
             result.files.push(FileMatch {
@@ -180,8 +190,10 @@ fn find_files(
 pub(crate) async fn search_files(
     roots: Vec<String>,
     query: String,
+    spec: Option<crate::search_options::SearchSpec>,
     access: State<'_, Access>,
 ) -> Result<FileMatches, String> {
+    let matcher = crate::search_options::Matcher::new(&query, spec)?;
     if roots.len() > 100 {
         return Err("Too many search roots.".into());
     }
@@ -191,7 +203,7 @@ pub(crate) async fn search_files(
         .collect::<Result<Vec<_>, _>>()?;
     let generation = access.filename_generation.clone();
     let ticket = generation.fetch_add(1, Ordering::Relaxed) + 1;
-    tauri::async_runtime::spawn_blocking(move || find_files(roots, &query, generation, ticket))
+    tauri::async_runtime::spawn_blocking(move || find_files_with_matcher(roots, &query, generation, ticket, matcher))
         .await
         .map_err(err)
 }
@@ -199,6 +211,22 @@ pub(crate) async fn search_files(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn search_filters_apply_before_filename_limit() {
+        let temp = tempfile::tempdir().unwrap();
+        fs::create_dir(temp.path().join("archive")).unwrap();
+        for i in 0..110 {
+            fs::write(temp.path().join(format!("archive/note{i}.md")), "note").unwrap();
+        }
+        fs::write(temp.path().join("Note.md"), "note").unwrap();
+        let spec = serde_json::from_value(serde_json::json!({
+            "pattern": "Note", "caseSensitive": true, "include": "", "exclude": "^archive/"
+        })).unwrap();
+        let result = find_files_with_matcher(vec![temp.path().to_path_buf()], "Note",
+            Arc::new(AtomicU64::new(1)), 1, crate::search_options::Matcher::new("Note", Some(spec)).unwrap());
+        assert_eq!(result.files.len(), 1);
+        assert_eq!(result.files[0].path, "Note.md");
+    }
     #[test]
     #[ignore = "Read-only smoke test; set NOVA_TEST_FOLDER to a real large folder"]
     fn opens_real_large_folder() {

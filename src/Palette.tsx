@@ -1,3 +1,5 @@
+import { useSearchPreferences } from "./useSearchPreferences";
+import { searchMatcher } from "./searchOptions";
 import ScopeToggle from "./ScopeToggle";
 import "./palette.css";
 import {
@@ -7,6 +9,7 @@ import {
 } from "./currentSearch";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  ChevronRight,
   Bookmark as BookmarkIcon,
   FileText,
   LayoutGrid,
@@ -69,6 +72,11 @@ export default function Palette({
     [folders, currentOnly, activeNote],
   );
   const [query, setQuery] = useState("");
+  const { options, setOptions, advanced, setAdvanced } = useSearchPreferences(folders.map(folder => folder.root));
+  const search = useMemo(() => {
+    try { return { matcher: searchMatcher(query, options), error: "" }; }
+    catch { return { matcher: null, error: "Invalid regular expression. Check your search pattern." }; }
+  }, [query, options]);
   const [filter, setFilter] = useState<string>(initialFilter);
   const [hits, setHits] = useState<FolderSearchHit[]>([]);
   const [bookmarks, setBookmarks] = useState<BookmarkSearchHit[]>([]);
@@ -99,38 +107,40 @@ export default function Palette({
       ...file, folderName: folders.find(folder => folder.root === file.root)?.name ?? "",
     }));
     const unique = new Map([...loaded, ...found].map(file => [JSON.stringify([file.root, file.path]), file]));
-    return filenameMatches([...unique.values()], query);
-  }, [searchFolders, query, filter, remoteFiles, folders, currentOnly]);
+    if (!search.matcher) return [];
+    const candidates = [...unique.values()].filter(file => search.matcher!.acceptsPath(file.path) && search.matcher!.matches(file.path));
+    return filenameMatches(candidates, options.regexp ? "" : query);
+  }, [searchFolders, query, filter, remoteFiles, folders, currentOnly, search, options]);
   useEffect(() => {
     let cancelled = false;
     setRemoteFiles([]); setFilesError(""); setFilesBusy(false);
-    if (currentOnly || !query.trim() || (filter !== "Files" && filter !== "All") || !folders.some(folder => folder.directories)) return;
+    if (!search.matcher || currentOnly || (!query.trim() && !options.include.trim() && !options.exclude.trim()) || (filter !== "Files" && filter !== "All") || !folders.some(folder => folder.directories)) return;
     setFilesBusy(true);
     let started = false;
     const timer = setTimeout(() => {
       started = true;
-      searchFiles(folders, query).then(result => {
+      searchFiles(folders, query, options).then(result => {
         if (!cancelled) { setRemoteFiles(result.files); setFilesError(result.warnings.join(" · ")); }
       }).catch(error => { if (!cancelled) setFilesError(String(error)); })
         .finally(() => { if (!cancelled) setFilesBusy(false); });
     }, 180);
     return () => { cancelled = true; clearTimeout(timer); if (started) cancelSearch(true); };
-  }, [folders, query, currentOnly, filter]);
+  }, [folders, query, currentOnly, filter, options, search]);
   const localHits = useMemo(
     () =>
-      activeNote && currentOnly && query.trim() && filter !== "Settings" && filter !== "Files" && filter !== "Bookmarks"
-        ? searchCurrentNote({ ...activeNote, text: getActiveText() }, query)
+      search.matcher && activeNote && currentOnly && query.trim() && filter !== "Settings" && filter !== "Files" && filter !== "Bookmarks"
+        ? searchCurrentNote({ ...activeNote, text: getActiveText() }, query, options)
         : [],
-    [activeNote, currentOnly, query, filter, getActiveText],
+    [activeNote, currentOnly, query, filter, getActiveText, search, options],
   );
   const localBookmarks = useMemo(
     () =>
-      activeNote && currentOnly && query.trim()
+      search.matcher && activeNote && currentOnly && query.trim()
         ? activeNote.bookmarks
             .filter(
               (b) =>
-                b.name.toLowerCase().includes(query.trim().toLowerCase()) ||
-                b.quote.toLowerCase().includes(query.trim().toLowerCase()),
+                search.matcher!.acceptsPath(activeNote.path) &&
+                (search.matcher!.matches(b.name) || search.matcher!.matches(b.quote)),
             )
             .slice(0, 80)
             .map((bookmark) => ({
@@ -139,7 +149,7 @@ export default function Palette({
               bookmark,
             }))
         : [],
-    [activeNote, currentOnly, query],
+    [activeNote, currentOnly, query, search],
   );
   const textHits =
     filter === "Settings" || filter === "Files" || filter === "Bookmarks"
@@ -182,7 +192,7 @@ export default function Palette({
     setBookmarks([]);
     setError("");
     setIndex(0);
-    if (currentOnly || !query.trim() || filter === "Files" || filter === "Settings") {
+    if (!search.matcher || currentOnly || !query.trim() || filter === "Files" || filter === "Settings") {
       setBusy(false);
       return;
     }
@@ -190,7 +200,7 @@ export default function Palette({
     let started = false;
     const timer = setTimeout(() => {
       started = true;
-      searchNotes(folders, query.trim())
+      searchNotes(folders, query.trim(), options)
         .then((results) => {
           if (!cancelled) {
             setHits(results.hits);
@@ -210,7 +220,8 @@ export default function Palette({
       clearTimeout(timer);
       if (started && folders.some(folder => folder.root !== "demo")) cancelSearch(false);
     };
-  }, [query, filter, folders, currentOnly]);
+  }, [query, filter, folders, currentOnly, options, search]);
+  useEffect(() => setIndex(0), [query, options, filter, scope]);
   useEffect(() => {
     panel.current
       ?.querySelector('[aria-selected="true"]')
@@ -241,7 +252,7 @@ export default function Palette({
   };
   return (
     <div
-      className="overlay"
+      className="overlay palette-overlay"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -255,7 +266,7 @@ export default function Palette({
         }
         ref={panel}
         onKeyDown={(e) => {
-          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          if (e.target === input.current && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
             e.preventDefault();
             setIndex((i) =>
               Math.max(
@@ -281,7 +292,7 @@ export default function Palette({
           }
           if (e.key === "Tab") {
             const controls = Array.from(
-              panel.current!.querySelectorAll<HTMLElement>("button,input"),
+              panel.current!.querySelectorAll<HTMLElement>("button:not(:disabled),input"),
             );
             const at = controls.indexOf(document.activeElement as HTMLElement);
             if (e.shiftKey && at === 0) {
@@ -358,9 +369,25 @@ export default function Palette({
                 ? "Find in this note…"
                 : "A filename, a bookmark, a setting…"
             }
+            aria-invalid={!!search.error}
+            aria-describedby={search.error ? "palette-query-error" : undefined}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
+          <div className="palette-match-options" role="group" aria-label="Search matching options">
+            {([
+              ["caseSensitive", "Match case", "Aa"],
+              ["wholeWord", "Match whole word", "ab"],
+              ["regexp", "Use regular expression", ".*"],
+            ] as const).map(([key, label, glyph]) => (
+              <button key={key} type="button" title={label} aria-label={label}
+                aria-pressed={options[key]} disabled={filter === "Settings"}
+                className={key === "wholeWord" ? "whole-word" : ""}
+                onClick={() => { setOptions(previous => ({ ...previous, [key]: !previous[key] })); input.current?.focus(); }}>
+                {glyph}
+              </button>
+            ))}
+          </div>
           <button
             className="icon-button"
             aria-label="Close search"
@@ -370,6 +397,28 @@ export default function Palette({
             <X size={17} />
           </button>
         </div>
+        <div className="palette-advanced">
+          <button type="button" className="palette-advanced-toggle" aria-expanded={advanced}
+            aria-controls="palette-advanced-fields" onClick={() => setAdvanced(value => !value)}>
+            <ChevronRight size={14} className={advanced ? "expanded" : ""} aria-hidden="true" />
+            Advanced search
+            {(options.include.trim() || options.exclude.trim()) && <span className="palette-filter-badge">Filters active</span>}
+          </button>
+          {advanced && <div id="palette-advanced-fields" className="palette-advanced-fields">
+            <label>Files to include
+              <input value={options.include} placeholder="e.g. *.md, notes/**" spellCheck={false}
+                disabled={filter === "Settings"}
+                onChange={event => setOptions(previous => ({ ...previous, include: event.target.value }))} />
+            </label>
+            <label>Files to exclude
+              <input value={options.exclude} placeholder="e.g. archive/**, *.log" spellCheck={false}
+                disabled={filter === "Settings"}
+                onChange={event => setOptions(previous => ({ ...previous, exclude: event.target.value }))} />
+            </label>
+            <p>Comma-separated paths or patterns: * matches a name, ** matches nested folders. Paths are relative to each folder.</p>
+          </div>}
+        </div>
+        {search.error && filter !== "Settings" && <p id="palette-query-error" role="alert" className="search-message error">{search.error}</p>}
         <div
           className="search-results"
           role="listbox"
@@ -484,7 +533,7 @@ export default function Palette({
           {!currentOnly && (error || filesError) && (
             <p className="search-message error">{error || filesError}</p>
           )}
-          {(currentOnly || (!busy && !filesBusy && !error && !filesError)) && !rows.length && !matchingCommands.length && (
+          {!search.error && (currentOnly || (!busy && !filesBusy && !error && !filesError)) && !rows.length && !matchingCommands.length && (
             <p className="search-message">No matches. Try another word.</p>
           )}
         </div>
