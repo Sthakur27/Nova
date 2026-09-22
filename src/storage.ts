@@ -3,7 +3,7 @@ import { DEFAULT_EXTENSION, normalizeExtension, isUntitled } from "./fileExtensi
 import { invoke, localResetInProgress } from "./resetLocalState";
 import { open } from "@tauri-apps/plugin-dialog";
 import { demoFiles } from "./demo";
-import { parsePreferences, type ExplorerPreferences } from "./folders";
+import { parsePreferences, type FolderPreference, type ExplorerPreferences } from "./folders";
 import {
   reanchor,
   type Bookmark,
@@ -32,14 +32,50 @@ export const demoWorkspace: Workspace = {
 };
 const textFor = (path: string) =>
   localStorage.getItem(prefix + path) ?? demoFiles[path] ?? "";
-export async function openWorkspace(root: string): Promise<Workspace> {
+export async function openWorkspace(root: string, expandedDirectories: string[] = []): Promise<Workspace> {
   if (root === "demo") {
     try { demoWorkspace.syncPolicy = loadDemoSyncPolicy(); demoWorkspace.syncError = undefined; }
     catch (error) { demoWorkspace.syncPolicy = undefined; demoWorkspace.syncError = String(error); }
     demoWorkspace.starred = JSON.parse(localStorage.getItem("nova-demo-stars-v1") ?? "[]");
     return { ...demoWorkspace };
   }
-  return invoke<Workspace>("open_workspace", { root });
+  let folder = await invoke<Workspace>("open_workspace", { root });
+  if (folder.directories) {
+    folder = { ...folder, expandedDirectories };
+    // Restore only explicitly expanded branches, never traverse the whole root.
+    const listings = await Promise.all(expandedDirectories.map(async path => {
+      try { return { path, listing: await listDirectory(root, path) }; }
+      catch (error) { return { path, error: String(error) }; }
+    }));
+    for (const result of listings) {
+      if (result.listing) folder = mergeDirectory(folder, result.path, result.listing);
+      else folder.directoryErrors = { ...folder.directoryErrors, [result.path]: result.error! };
+    }
+  }
+  return folder;
+}
+export type DirectoryListing = { files: Workspace["files"]; directories: string[]; nextOffset: number | null; warnings: string[] };
+export const listDirectory = (root: string, path: string, offset = 0) => invoke<DirectoryListing>("list_directory", { root, path, offset });
+export function mergeDirectory(folder: Workspace, path: string, listing: DirectoryListing, append = false): Workspace {
+  const parent = (path: string) => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+  const pages = { ...folder.directoryPages };
+  if (listing.nextOffset == null) delete pages[path]; else pages[path] = listing.nextOffset;
+  const errors = { ...folder.directoryErrors }; delete errors[path];
+  const files = [...folder.files.filter(file => append || parent(file.path) !== path), ...listing.files];
+  return { ...folder,
+    files: [...new Map(files.map(file => [file.path, file])).values()],
+    directories: [...new Set([...(folder.directories ?? []).filter(dir => append || parent(dir) !== path), ...(path ? [path] : []), ...listing.directories])],
+    directoryPages: pages, directoryErrors: errors,
+    warnings: [...new Set([...(folder.warnings ?? []), ...listing.warnings])].slice(0, 20),
+  };
+}
+export function cancelSearch(filenames: boolean) {
+  if (native) void invoke("cancel_search", { filenames }).catch(() => {});
+}
+export type FileSearchMatch = { root: string; path: string; name: string };
+export async function searchFiles(folders: Workspace[], query: string): Promise<{ files: FileSearchMatch[]; warnings: string[] }> {
+  const roots = folders.filter(folder => folder.directories && !folder.error).map(folder => folder.root);
+  return roots.length ? invoke("search_files", { roots, query }) : { files: [], warnings: [] };
 }
 export async function setFileStar(root: string, path: string, starred: boolean): Promise<string[]> {
   if (root !== "demo") return invoke("set_file_star", { root, path, starred });
@@ -51,13 +87,21 @@ export async function setFileStar(root: string, path: string, starred: boolean):
   demoWorkspace.starred = result;
   return result;
 }
+export async function openFolderWindow(root: string): Promise<void> {
+  if (desktop) { await invoke("new_window", { root }); return; }
+  if (mobile) throw new Error("Mobile uses Cloud spaces.");
+  const url = new URL(window.location.href);
+  url.searchParams.set("folder", root);
+  url.searchParams.set("new-window", "true");
+  window.open(url.href, "_blank", "noopener");
+}
 export async function chooseWorkspaces(): Promise<Workspace[]> {
   if (mobile) throw new Error("Mobile uses Cloud spaces. Connect Google Drive to get started.");
-  if (!desktop) throw new Error("Add local folders in the Nova desktop app.");
+  if (!desktop) throw new Error("Open local folders in the Nova desktop app.");
   const selected = await open({
     directory: true,
-    multiple: true,
-    title: "Add folders to Nova",
+    multiple: false,
+    title: "Open Folder",
   });
   if (!selected) return [];
   return loadFolders(
@@ -68,13 +112,13 @@ export async function chooseWorkspaces(): Promise<Workspace[]> {
   );
 }
 export async function loadFolders(
-  folders: { root: string; name: string; collapsed?: boolean; closedDirectories?: string[] }[],
+  folders: FolderPreference[],
 ): Promise<Workspace[]> {
   const results: Workspace[] = [];
   for (const folder of folders) {
     try {
       results.push({
-        ...(await openWorkspace(folder.root)),
+        ...(await openWorkspace(folder.root, folder.expandedDirectories)),
         collapsed: folder.collapsed,
         closedDirectories: folder.closedDirectories,
       });

@@ -6,6 +6,7 @@ mod background;
 mod speech;
 mod sync_policy;
 mod drive_registry;
+mod local_tree;
 #[cfg(any(desktop, target_os = "ios"))]
 mod drive_auth;
 #[cfg(any(desktop, target_os = "ios"))]
@@ -33,11 +34,14 @@ use tauri::{Manager, State};
 use walkdir::WalkDir;
 
 const MAX_FILE: u64 = 32 * 1024 * 1024;
+// Includes lightweight sessions for recent folders, never document contents.
+const MAX_EXPLORER: usize = 4 * 1024 * 1024;
 #[derive(Default)]
 struct Access {
     roots: Mutex<HashSet<PathBuf>>,
     writes: Mutex<()>,
     search_generation: Arc<AtomicU64>,
+    filename_generation: Arc<AtomicU64>,
     #[cfg(desktop)]
     quitting: AtomicBool,
     #[cfg(desktop)]
@@ -57,6 +61,11 @@ struct Workspace {
     root: String,
     name: String,
     files: Vec<NoteFile>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    directories: Option<Vec<String>>,
+    #[serde(rename = "directoryPages", skip_serializing_if = "Option::is_none")]
+    directory_pages: Option<std::collections::HashMap<String, usize>>,
+    warnings: Vec<String>,
     starred: Vec<String>,
     #[serde(rename = "syncPolicy")]
     sync_policy: sync_policy::SyncPolicy,
@@ -310,8 +319,19 @@ async fn open_workspace(root: String, access: State<'_, Access>) -> Result<Works
     if !path.is_dir() {
         return Err("Choose a folder.".into());
     }
+    let cloud_space = read_registry(&path)?.get("cloudSpace").filter(|v| v.is_object()).cloned();
     let scan = path.clone();
-    let files = tauri::async_runtime::spawn_blocking(move || files_in(&scan))
+    let cloud = cloud_space.is_some();
+    let (files, directories, directory_pages, warnings) = tauri::async_runtime::spawn_blocking(move || {
+        if cloud {
+            Ok((files_in(&scan)?, None, None, Vec::new()))
+        } else {
+            let listing = local_tree::list(&scan, "", 0)?;
+            let mut pages = std::collections::HashMap::new();
+            if let Some(offset) = listing.next_offset { pages.insert(String::new(), offset); }
+            Ok::<_, String>((listing.files, Some(listing.directories), Some(pages), listing.warnings))
+        }
+    })
         .await
         .map_err(err)??;
     access.roots.lock().map_err(err)?.insert(path.clone());
@@ -323,9 +343,9 @@ async fn open_workspace(root: String, access: State<'_, Access>) -> Result<Works
         Ok(policy) => (policy, None),
         Err(error) => (sync_policy::SyncPolicy::default(), Some(error)),
     };
-    let cloud_space = read_registry(&path)?.get("cloudSpace").filter(|v| v.is_object()).cloned();
     let display_name = cloud_space.as_ref().and_then(|v| v["name"].as_str()).map(str::to_owned);
     Ok(Workspace {
+        directories, directory_pages, warnings,
         cloud_space,
         sync_policy,
         sync_error,
@@ -445,20 +465,19 @@ fn scan_search(
         if generation.load(Ordering::Relaxed) != ticket {
             break;
         }
-        let files = match files_in(&root) {
-            Ok(files) => files,
-            Err(error) => {
-                response
-                    .warnings
-                    .push(format!("{}: {error}", root.display()));
-                continue;
-            }
-        };
-        for note in files {
-            if generation.load(Ordering::Relaxed) != ticket {
-                return response;
-            }
-            let path = root.join(&note.path);
+        for entry in WalkDir::new(&root).follow_links(false).into_iter()
+            .filter_entry(|e| e.depth() == 0 || local_tree::visible(&e.file_name().to_string_lossy())) {
+            if generation.load(Ordering::Relaxed) != ticket { return response; }
+            let entry = match entry {
+                Ok(entry) => entry,
+                Err(error) => {
+                    if response.warnings.len() < 20 { response.warnings.push(error.to_string()); }
+                    continue;
+                }
+            };
+            if !entry.file_type().is_file() { continue; }
+            let path = entry.path().to_path_buf();
+            let note = NoteFile { path: path.strip_prefix(&root).unwrap().to_string_lossy().replace('\\', "/"), name: entry.file_name().to_string_lossy().into_owned() };
             if fs::metadata(&path)
                 .map(|m| m.len() > MAX_FILE)
                 .unwrap_or(true)
@@ -505,7 +524,8 @@ fn scan_search(
                     )),
                 }
             }
-            if listing || response.hits.len() == 80 {
+            if !listing && response.hits.len() == 80 && response.bookmarks.len() == 80 { return response; }
+            if listing || response.hits.len() == 80 || !supported(&path) {
                 continue;
             }
             let file = match fs::File::open(&path) {
@@ -537,6 +557,11 @@ fn scan_search(
         }
     }
     response
+}
+#[tauri::command]
+fn cancel_search(filenames: bool, access: State<'_, Access>) {
+    let generation = if filenames { &access.filename_generation } else { &access.search_generation };
+    generation.fetch_add(1, Ordering::Relaxed);
 }
 #[tauri::command]
 async fn search_notes(
@@ -589,7 +614,7 @@ async fn load_explorer(app: tauri::AppHandle) -> Result<serde_json::Value, Strin
         if !path.exists() {
             return Ok(serde_json::Value::Null);
         }
-        if fs::metadata(&path).map_err(err)?.len() > 256 * 1024 {
+        if fs::metadata(&path).map_err(err)?.len() > MAX_EXPLORER as u64 {
             return Err("Explorer preferences are too large.".into());
         }
         serde_json::from_slice(&fs::read(path).map_err(err)?).map_err(err)
@@ -603,7 +628,7 @@ async fn save_explorer(
     app: tauri::AppHandle,
 ) -> Result<(), String> {
     let bytes = serde_json::to_vec(&preferences).map_err(err)?;
-    if bytes.len() > 256 * 1024 {
+    if bytes.len() > MAX_EXPLORER {
         return Err("Explorer preferences are too large.".into());
     }
     let path = explorer_path(&app)?;
@@ -811,14 +836,21 @@ fn reveal_note(root: String, path: String, access: State<'_, Access>) -> Result<
 }
 #[cfg(desktop)]
 #[tauri::command]
-fn new_window(app: tauri::AppHandle) -> Result<(), String> {
+fn new_window(app: tauri::AppHandle, root: Option<String>) -> Result<(), String> {
     let updating = app.state::<Access>();
     let guard = updating.updating.lock().map_err(err)?;
     if *guard { return Err("An update is being installed.".into()); }
     static WINDOW_ID: AtomicU64 = AtomicU64::new(1);
     let mut config = app.config().app.windows[0].clone();
     config.label = format!("nova-{}", WINDOW_ID.fetch_add(1, Ordering::Relaxed));
-    let window = tauri::WebviewWindowBuilder::from_config(&app, &config).map_err(err)?.build().map_err(err)?;
+    let mut builder = tauri::WebviewWindowBuilder::from_config(&app, &config).map_err(err)?;
+    if let Some(root) = root {
+        let path = fs::canonicalize(root).map_err(err)?;
+        if !path.is_dir() { return Err("Choose a folder.".into()); }
+        let root = serde_json::to_string(&path.to_string_lossy()).map_err(err)?;
+        builder = builder.initialization_script(format!("window.__NOVA_OPEN_FOLDER__ = {root};"));
+    }
+    let window = builder.build().map_err(err)?;
     configure_window_menu(&window).map_err(err)?;
     Ok(())
 }
@@ -949,13 +981,13 @@ pub fn run() {
             terminal::terminal_write,
             terminal::terminal_resize,
             terminal::terminal_close,
-            open_workspace,
+            open_workspace, local_tree::list_directory, local_tree::search_files,
             set_file_star,
             set_sync_choice,
             read_note,
             save_note,
             save_bookmarks,
-            search_notes,
+            search_notes, cancel_search,
             load_draft,
             save_draft,
             load_explorer,
@@ -1015,12 +1047,12 @@ pub fn run() {
         drive_auth::drive_status, drive_auth::drive_connect, drive_auth::drive_cancel, drive_auth::drive_disconnect,
         drive_upload::cloud_spaces::cloud_setup, drive_upload::cloud_spaces::cloud_move_in,
         drive_upload::drive_upload, drive_upload::drive_open_folder, drive_upload::drive_open_file, drive_upload::drive_workspaces, drive_upload::drive_restore,
-        open_workspace, set_file_star, set_sync_choice, read_note, save_note, save_bookmarks, search_notes, load_draft, save_draft, load_explorer, save_explorer, create_note, rename_note, move_note, delete_note
+        open_workspace, set_file_star, set_sync_choice, read_note, save_note, save_bookmarks, search_notes, cancel_search, load_draft, save_draft, load_explorer, save_explorer, create_note, rename_note, move_note, delete_note
     ]);
     #[cfg(not(target_os = "ios"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
             open_workspace, set_file_star, set_sync_choice, read_note, save_note,
-            save_bookmarks, search_notes, load_draft, save_draft, load_explorer,
+            save_bookmarks, search_notes, cancel_search, load_draft, save_draft, load_explorer,
             save_explorer, create_note, rename_note, move_note, delete_note
         ]);
     builder.run(tauri::generate_context!())

@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import { syncIncluded, type SyncPolicy } from "./syncPolicy";
 import type { Workspace } from "./model";
+import RecentFolders from "./RecentFolders";
+import type { RecentFolder } from "./localFolders";
 import { closedDirectories, reorderFolders } from "./folders";
 function NovaStar({ size }: { size: number }) {
   return (
@@ -31,6 +33,7 @@ function NovaStar({ size }: { size: number }) {
 }
 function FileTree({
   paths,
+  directories = [], directoryPages = {}, directoryErrors = {}, loadingDirectories = [], onLoadDirectory,
   active,
   onOpen,
   onRename,
@@ -43,6 +46,11 @@ function FileTree({
   onToggle,
 }: {
   paths: string[];
+  directories?: string[];
+  directoryPages?: Record<string, number>;
+  directoryErrors?: Record<string, string>;
+  loadingDirectories?: string[];
+  onLoadDirectory?: (path: string, more?: boolean) => void;
   active: string;
   onOpen: (path: string, pinned?: boolean) => void;
   onRename: (path: string) => void;
@@ -68,6 +76,13 @@ function FileTree({
       groups.get(name)!.push(path);
     }
   }
+  for (const directory of directories) {
+    if (!directory.startsWith(prefix)) continue;
+    const rest = directory.slice(prefix.length);
+    if (rest && !rest.includes("/") && !groups.has(rest)) groups.set(rest, []);
+  }
+  const directoryPath = prefix.replace(/\/$/, "");
+  const loading = loadingDirectories.includes(directoryPath);
   return (
     <>
       {[...groups]
@@ -93,6 +108,7 @@ function FileTree({
                   closed={closed}
                   onToggle={onToggle}
                   paths={children}
+                  directories={directories} directoryPages={directoryPages} directoryErrors={directoryErrors} loadingDirectories={loadingDirectories} onLoadDirectory={onLoadDirectory}
                   active={active}
                   onOpen={onOpen}
                   onRename={onRename}
@@ -144,11 +160,20 @@ function FileTree({
           </button>
         </div>
       ))}
+      {loading && <p className="folder-empty" role="status">Loading…</p>}
+      {directoryErrors[directoryPath] && <div className="folder-error"><span>{directoryErrors[directoryPath]}</span><button disabled={loading} onClick={() => onLoadDirectory?.(directoryPath)}>Retry</button></div>}
+      {directoryPages[directoryPath] !== undefined && !directoryErrors[directoryPath] && <button className="tree-load-more" disabled={loading} onClick={() => onLoadDirectory?.(directoryPath, true)}>Load more</button>}
     </>
   );
 }
 type Props = {
   folders: Workspace[];
+  recents?: RecentFolder[];
+  onRecent?: (folder: RecentFolder) => void;
+  onForgetRecents?: () => void;
+  onLoadDirectory?: (root: string, path: string, more?: boolean) => void;
+  onToggleDirectory?: (root: string, path: string) => void;
+  loadingDirectories?: Record<string, string[]>;
   activeRoot: string;
   activePath: string;
   onOpen: (folder: Workspace, path: string, pinned?: boolean) => void;
@@ -168,6 +193,7 @@ type Props = {
 };
 export default function Explorer({
   folders,
+  recents = [], onRecent, onForgetRecents, onLoadDirectory, onToggleDirectory, loadingDirectories = {},
   activeRoot,
   activePath,
   onOpen,
@@ -213,7 +239,6 @@ export default function Explorer({
     return () => { window.removeEventListener("pointerdown", outside); window.removeEventListener("resize", close); window.removeEventListener("blur", close); window.removeEventListener("scroll", close, true); };
   }, [menu]);
   const [cloudCollapsed, setCloudCollapsed] = usePreference<boolean>("explorer-cloud-collapsed", false);
-  const [localCollapsed, setLocalCollapsed] = usePreference<boolean>("explorer-local-collapsed", false);
   const [starredOnly, setStarredOnly] = useState(false);
   const [syncOnly, setSyncOnly] = useState(false);
   const [dragging, setDragging] = useState<string | null>(null),
@@ -282,8 +307,8 @@ export default function Explorer({
           className="icon-button"
           hidden={mobile}
           onClick={onAdd}
-          title="Add folders"
-          aria-label="Add folders"
+          title="Open Folder in New Window…"
+          aria-label="Open Folder"
         >
           <Plus size={16} />
         </button>
@@ -300,24 +325,30 @@ export default function Explorer({
           const isCloud = kind === "Cloud";
           const ordered = folders.filter(folder => !!folder.cloudSpace === isCloud);
           if ((isCloud && !ordered.length) || (!isCloud && mobile)) return null;
-          const collapsed = isCloud ? cloudCollapsed : localCollapsed;
-          const toggle = isCloud ? setCloudCollapsed : setLocalCollapsed;
+          const collapsed = isCloud && cloudCollapsed;
           const createTarget = ordered.find(folder => folder.root === activeRoot && !folder.error)
             ?? ordered.find(folder => !folder.error);
           return <section className="explorer-section" key={kind} aria-label={`${kind} notes`}>
             <div className="explorer-section-header">
-              <h2><button className="explorer-section-toggle" aria-expanded={!collapsed} aria-controls={`explorer-${kind.toLowerCase()}`} onClick={() => toggle(!collapsed)}>
+              <h2>{isCloud ? <button className="explorer-section-toggle" aria-expanded={!collapsed} aria-controls="explorer-cloud" onClick={() => setCloudCollapsed(!collapsed)}>
                 {collapsed ? <ChevronRight size={14}/> : <ChevronDown size={14}/>}
-                {isCloud ? <Cloud size={14}/> : <Folder size={14}/>}<span>{kind}</span>
-              </button></h2>
-              {isCloud && onNew && <button className="explorer-new-cloud" aria-label="New Cloud note" title={`New Cloud note${createTarget ? ` in ${createTarget.name}` : ""}`} disabled={!createTarget} onClick={() => { toggle(false); if (createTarget) onNew(createTarget); }}><Plus size={14}/><span>New note</span></button>}
+                <Cloud size={14}/><span>Cloud</span>
+              </button> : <span className="explorer-local-label">Local</span>}</h2>
+              {!isCloud && <div className="explorer-local-actions">
+                <RecentFolders folders={recents.filter(recent => !ordered.some(folder => folder.root === recent.root))} onOpen={onRecent} onClear={onForgetRecents}/>
+                <button className="icon-button explorer-open-local" aria-label="Open local folder in new window" title="Open Folder in New Window…" onClick={onAdd}><Plus size={15}/></button>
+              </div>}
+              {isCloud && onNew && <button className="explorer-new-cloud" aria-label="New Cloud note" title={`New Cloud note${createTarget ? ` in ${createTarget.name}` : ""}`} disabled={!createTarget} onClick={() => { setCloudCollapsed(false); if (createTarget) onNew(createTarget); }}><Plus size={14}/><span>New note</span></button>}
             </div>
             <div id={`explorer-${kind.toLowerCase()}`} hidden={collapsed}>
         {ordered.map((folder, index) => {
           const starred = new Set(folder.starred ?? []);
           const collapsed = folder.collapsed ?? true;
           const closed = closedDirectories(folder);
-          const files = folder.files.filter(file =>
+          const available = starredOnly && folder.directories
+            ? [...new Map([...folder.files, ...(folder.starred ?? []).map(path => ({ path, name: path.split("/").at(-1)! }))].map(file => [file.path, file])).values()]
+            : folder.files;
+          const files = available.filter(file =>
             (!starredOnly || starred.has(file.path)) &&
             (!syncOnly || (!folder.syncError && syncIncluded(folder.syncPolicy, file.path))));
           return (
@@ -335,6 +366,7 @@ export default function Explorer({
             <div className="root-header">
               <button
                 className="root-grip"
+                hidden={!isCloud}
                 aria-label={`Reorder ${folder.name}`}
                 title="Drag to reorder · Arrow keys to move"
                 onPointerDown={(e) => pointerDown(e, folder.root)}
@@ -395,6 +427,7 @@ export default function Explorer({
                     Refresh
                   </button>
                   <button
+                    hidden={!isCloud}
                     disabled={index === 0 || !!ordered[index-1].cloudSpace !== !!folder.cloudSpace}
                     onClick={() => move(folder.root, ordered[index - 1].root)}
                   >
@@ -402,6 +435,7 @@ export default function Explorer({
                     Move up
                   </button>
                   <button
+                    hidden={!isCloud}
                     disabled={index === ordered.length - 1 || !!ordered[index+1].cloudSpace !== !!folder.cloudSpace}
                     onClick={() => move(folder.root, ordered[index + 1].root)}
                   >
@@ -410,25 +444,31 @@ export default function Explorer({
                   </button>
                   <button hidden={mobile || !!folder.cloudSpace} onClick={() => onRemove(folder.root)}>
                     <X size={13} />
-                    Remove from explorer
+                    Close Folder
                   </button>
                 </div>
               </details>
             </div>
             {!collapsed && (
               <div className="root-files">
+                {folder.warnings?.map(warning => <p className="folder-error" key={warning}>{warning}</p>)}
                 {folder.starsError && <p className="folder-error">{folder.starsError}</p>}
                 {folder.error ? (
                   <div className="folder-error">
-                    <span>Folder unavailable</span>
+                    <span>{folder.error}</span>
                     <button onClick={() => onRefresh(folder.root)}>
                       Retry
                     </button>
                   </div>
-                ) : files.length ? (
+                ) : files.length || folder.directories?.length || Object.keys(folder.directoryPages ?? {}).length || Object.keys(folder.directoryErrors ?? {}).length ? (
                   <FileTree
                     closed={new Set(closed)}
-                    onToggle={path => onChange(folders.map(f => f.root !== folder.root ? f : {
+                    directories={starredOnly || syncOnly ? [] : folder.directories}
+                    directoryPages={starredOnly || syncOnly ? {} : folder.directoryPages}
+                    directoryErrors={folder.directoryErrors}
+                    loadingDirectories={loadingDirectories[folder.root]}
+                    onLoadDirectory={(path, more) => onLoadDirectory?.(folder.root, path, more)}
+                    onToggle={path => folder.directories && onToggleDirectory ? onToggleDirectory(folder.root, path) : onChange(folders.map(f => f.root !== folder.root ? f : {
                       ...f, closedDirectories: closed.includes(path)
                         ? closed.filter(p => p !== path)
                         : [...closed, path],
@@ -453,7 +493,7 @@ export default function Explorer({
             )}
           </section>
         );})}
-              {!ordered.length && <button className="explorer-add-local" onClick={onAdd}><Plus size={14}/>Add a local folder</button>}
+              {!ordered.length && <button className="explorer-add-local" onClick={onAdd}><Plus size={14}/>Open Folder…</button>}
             </div>
           </section>;
         })}
@@ -461,11 +501,11 @@ export default function Explorer({
           <div className="explorer-empty">
             <FolderOpen size={24} />
             <p>A place for every project.</p>
-            <small>Add a folder to get started.</small>
+            <small>Open a folder to get started.</small>
           </div>
         )}
         {externalDrag && (
-          <div className="folder-drop-message">Drop folders to add them</div>
+          <div className="folder-drop-message">Drop a folder to open it</div>
         )}
       </nav>
       {menu && createPortal(<div ref={menuRef} className="file-context-menu" role="menu" aria-label={`Actions for ${menu.path}`} style={{ left: menu.x, top: menu.y }} onKeyDown={event => {

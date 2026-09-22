@@ -19,7 +19,7 @@ export function useCloudSpaces(connected: boolean, ready: boolean, onSpaces: (sp
       if (!pending.current) {
         pending.current = driveTransfer(async () => {
           const roots = await invoke<string[]>("cloud_setup");
-          return Promise.all(roots.map(openWorkspace));
+          return Promise.all(roots.map(root => openWorkspace(root)));
         }).finally(() => { pending.current = null; });
       }
       const spaces = await pending.current;

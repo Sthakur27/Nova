@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { filenameMatches, type Workspace } from "./model";
 import {
-  searchNotes,
+  searchNotes, searchFiles, cancelSearch, type FileSearchMatch,
   type FolderSearchHit,
   type BookmarkSearchHit,
 } from "./storage";
@@ -74,6 +74,9 @@ export default function Palette({
   const [bookmarks, setBookmarks] = useState<BookmarkSearchHit[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [remoteFiles, setRemoteFiles] = useState<FileSearchMatch[]>([]);
+  const [filesBusy, setFilesBusy] = useState(false);
+  const [filesError, setFilesError] = useState("");
   const [index, setIndex] = useState(0);
   const panel = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -87,22 +90,32 @@ export default function Palette({
     window.addEventListener("keydown", closeOnEscape, { capture: true });
     return () => window.removeEventListener("keydown", closeOnEscape, { capture: true });
   }, [onClose]);
-  const files = useMemo(
-    () =>
-      filter === "Settings" || filter === "Text" || filter === "Bookmarks"
-        ? []
-        : filenameMatches(
-            searchFolders.flatMap((folder) =>
-              folder.files.map((file) => ({
-                ...file,
-                root: folder.root,
-                folderName: folder.name,
-              })),
-            ),
-            query,
-          ),
-    [searchFolders, query, filter],
-  );
+  const files = useMemo(() => {
+    if (filter === "Settings" || filter === "Text" || filter === "Bookmarks") return [];
+    const loaded = searchFolders.flatMap(folder => folder.files.map(file => ({
+      ...file, root: folder.root, folderName: folder.name,
+    })));
+    const found = currentOnly ? [] : remoteFiles.map(file => ({
+      ...file, folderName: folders.find(folder => folder.root === file.root)?.name ?? "",
+    }));
+    const unique = new Map([...loaded, ...found].map(file => [JSON.stringify([file.root, file.path]), file]));
+    return filenameMatches([...unique.values()], query);
+  }, [searchFolders, query, filter, remoteFiles, folders, currentOnly]);
+  useEffect(() => {
+    let cancelled = false;
+    setRemoteFiles([]); setFilesError(""); setFilesBusy(false);
+    if (currentOnly || !query.trim() || (filter !== "Files" && filter !== "All") || !folders.some(folder => folder.directories)) return;
+    setFilesBusy(true);
+    let started = false;
+    const timer = setTimeout(() => {
+      started = true;
+      searchFiles(folders, query).then(result => {
+        if (!cancelled) { setRemoteFiles(result.files); setFilesError(result.warnings.join(" · ")); }
+      }).catch(error => { if (!cancelled) setFilesError(String(error)); })
+        .finally(() => { if (!cancelled) setFilesBusy(false); });
+    }, 180);
+    return () => { cancelled = true; clearTimeout(timer); if (started) cancelSearch(true); };
+  }, [folders, query, currentOnly, filter]);
   const localHits = useMemo(
     () =>
       activeNote && currentOnly && query.trim() && filter !== "Settings" && filter !== "Files" && filter !== "Bookmarks"
@@ -174,7 +187,9 @@ export default function Palette({
       return;
     }
     setBusy(true);
+    let started = false;
     const timer = setTimeout(() => {
+      started = true;
       searchNotes(folders, query.trim())
         .then((results) => {
           if (!cancelled) {
@@ -193,6 +208,7 @@ export default function Palette({
     return () => {
       cancelled = true;
       clearTimeout(timer);
+      if (started && folders.some(folder => folder.root !== "demo")) cancelSearch(false);
     };
   }, [query, filter, folders, currentOnly]);
   useEffect(() => {
@@ -462,13 +478,13 @@ export default function Palette({
               <kbd>↵</kbd>
             </button>
           ))}
-          {!currentOnly && busy && (
-            <p className="search-message">Looking inside your files…</p>
+          {!currentOnly && (busy || filesBusy) && (
+            <p className="search-message">{filesBusy && !busy ? "Finding files…" : "Looking inside your files…"}</p>
           )}
-          {!currentOnly && error && (
-            <p className="search-message error">{error}</p>
+          {!currentOnly && (error || filesError) && (
+            <p className="search-message error">{error || filesError}</p>
           )}
-          {(currentOnly || (!busy && !error)) && !rows.length && !matchingCommands.length && (
+          {(currentOnly || (!busy && !filesBusy && !error && !filesError)) && !rows.length && !matchingCommands.length && (
             <p className="search-message">No matches. Try another word.</p>
           )}
         </div>

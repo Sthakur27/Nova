@@ -102,7 +102,7 @@ Nova for **iPhone and iPad is in development**. The same quiet writing space is 
 
 ## Your first few minutes
 
-1. **Open a folder.** Click **Add folders** and choose where you keep your notes. You can add more than one.
+1. **Open a folder.** Click **Open Folder** and choose where you keep your notes. Each window focuses one local folder. Opening another folder creates a new window; **Recent** reopens a folder with its saved tabs and drafts.
 2. **Start a note.** Open a file from the sidebar, or click **+** beside the tabs to create one. New notes start as plain text; choose `.md` as the default file extension in Settings if you want headings, lists, and other formatting.
 3. **Choose your view.** For Markdown notes, **Edit** lets you write with formatting, **Read** gives you a reading view, and **Source** shows the underlying text.
 4. **Mark a good passage.** Select some text and use **Add bookmark** in the bookmarks panel. Give it a name so you can find it again.

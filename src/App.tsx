@@ -85,7 +85,8 @@ import RenameDialog from "./RenameDialog";
 import FormatToolbar from "./FormatToolbar";
 import { FontControl, TextSizeControl, editorFonts, textSizes, type EditorFont } from "./TypographyControls";
 import type { FormatAction } from "./richMarkdown";
-import { addFolders, type EditorMode } from "./folders";
+import { type EditorMode } from "./folders";
+import { folderPreference, folderWindowPreferences, migrateLocalFolders, rememberFolder, type RecentFolder } from "./localFolders";
 import VoiceControl from "./VoiceControl";
 import NovaMark from "./NovaMark";
 import SignalBell from "./SignalBell";
@@ -98,7 +99,7 @@ import { RICH_DOCUMENT_LIMIT, supportsDocumentView } from "./documentLimits";
 import PlasmaEffects from "./PlasmaEffects";
 import { DEFAULT_GALAXY_PERFORMANCE, galaxyPerformanceModes, galaxyPerformanceLabels, type GalaxyPerformance } from "./galaxyPerformance";
 import {
-  chooseWorkspaces,
+  chooseWorkspaces, openFolderWindow, listDirectory, mergeDirectory,
   createNote,
   renameNote,
   moveNote,
@@ -245,6 +246,13 @@ export default function App() {
     [updateTabs],
   );
   const [folders, setFolders] = useState<Workspace[]>([demoWorkspace]);
+  const [recents, setRecents] = useState<RecentFolder[]>([]);
+  const recentsRef = useRef<RecentFolder[]>([]);
+  const localActivity = useRef(new Map<string, { path: string; mode: EditorMode }>());
+  const updateRecents = (next: RecentFolder[]) => { recentsRef.current = next; setRecents(next); };
+  const [loadingDirectories, setLoadingDirectories] = useState<Record<string, string[]>>({});
+  const directoryRequests = useRef(new Map<string, symbol>());
+  const localSwitchRequest = useRef(0);
   const [foldersReady, setFoldersReady] = useState(false);
   const [externalDrag, setExternalDrag] = useState(false);
   const [workspace, setWorkspace] = useState<Workspace>(demoWorkspace);
@@ -364,6 +372,7 @@ export default function App() {
     hasDocument: !!data,
     foldersReady,
   };
+  if (data && !workspace.cloudSpace) localActivity.current.set(workspace.root, { path, mode });
   const applyMarks = useCallback((marks: Bookmark[]) => {
     marksRef.current = marks;
     setBookmarks(marks);
@@ -467,7 +476,8 @@ export default function App() {
     try {
       const c = current.current;
       await saveExplorer({
-        folders: c.folders.map(({ root, name, collapsed, closedDirectories }) => ({ root, name, collapsed, closedDirectories })),
+        folders: c.folders.map(folderPreference),
+        recents: recentsRef.current,
         active: c.hasDocument ? { root: c.workspace.root, path: c.path } : null,
         tabs: tabsRef.current, panes: paneLayoutRef.current, mode: c.mode,
       });
@@ -476,10 +486,12 @@ export default function App() {
   };
   const appUpdate = useAppUpdate(desktop, prepareUpdate, () => { operation.current = false; });
   const [editVersion, setEditVersion] = useState(0);
+  const editGeneration = useRef(0);
   const changed = useCallback(() => {
     pin(current.current.workspace.root, current.current.path);
     dirtyRef.current = true;
     setDirty(true);
+    editGeneration.current++;
     setEditVersion(value => value + 1);
     // The editor immediately supplies the updated anchors via onBookmarks.
   }, [pin]);
@@ -493,13 +505,17 @@ export default function App() {
         const freshWindow = desktop
           ? getCurrentWindow().label.startsWith("nova-")
           : new URLSearchParams(window.location.search).get("new-window") === "true";
-        const prefs = freshWindow
-          ? { ...savedPrefs, folders: savedPrefs?.folders ?? [demoWorkspace], active: null, tabs: [], panes: undefined }
+        const requestedFolder = (window as Window & { __NOVA_OPEN_FOLDER__?: string }).__NOVA_OPEN_FOLDER__
+          ?? (!desktop ? new URLSearchParams(window.location.search).get("folder") : null);
+        const prefs = requestedFolder ? folderWindowPreferences(savedPrefs, requestedFolder) : freshWindow
+          ? { ...savedPrefs, mode: savedPrefs?.mode ?? "edit", folders: savedPrefs?.folders ?? [demoWorkspace], active: null, tabs: [], panes: undefined }
           : savedPrefs;
         const loaded = prefs ? await loadFolders(prefs.folders) : mobile ? [] : [demoWorkspace];
-        const restored = mobile ? loaded.filter(folder => !!folder.cloudSpace) : loaded;
+        const migrated = migrateLocalFolders(requestedFolder ? prefs : savedPrefs, loaded);
+        const restored = mobile ? loaded.filter(folder => !!folder.cloudSpace) : migrated.folders;
         if (cancelled) return;
         setFolders(restored);
+        updateRecents(mobile ? [] : migrated.recents);
         const mode = prefs?.mode ?? "edit";
         setMode(mode);
         const restoredTabs = (prefs?.tabs ?? []).filter(tab => restored.some(folder => folder.root === tab.root));
@@ -563,7 +579,7 @@ export default function App() {
         }
         if (!opened) {
           setWorkspace(
-            restored[0] ?? { name: "Your folders", root: "", files: [] },
+            restored.find(folder => folder.root === requestedFolder) ?? restored.find(folder => !folder.cloudSpace) ?? restored[0] ?? { name: "Your folders", root: "", files: [] },
           );
           setPath("");
           setData(null);
@@ -584,18 +600,14 @@ export default function App() {
   useEffect(() => {
     if (!foldersReady) return;
     void saveExplorer({
-      folders: folders.map(({ root, name, collapsed, closedDirectories }) => ({
-        root,
-        name,
-        collapsed,
-        closedDirectories,
-      })),
+      folders: folders.map(folderPreference),
+      recents,
       active: data ? { root: workspace.root, path } : null,
       mode,
       tabs,
       panes: paneLayout,
     }).catch((error) => setNotice(String(error)));
-  }, [foldersReady, folders, workspace.root, path, mode, !!data, tabs, paneLayout]);
+  }, [foldersReady, folders, recents, workspace.root, path, mode, !!data, tabs, paneLayout]);
   const save = useCallback(async (): Promise<boolean> => {
     if (localResetInProgress()) return false;
     if (saveInFlight.current) return saveInFlight.current;
@@ -604,12 +616,8 @@ export default function App() {
         try {
           const c = current.current;
           await saveExplorer({
-            folders: c.folders.map(({ root, name, collapsed, closedDirectories }) => ({
-              root,
-              name,
-              collapsed,
-              closedDirectories,
-            })),
+            folders: c.folders.map(folderPreference),
+            recents: recentsRef.current,
             active: c.hasDocument
               ? { root: c.workspace.root, path: c.path }
               : null,
@@ -819,11 +827,11 @@ export default function App() {
       if (!(await preserveDraft())) return;
       folder = current.current.folders.find(f => f.root === (requested?.root ?? current.current.workspace.root) && !f.error)
         ?? current.current.folders.find(f => !f.error);
-      if (!folder) throw new Error("Add a folder before creating a note.");
+      if (!folder) throw new Error("Open a folder before creating a note.");
       nextPath = await createNote(folder.root, defaultExtension);
       const created = { root: folder.root, path: nextPath };
       createdNotes.current.set(tabId(created), created);
-      folder = { ...folder, ...(await openWorkspace(folder.root)), collapsed: false };
+      folder = { ...folder, ...(await openWorkspace(folder.root, folder.expandedDirectories)), collapsed: false };
       setFolders(old => old.map(f => f.root === folder!.root ? folder! : f));
     } catch (error) { setNotice(String(error)); }
     finally { operation.current = false; }
@@ -853,7 +861,7 @@ export default function App() {
       if (folder.cloudSpace) uploads.schedule(folder.root);
       if (nextPath !== oldPath) createdNotes.current.delete(tabId({ root: folder.root, path: oldPath }));
       name = nextPath.split("/").at(-1)!;
-      const updated = { ...folder, ...(await openWorkspace(folder.root)) };
+      const updated = { ...folder, ...(await openWorkspace(folder.root, folder.expandedDirectories)) };
       setFolders(old => old.map(f => f.root === folder.root ? { ...f, files: updated.files, syncPolicy: updated.syncPolicy, starred: updated.starred } : f));
       const oldId = tabId({ root: folder.root, path: oldPath });
       paneActions.current?.capture();
@@ -984,24 +992,102 @@ export default function App() {
   const changeFolders = (next: Workspace[]) => {
     if (current.current.foldersReady) setFolders(next);
   };
-  const acceptFolders = async (added: Workspace[]) => {
+  const switchLocalFolder = async (folder: Workspace | null) => {
     if (!current.current.foldersReady) return;
-    const next = addFolders(current.current.folders, added);
-    if (next.length > 100) {
-      setNotice("You can add up to 100 folders.");
+    if (folder?.error) { setNotice(`Could not open ${folder.name}: ${folder.error}`); return; }
+    if (voiceBusy.current || operation.current || saveInFlight.current) {
+      setNotice("Finish the current operation before switching folders."); return;
+    }
+    const c = current.current;
+    const previous = c.folders.find(f => !f.cloudSpace);
+    if (folder && previous?.root === folder.root) return;
+    operation.current = true;
+    setLoading(true);
+    try {
+      const recent = folder ? recentsRef.current.find(r => r.root === folder.root) : undefined;
+      const restored = folder ? { ...folder, collapsed: false, closedDirectories: recent?.closedDirectories, expandedDirectories: recent?.expandedDirectories ?? [] } : null;
+      const localTabs = recent?.tabs ?? [];
+      const cloudTabs = tabsRef.current.filter(tab => c.folders.some(f => f.root === tab.root && f.cloudSpace));
+      const nextTabs = [...cloudTabs, ...localTabs];
+      const nextFolders = [...c.folders.filter(f => f.cloudSpace), ...(restored ? [restored] : [])];
+      const candidates = restored
+        ? [...new Set([recent?.active, ...localTabs.map(t => t.path)].filter((p): p is string => !!p))].map(path => ({ folder: restored, path }))
+        : cloudTabs.map(tab => ({ folder: nextFolders.find(f => f.root === tab.root)!, path: tab.path }));
+      // Read the incoming document before committing the switch. Missing files
+      // remain in the saved tab list; other recoverable tabs can still reopen.
+      let selected: { folder: Workspace; path: string; note: DocumentData; recovered: boolean } | undefined;
+      const warnings: string[] = [];
+      for (const candidate of candidates) {
+        try { selected = { ...candidate, ...await readRecoverableNote(candidate.folder.root, candidate.path) }; break; }
+        catch (error) { warnings.push(`${candidate.path}: ${String(error)}`); }
+      }
+      const preservedGeneration = editGeneration.current;
+      paneActions.current?.capture();
+      if (!await preserveInactiveDrafts() || !await preserveDraft()) return;
+      if (preservedGeneration !== editGeneration.current) { setNotice("Your note changed while switching. Open the folder again when you finish typing."); return; }
+      let nextRecents = recentsRef.current;
+      if (previous) {
+        const activity = localActivity.current.get(previous.root);
+        nextRecents = rememberFolder(nextRecents, previous, tabsRef.current,
+          activity ? { root: previous.root, path: activity.path } : null, activity?.mode ?? c.mode, paneLayoutRef.current);
+      }
+      if (restored && !recent) nextRecents = rememberFolder(nextRecents, restored, [], null, c.mode);
+      if (recent) nextRecents = [recent, ...nextRecents.filter(r => r.root !== recent.root)];
+      const nextWorkspace = selected?.folder ?? restored ?? nextFolders[0] ?? { root: "", name: "Your folders", files: [] };
+      if (selected && !nextTabs.some(tab => tab.root === selected.folder.root && tab.path === selected.path)) nextTabs.push({ root: selected.folder.root, path: selected.path, pinned: false });
+      const nextMode = selected ? readFileMode(selected.path, recent?.mode ?? c.mode) : recent?.mode ?? c.mode;
+      const nextLayout = reconcilePanes(!cloudTabs.length && recent?.panes ? recent.panes : paneLayoutRef.current, nextTabs.map(tabId), activePaneRef.current);
+      // Persist the concrete next session before dropping any current UI state.
+      await saveExplorer({ folders: nextFolders.map(folderPreference), recents: nextRecents, tabs: nextTabs, panes: nextLayout,
+        active: selected ? { root: selected.folder.root, path: selected.path } : null, mode: nextMode });
+      if (preservedGeneration !== editGeneration.current) {
+        await saveExplorer({ folders: c.folders.map(folderPreference), recents: recentsRef.current, tabs: tabsRef.current, panes: paneLayoutRef.current,
+          active: c.hasDocument ? { root: c.workspace.root, path: c.path } : null, mode: c.mode });
+        await preserveDraft();
+        setNotice("Your note changed while switching. Open the folder again when you finish typing."); return;
+      }
+      directoryRequests.current.clear(); setLoadingDirectories({});
+      updateRecents(nextRecents);
+      setFolders(nextFolders);
+      updateTabs(nextTabs); updatePaneLayout(nextLayout);
+      const owner = paneLeaves(nextLayout).find(p => p.tabs.includes(selected ? tabId({ root: selected.folder.root, path: selected.path }) : "")) ?? paneLeaves(nextLayout)[0];
+      focusPane(owner.id);
+      if (selected) updatePaneLayout(selectPaneTab(nextLayout, owner.id, tabId({ root: selected.folder.root, path: selected.path })));
+      setWorkspace(nextWorkspace); setPath(selected?.path ?? ""); setData(selected?.note ?? null);
+      setPreview(selected?.note.text ?? ""); applyMarks(selected?.note.bookmarks ?? []);
+      setEditorSnapshot(undefined); setMode(nextMode); setActiveMark(null); setCursor([1, 1]);
+      revision.current = selected?.note.revision ?? "";
+      dirtyRef.current = selected?.recovered ?? false; setDirty(dirtyRef.current);
+      current.current = { ...c, folders: nextFolders, workspace: nextWorkspace, path: selected?.path ?? "", hasDocument: !!selected, mode: nextMode };
+      setNotice(warnings.join(" · "));
+    } catch (error) { setNotice(`Could not switch folders: ${String(error)}`); }
+    finally { operation.current = false; setLoading(false); }
+  };
+  const launchFolder = async (root: string) => {
+    await openFolderWindow(root);
+    // Record the destination without replacing this window's folder or tabs.
+    if (!recentsRef.current.some(recent => recent.root === root)) {
+      updateRecents(rememberFolder(recentsRef.current, { root, name: root.split(/[\\/]/).at(-1) || root, files: [] }, [], null, current.current.mode));
+    }
+  };
+  const openRecent = async (recent: RecentFolder) => {
+    try { await launchFolder(recent.root); }
+    catch (error) { setNotice(`Could not open ${recent.name}: ${String(error)}`); }
+  };
+  const acceptFolders = async (added: Workspace[]) => {
+    if (added.length > 1) { setNotice("Open one local folder at a time."); return; }
+    const folder = added[0];
+    if (folder?.cloudSpace) {
+      setFolders(old => [...old.filter(f => f.root !== folder.root), folder]);
       return;
     }
-    setFolders(next);
-    if (!current.current.hasDocument) {
-      const first = added.find((f) => !f.error && f.files.length);
-      if (first) await openNote(first.files[0].path, undefined, first);
-    }
+    if (folder) await switchLocalFolder(folder);
   };
   const cloud = useCloudSpaces(drive.status.connected, foldersReady, spaces => {
     setFolders(previous => [...previous.filter(folder => !folder.cloudSpace && !mobile), ...spaces.map(space => ({...space, collapsed: previous.find(f => f.root === space.root)?.collapsed ?? false}))]);
     const currentSpace = spaces.find(space => space.root === current.current.workspace.root);
     if (currentSpace) setWorkspace(currentSpace);
-    else if ((!current.current.hasDocument || !!current.current.workspace.cloudSpace) && spaces.length) {
+    else if ((!current.current.workspace.root || !!current.current.workspace.cloudSpace) && spaces.length) {
       setWorkspace(spaces[0]);
       if (spaces[0].files.length) void openNote(spaces[0].files[0].path, undefined, spaces[0]);
     }
@@ -1021,15 +1107,13 @@ export default function App() {
     } catch(error) { setNotice(String(error)); }
   }
   const openFolder = async () => {
-    if (voiceBusy.current) {
-      setNotice("Finish or cancel voice typing before adding folders.");
-      return;
-    }
+    const request = ++localSwitchRequest.current;
     try {
-      await acceptFolders(await chooseWorkspaces());
-    } catch (error) {
-      setNotice(String(error));
-    }
+      const [folder] = await chooseWorkspaces();
+      if (request !== localSwitchRequest.current || !folder) return;
+      if (folder.error) { setNotice(`Could not open ${folder.name}: ${folder.error}`); return; }
+      await launchFolder(folder.root);
+    } catch (error) { setNotice(String(error)); }
   };
   const starFile = (folder: Workspace, path: string, starred: boolean) => {
     if (operation.current || saveInFlight.current) return;
@@ -1043,7 +1127,8 @@ export default function App() {
   const refreshFolder = async (root: string) => {
     try {
       await starQueue.current;
-      const refreshed = await openWorkspace(root);
+      const original = current.current.folders.find(f => f.root === root);
+      const refreshed = await openWorkspace(root, original?.expandedDirectories);
       setSyncFolder(old => old?.root === root ? {...old, ...refreshed} : old);
       setFolders((old) =>
         old.map((f) =>
@@ -1108,47 +1193,41 @@ export default function App() {
     },
   });
   const removeFolder = async (root: string) => {
-    if (voiceBusy.current || operation.current) {
-      setNotice("Finish the current operation before removing a folder.");
-      return;
-    }
-    const next = current.current.folders.filter((f) => f.root !== root);
-    if (
-      current.current.workspace.root === root &&
-      current.current.hasDocument
-    ) {
-      const first = next.find((f) => !f.error && f.files.length);
-      if (first) {
-        if (!(await openNote(first.files[0].path, undefined, first))) return;
-      } else {
-        if (!(await preserveDraft())) return;
-        setData(null);
-        setPath("");
-        applyMarks([]);
-        setWorkspace(next[0] ?? { name: "Your folders", root: "", files: [] });
+    if (current.current.folders.some(folder => folder.root === root && !folder.cloudSpace)) await switchLocalFolder(null);
+  };
+  const loadDirectory = async (root: string, path: string, more = false) => {
+    const folder = current.current.folders.find(folder => folder.root === root);
+    if (!folder?.directories) return;
+    const key = JSON.stringify([root, path]);
+    if (directoryRequests.current.has(key)) return;
+    const ticket = Symbol(); directoryRequests.current.set(key, ticket);
+    setLoadingDirectories(old => ({ ...old, [root]: [...(old[root] ?? []), path] }));
+    try {
+      const listing = await listDirectory(root, path, more ? folder.directoryPages?.[path] ?? 0 : 0);
+      if (directoryRequests.current.get(key) !== ticket) return;
+      setFolders(old => old.map(f => f.root === root ? mergeDirectory(f, path, listing, more) : f));
+    } catch (error) {
+      if (directoryRequests.current.get(key) === ticket) setFolders(old => old.map(f => f.root === root ? { ...f, directoryErrors: { ...f.directoryErrors, [path]: String(error) } } : f));
+    } finally {
+      if (directoryRequests.current.get(key) === ticket) {
+        directoryRequests.current.delete(key);
+        setLoadingDirectories(old => ({ ...old, [root]: (old[root] ?? []).filter(p => p !== path) }));
       }
     }
-    updateTabs(tabsRef.current.filter((t) => t.root !== root));
-    setFolders(next);
+  };
+  const toggleDirectory = (root: string, path: string) => {
+    const folder = current.current.folders.find(f => f.root === root);
+    if (!folder) return;
+    const expanded = folder.expandedDirectories ?? [];
+    const opening = !expanded.includes(path);
+    setFolders(old => old.map(f => f.root !== root ? f : { ...f, expandedDirectories: opening ? [...expanded, path] : expanded.filter(p => p !== path) }));
+    if (opening) void loadDirectory(root, path);
   };
   const dropHandler = useRef<(paths: string[]) => void>(() => {});
   dropHandler.current = (paths) => {
-    if (voiceBusy.current) {
-      setNotice("Finish or cancel voice typing before adding folders.");
-      return;
-    }
-    void loadFolders(
-      paths.map((root) => ({ root, name: root.split(/[\\/]/).at(-1) || root })),
-    )
-      .then((added) => {
-        const valid = added.filter((f) => !f.error);
-        if (valid.length !== added.length)
-          setNotice(
-            "Drop folders rather than individual files. Unavailable folders were skipped.",
-          );
-        return acceptFolders(valid);
-      })
-      .catch((error) => setNotice(String(error)));
+    if (paths.length !== 1) { setNotice("Drop one folder to open it."); return; }
+    const root = paths[0];
+    void openRecent(recentsRef.current.find(recent => recent.root === root) ?? { root, name: root.split(/[\\/]/).at(-1) || root, tabs: [], active: null, mode: current.current.mode });
   };
   useEffect(() => {
     if (!desktop) return;
@@ -1260,9 +1339,12 @@ export default function App() {
   }), [syncFolder, drive.status.connected, settingsOpen, activeSettingId, bookmarkDraft, renameTarget, fileAction]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (syncFolder || (mobile && !drive.status.connected)) return;
+      if (syncFolder || settingsOpen || activeSettingId || palette || bookmarkDraft || renameTarget || fileAction || document.querySelector("dialog[open]") || (mobile && !drive.status.connected)) return;
       if (e.target instanceof Element && e.target.closest("#terminal-panel")) return;
       if (!(e.metaKey || e.ctrlKey)) return;
+      if (!mobile && !e.altKey && !e.shiftKey && e.key.toLowerCase() === "o" && !e.isComposing) {
+        e.preventDefault(); if (!e.repeat) void openFolder(); return;
+      }
       if (!e.altKey && !e.shiftKey && (e.key.toLowerCase() === "n" || e.key.toLowerCase() === "t")) {
         e.preventDefault();
         if (e.repeat) return;
@@ -1271,6 +1353,7 @@ export default function App() {
           if (desktop) void invoke("new_window").catch(error => setNotice(String(error)));
           else {
             const url = new URL(window.location.href);
+            url.searchParams.delete("folder");
             url.searchParams.set("new-window", "true");
             window.open(url.href, "_blank", "noopener");
           }
@@ -1304,7 +1387,8 @@ export default function App() {
       const c = current.current;
       if (!c.foldersReady) return;
       await saveExplorer({
-        folders: c.folders.map(({ root, name, collapsed, closedDirectories }) => ({ root, name, collapsed, closedDirectories })),
+        folders: c.folders.map(folderPreference),
+        recents: recentsRef.current,
         active: c.hasDocument ? { root: c.workspace.root, path: c.path } : null,
         tabs: tabsRef.current, panes: paneLayoutRef.current, mode: c.mode,
       });
@@ -1586,8 +1670,8 @@ export default function App() {
           {!data && !loading && (
             <div className="empty-editor">
               <FolderOpen size={32} />
-              <h2>{mobile ? "A little space to think." : "A folder is all you need."}</h2>
-              <p>{mobile ? "Create your first Cloud note. Edits save and sync automatically." : "Open a folder with Markdown or text files."}</p>
+              <h2>{mobile ? "A little space to think." : workspace.root ? workspace.name : "A folder is all you need."}</h2>
+              <p>{mobile ? "Create your first Cloud note. Edits save and sync automatically." : workspace.root ? "Choose a file in the explorer, or search this folder." : "Open a folder with Markdown or text files."}</p>
               <button className="primary" onClick={mobile ? () => void newTab() : openFolder}>
                 {mobile ? "Create a note" : "Open folder"}
               </button>
@@ -1697,6 +1781,8 @@ export default function App() {
           onRemove={(root) => void removeFolder(root)}
           onRefresh={(root) => void refreshFolder(root)}
           onAdd={() => void openFolder()}
+          recents={recents} onRecent={recent => void openRecent(recent)} onForgetRecents={() => updateRecents([])}
+          onLoadDirectory={(root, path, more) => void loadDirectory(root, path, more)} onToggleDirectory={toggleDirectory} loadingDirectories={loadingDirectories}
           externalDrag={externalDrag}
         />
         <div className="sidebar-bottom">
@@ -1706,9 +1792,9 @@ export default function App() {
           </div>}
           {mobile && <p>Cloud notes save and sync automatically.</p>}
           <div className="sidebar-actions">
-            <button className="sidebar-action" hidden={mobile} aria-label="Add folders" aria-describedby="add-folders-tip" onClick={openFolder}>
+            <button className="sidebar-action" hidden={mobile} aria-label="Open Folder" aria-describedby="add-folders-tip" onClick={openFolder}>
               <Plus size={17} aria-hidden="true" />
-              <span className="focus-tooltip" id="add-folders-tip" role="tooltip">Add folders</span>
+              <span className="focus-tooltip" id="add-folders-tip" role="tooltip">Open Folder in New Window…</span>
             </button>
             <button className="sidebar-action" aria-label="Settings" aria-describedby="settings-button-tip"
               aria-haspopup="dialog" onClick={() => setSettingsOpen(true)}>

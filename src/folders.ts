@@ -1,10 +1,12 @@
+import { parseRecents, type RecentFolder } from "./localFolders";
 import { tabId, type NoteTab } from "./tabs";
 import { parsePaneLayout, type PaneNode } from "./paneLayout";
 import type { Workspace } from "./model";
-export type FolderPreference = Pick<Workspace, "root" | "name" | "collapsed" | "closedDirectories">;
+export type FolderPreference = Pick<Workspace, "root" | "name" | "collapsed" | "closedDirectories" | "expandedDirectories" | "cloudSpace">;
 export type EditorMode = "source" | "edit" | "read";
 export type ExplorerPreferences = {
   folders: FolderPreference[];
+  recents?: RecentFolder[];
   active: { root: string; path: string } | null;
   mode: EditorMode;
   tabs?: NoteTab[];
@@ -45,7 +47,7 @@ export function parsePreferences(value: unknown): ExplorerPreferences | null {
       (f): f is FolderPreference =>
         !!f && typeof f.root === "string" && typeof f.name === "string",
     )
-    .map((f) => ({ root: f.root, name: f.name, collapsed: f.collapsed !== false, ...(Array.isArray(f.closedDirectories) ? { closedDirectories: f.closedDirectories.filter(p => typeof p === "string") } : {}) }));
+    .map((f) => ({ root: f.root, name: f.name, collapsed: f.collapsed !== false, ...(f.cloudSpace ? { cloudSpace: f.cloudSpace } : {}), ...(Array.isArray(f.expandedDirectories) ? { expandedDirectories: f.expandedDirectories.filter(p => typeof p === "string") } : {}), ...(Array.isArray(f.closedDirectories) ? { closedDirectories: f.closedDirectories.filter(p => typeof p === "string") } : {}) }));
   const unique = folders.filter(
     (f, i) => folders.findIndex((other) => other.root === f.root) === i,
   );
@@ -57,6 +59,7 @@ export function parsePreferences(value: unknown): ExplorerPreferences | null {
       : null;
   return {
     folders: unique,
+    ...(v.recents ? { recents: parseRecents(v.recents) } : {}),
     active,
     ...(Array.isArray(v.tabs) ? { tabs: v.tabs.filter((t): t is NoteTab =>
       !!t && typeof t.root === "string" && typeof t.path === "string" && unique.some(f => f.root === t.root))
@@ -68,6 +71,7 @@ export function parsePreferences(value: unknown): ExplorerPreferences | null {
 }
 
 export function closedDirectories(folder: Workspace): string[] {
+  if (folder.directories) return folder.directories.filter(path => !folder.expandedDirectories?.includes(path));
   if (folder.closedDirectories) return folder.closedDirectories;
   const directories = new Set<string>();
   for (const { path } of folder.files) {

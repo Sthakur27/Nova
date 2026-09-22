@@ -20,6 +20,12 @@ export type Workspace = {
   syncError?: string;
   collapsed?: boolean;
   closedDirectories?: string[];
+  // Local trees contain only directories the user has opened.
+  directories?: string[];
+  expandedDirectories?: string[];
+  directoryPages?: Record<string, number>;
+  directoryErrors?: Record<string, string>;
+  warnings?: string[];
   error?: string;
 };
 export type DocumentData = {
