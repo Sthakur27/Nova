@@ -1,18 +1,15 @@
 import { usePreference } from "./preferences";
 import { mobile } from "./platform";
 import { createPortal } from "react-dom";
-import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import {
   Cloud,
   CloudOff,
-  ArrowDown,
-  ArrowUp,
   ChevronDown,
   ChevronRight,
   FileText,
   Folder,
   FolderOpen,
-  GripVertical,
   Plus,
   Pencil,
   MoreHorizontal,
@@ -23,7 +20,7 @@ import { syncIncluded, type SyncPolicy } from "./syncPolicy";
 import type { Workspace } from "./model";
 import RecentFolders from "./RecentFolders";
 import type { RecentFolder } from "./localFolders";
-import { closedDirectories, reorderFolders } from "./folders";
+import { closedDirectories } from "./folders";
 function NovaStar({ size }: { size: number }) {
   return (
     <svg className="nova-star" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
@@ -241,42 +238,6 @@ export default function Explorer({
   const [cloudCollapsed, setCloudCollapsed] = usePreference<boolean>("explorer-cloud-collapsed", false);
   const [starredOnly, setStarredOnly] = useState(false);
   const [syncOnly, setSyncOnly] = useState(false);
-  const [dragging, setDragging] = useState<string | null>(null),
-    [target, setTarget] = useState<string | null>(null),
-    [announcement, setAnnouncement] = useState("");
-  const drag = useRef<{ root: string; startY: number; target: string } | null>(
-    null,
-  );
-  const move = (source: string, destination: string) => {
-    if (!!folders.find(f => f.root === source)?.cloudSpace !== !!folders.find(f => f.root === destination)?.cloudSpace) return;
-    onChange(reorderFolders(folders, source, destination));
-    setAnnouncement("Folder order updated.");
-  };
-  function pointerDown(event: PointerEvent<HTMLButtonElement>, root: string) {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    drag.current = { root, startY: event.clientY, target: root };
-  }
-  function pointerMove(event: PointerEvent<HTMLButtonElement>) {
-    const d = drag.current;
-    if (!d || Math.abs(event.clientY - d.startY) < 4) return;
-    setDragging(d.root);
-    const element = document
-      .elementFromPoint(event.clientX, event.clientY)
-      ?.closest<HTMLElement>("[data-folder-root]");
-    if (element?.dataset.folderRoot) {
-      d.target = element.dataset.folderRoot;
-      setTarget(d.target);
-    }
-  }
-  function pointerUp() {
-    const d = drag.current;
-    if (d && d.target !== d.root) move(d.root, d.target);
-    drag.current = null;
-    setDragging(null);
-    setTarget(null);
-  }
   return (
     <>
       <div className="workspace-label">
@@ -330,18 +291,17 @@ export default function Explorer({
             ?? ordered.find(folder => !folder.error);
           return <section className="explorer-section" key={kind} aria-label={`${kind} notes`}>
             <div className="explorer-section-header">
-              <h2>{isCloud ? <button className="explorer-section-toggle" aria-expanded={!collapsed} aria-controls="explorer-cloud" onClick={() => setCloudCollapsed(!collapsed)}>
-                {collapsed ? <ChevronRight size={14}/> : <ChevronDown size={14}/>}
-                <Cloud size={14}/><span>Cloud</span>
-              </button> : <span className="explorer-local-label">Local</span>}</h2>
-              {!isCloud && <div className="explorer-local-actions">
+              <h2>{isCloud ? <button className="explorer-section-label explorer-section-toggle" aria-expanded={!collapsed} aria-controls="explorer-cloud" onClick={() => setCloudCollapsed(!collapsed)}>
+                Cloud
+              </button> : <span className="explorer-section-label">Local</span>}</h2>
+              {!isCloud && <div className="explorer-section-actions">
                 <RecentFolders folders={recents.filter(recent => !ordered.some(folder => folder.root === recent.root))} onOpen={onRecent} onClear={onForgetRecents}/>
                 <button className="icon-button explorer-open-local" aria-label="Open local folder in new window" title="Open Folder in New Window…" onClick={onAdd}><Plus size={15}/></button>
               </div>}
-              {isCloud && onNew && <button className="explorer-new-cloud" aria-label="New Cloud note" title={`New Cloud note${createTarget ? ` in ${createTarget.name}` : ""}`} disabled={!createTarget} onClick={() => { setCloudCollapsed(false); if (createTarget) onNew(createTarget); }}><Plus size={14}/><span>New note</span></button>}
+              {isCloud && onNew && <div className="explorer-section-actions"><button className="icon-button explorer-new-cloud" aria-label="New Cloud note" title={`New Cloud note${createTarget ? ` in ${createTarget.name}` : ""}`} disabled={!createTarget} onClick={() => { setCloudCollapsed(false); if (createTarget) onNew(createTarget); }}><Plus size={15}/></button></div>}
             </div>
             <div id={`explorer-${kind.toLowerCase()}`} hidden={collapsed}>
-        {ordered.map((folder, index) => {
+        {ordered.map((folder) => {
           const starred = new Set(folder.starred ?? []);
           const collapsed = folder.collapsed ?? true;
           const closed = closedDirectories(folder);
@@ -355,39 +315,9 @@ export default function Explorer({
           <section
             key={folder.root}
             data-folder-root={folder.root}
-            className={
-              "explorer-root " +
-              (dragging === folder.root ? "is-dragging " : "") +
-              (target === folder.root && target !== dragging
-                ? "drop-target"
-                : "")
-            }
+            className="explorer-root"
           >
             <div className="root-header">
-              <button
-                className="root-grip"
-                hidden={!isCloud}
-                aria-label={`Reorder ${folder.name}`}
-                title="Drag to reorder · Arrow keys to move"
-                onPointerDown={(e) => pointerDown(e, folder.root)}
-                onPointerMove={pointerMove}
-                onPointerUp={pointerUp}
-                onPointerCancel={() => {
-                  drag.current = null;
-                  setDragging(null);
-                  setTarget(null);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-                    e.preventDefault();
-                    const next =
-                      ordered[index + (e.key === "ArrowUp" ? -1 : 1)];
-                    if (next) move(folder.root, next.root);
-                  }
-                }}
-              >
-                <GripVertical size={12} />
-              </button>
               <button
                 className="root-title"
                 title={folder.cloudSpace ? `Cloud / ${folder.name}` : folder.root === "demo" ? "Sample notes" : folder.root}
@@ -425,22 +355,6 @@ export default function Explorer({
                   <button onClick={() => onRefresh(folder.root)}>
                     <RefreshCw size={13} />
                     Refresh
-                  </button>
-                  <button
-                    hidden={!isCloud}
-                    disabled={index === 0 || !!ordered[index-1].cloudSpace !== !!folder.cloudSpace}
-                    onClick={() => move(folder.root, ordered[index - 1].root)}
-                  >
-                    <ArrowUp size={13} />
-                    Move up
-                  </button>
-                  <button
-                    hidden={!isCloud}
-                    disabled={index === ordered.length - 1 || !!ordered[index+1].cloudSpace !== !!folder.cloudSpace}
-                    onClick={() => move(folder.root, ordered[index + 1].root)}
-                  >
-                    <ArrowDown size={13} />
-                    Move down
                   </button>
                   <button hidden={mobile || !!folder.cloudSpace} onClick={() => onRemove(folder.root)}>
                     <X size={13} />
@@ -522,9 +436,6 @@ export default function Explorer({
         {menu.folder.cloudSpace && <button role="menuitem" onClick={() => { menu.trigger.focus(); setMenu(null); onFileAction(menu.folder, menu.path, "drive"); }}>Open in Google Drive</button>}
         <button role="menuitem" className="danger" onClick={() => { menu.trigger.focus(); setMenu(null); onFileAction(menu.folder, menu.path, "delete"); }}>Delete…</button>
       </div>, document.body)}
-      <span role="status" className="sr-only">
-        {announcement}
-      </span>
     </>
   );
 }

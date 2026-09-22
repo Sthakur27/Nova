@@ -118,7 +118,7 @@ it("browses unloaded directories, paginates, shows actionable errors and exposes
     await click('[aria-label="Open Recent"]');
     await act(async () => document.querySelector<HTMLButtonElement>('button[title="/other"]')!.click());
     expect(onRecent).toHaveBeenCalledWith(recent);
-    expect(host.querySelector('.root-grip')?.hasAttribute('hidden')).toBe(true);
+    expect(host.querySelector('.root-grip')).toBeNull();
     await click('[aria-label="Show starred files only"]');
     expect(host.textContent).toContain("star.md");
   } finally { await act(async () => root.unmount()); host.remove(); localStorage.clear(); vi.unstubAllGlobals(); }

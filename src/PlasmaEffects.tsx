@@ -380,8 +380,8 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
     };
     const target = (element: EventTarget | null) => {
       if (!(element instanceof Element)) return null;
-      // Compact explorer actions use their own restrained hover/focus treatment.
-      if (element.closest(".explorer-local-actions")) return null;
+      // Section labels stay quiet while their action buttons retain hover effects.
+      if (element.closest(".explorer-section-label")) return null;
       // The title is editable text; its hover rim follows the line preference too.
       if (!lineHighlight && element.closest(".file-heading")) return null;
       // Composite controls share one frame around their full outer boundary.

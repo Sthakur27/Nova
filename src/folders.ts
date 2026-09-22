@@ -25,19 +25,6 @@ export function addFolders(
     }
   return next;
 }
-export function reorderFolders<T extends { root: string }>(
-  folders: T[],
-  source: string,
-  target: string,
-): T[] {
-  const from = folders.findIndex((folder) => folder.root === source),
-    to = folders.findIndex((folder) => folder.root === target);
-  if (from < 0 || to < 0 || from === to) return folders;
-  const next = [...folders];
-  const [folder] = next.splice(from, 1);
-  next.splice(to, 0, folder);
-  return next;
-}
 export function parsePreferences(value: unknown): ExplorerPreferences | null {
   if (!value || typeof value !== "object") return null;
   const v = value as Partial<ExplorerPreferences>;

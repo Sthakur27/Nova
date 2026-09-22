@@ -1281,17 +1281,6 @@ kbd {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.root-grip {
-  padding: 3px 0;
-  color: #676371;
-  background: none;
-  border: 0;
-  cursor: grab;
-  touch-action: none;
-}
-.root-grip:active {
-  cursor: grabbing;
-}
 .root-files {
   padding-left: 9px;
 }
@@ -1359,12 +1348,6 @@ kbd {
 }
 .root-menu button:disabled {
   opacity: 0.3;
-}
-.is-dragging {
-  opacity: 0.45;
-}
-.drop-target {
-  box-shadow: 0 -2px #b499e0;
 }
 .external-drag {
   outline: 2px dashed #b499e0;
@@ -2679,14 +2662,14 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 
 .explorer-section-header { display: flex; align-items: center; gap: 4px; padding: 8px 6px 4px; }
 .explorer-section-header h2 { flex: 1; min-width: 0; margin: 0; font-size: inherit; }
-.explorer-section-toggle { display: flex; align-items: center; gap: 6px; width: 100%; padding: 6px 2px; border: 0; background: transparent; color: var(--muted, #a49cb0); text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; }
-.explorer-new-cloud, .explorer-add-local { display: flex; align-items: center; gap: 4px; border: 0; border-radius: 5px; padding: 5px 6px; color: #cfacff; background: transparent; font-size: 11px; white-space: nowrap; cursor: pointer; }
-.explorer-new-cloud { opacity: 0; pointer-events: none; }
-.explorer-section-header:hover .explorer-new-cloud, .explorer-new-cloud:focus-visible { opacity: 1; pointer-events: auto; }
-.explorer-new-cloud:hover, .explorer-add-local:hover, .explorer-section-toggle:hover { background: #b58aff12; color: #dfcaff; }
-.explorer-section-toggle:focus-visible, .explorer-new-cloud:focus-visible, .explorer-add-local:focus-visible { outline: 1px solid #cfacff; outline-offset: 1px; }
+.explorer-section-label { display: block; margin: 0; padding: 6px 2px; border: 0; background: transparent; color: var(--muted, #a49cb0); text-align: left; font-size: 11px; font-weight: 600; line-height: 16px; letter-spacing: .06em; text-transform: uppercase; }
+.explorer-section-toggle { width: 100%; cursor: pointer; }
+.explorer-section-toggle:hover { background: transparent; color: var(--muted, #a49cb0); }
+.explorer-section-toggle:focus-visible { outline: 1px solid #cfacff; outline-offset: 1px; }
 .explorer-section + .explorer-section { margin-top: 8px; }
-.explorer-add-local { margin: 4px 12px 8px; }
+.explorer-add-local { display: flex; align-items: center; gap: 4px; margin: 4px 12px 8px; border: 0; border-radius: 5px; padding: 5px 6px; color: #cfacff; background: transparent; font-size: 11px; white-space: nowrap; cursor: pointer; }
+.explorer-add-local:hover { background: #b58aff12; color: #dfcaff; }
+.explorer-add-local:focus-visible { outline: 1px solid #cfacff; outline-offset: 1px; }
 
 
 /* Portaled so tab-strip scrolling and split panes do not clip the path. */
@@ -2796,10 +2779,9 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 }
 
 /* The recent menu is portaled outside the scrolling sidebar. */
-.explorer-local-label { display: block; margin: 0; padding: 6px 2px; color: var(--muted, #a49cb0); font-size: 11px; font-weight: 600; line-height: 16px; letter-spacing: .06em; text-transform: uppercase; }
-.explorer-local-actions { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
-.explorer-local-actions .icon-button { width: 26px; height: 26px; padding: 0; border-radius: 5px; }
-.explorer-local-actions .icon-button:focus-visible { outline: 1px solid #bda0ed; outline-offset: -2px; }
+.explorer-section-actions { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+.explorer-section-actions .icon-button { width: 26px; height: 26px; padding: 0; border-radius: 5px; }
+.explorer-section-actions .icon-button:focus-visible { outline: 1px solid #bda0ed; outline-offset: -2px; }
 .recent-folders-trigger[aria-expanded="true"] { background: #bda0ed12; color: #c8b3e6; }
 .explorer-open-local { flex-shrink: 0; }
 .recent-folders-menu { position: fixed; z-index: 1000; width: min(320px, calc(100vw - 16px)); max-height: min(400px, calc(100vh - 16px)); overflow-y: auto; padding: 5px; background: #29272f; border: 1px solid #45404e; border-radius: 8px; box-shadow: 0 8px 25px #0008; }
