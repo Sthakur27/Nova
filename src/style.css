@@ -88,10 +88,10 @@ kbd {
   height: 36px;
   flex-shrink: 0;
   border: 1px solid #bda0ed24;
-  border-radius: 9px;
+  border-radius: 50%;
   background: linear-gradient(145deg, #aa81d911, #799be908);
 }
-.brand-emblem:focus-visible { border-radius: 9px; }
+.brand-emblem:focus-visible { outline: 2px solid #c6a4ef; outline-offset: 2px; }
 .brand-emblem[aria-pressed="false"] .brand-symbol { color: #8a8099; }
 .brand-emblem:hover { background: #b79adc16; }
 .brand-symbol {
@@ -2755,6 +2755,8 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 .sidebar-corner-controls .sidebar-action { width: 24px; height: 24px; border-radius: 50%; border: 1px solid #ffffff12; background: linear-gradient(145deg, #ffffff09, #ffffff02); box-shadow: 0 2px 0 #00000030, inset 0 1px 0 #ffffff08; }
 .sidebar-corner-controls .sidebar-action:hover, .sidebar-corner-controls .sidebar-action[aria-pressed="true"] { background: #b497dc18; border-color: #b497dc40; }
 .sidebar-corner-controls .signal-bell > span:first-child { width: 24px; height: 24px; }
+.sidebar-corner-controls > :is(.sidebar-action, .sidebar-section-toggle) svg,
+.sidebar-corner-controls > :is(.sidebar-action, .sidebar-section-toggle):is(:hover, :focus-visible) svg { color: #a990c8; }
 .sidebar .sidebar-action { position: relative; }
 .sidebar-action:hover > .focus-tooltip, .sidebar-action:focus-visible > .focus-tooltip { visibility: visible; opacity: 1; transform: translateY(0); }
 
@@ -2806,22 +2808,42 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 .starred-file-row > .icon-button { flex-shrink: 0; }
 .starred-files .rail-intro { margin-bottom: 12px; }
 
-/* Nested navigation panels share the workspace's hover and keyboard controls. */
+/* Small, persistent controls for the nested navigation sections. */
 .sidebar-section { position: relative; flex-shrink: 0; }
 .sidebar-section > [hidden] { display: none; }
-.sidebar-section[data-expanded="false"] { height: 24px; }
-.sidebar-section .sidebar-section-toggle {
-  inset: auto 0 -12px;
-  width: auto;
-  height: 24px;
-  pointer-events: auto;
+.sidebar-section[data-expanded="false"] { height: 28px; }
+.sidebar-section[data-edge="bottom"][data-expanded="false"] { height: 40px; }
+.sidebar-section-corner { position: absolute; top: 2px; left: calc(50% - 12px); }
+.sidebar-section[data-edge="top"][data-expanded="false"] + .workspace-label { margin-top: 2px; }
+.brand-collapse > svg { grid-area: 1 / 1; }
+.brand-collapse-chevron { opacity: 0; color: #c6b4e2; }
+.brand-collapse:is(:hover, :focus-visible) .brand-symbol { opacity: 0; }
+.brand-collapse:is(:hover, :focus-visible) .brand-collapse-chevron { opacity: 1; }
+.sidebar-section[data-edge="top"][data-expanded="false"] .sidebar-section-toggle { opacity: 0; }
+.sidebar-section[data-edge="top"]:is(:hover, :has(:focus-visible)) .sidebar-section-toggle { opacity: 1; }
+@media (hover: none) {
+  .sidebar-section[data-edge="top"][data-expanded="false"] .sidebar-section-toggle { opacity: 1; }
 }
-.sidebar-section[data-edge="bottom"] .sidebar-section-toggle { top: 0; bottom: auto; }
-.sidebar-section[data-expanded="false"] .sidebar-section-toggle { inset: 0; }
-.sidebar-section-toggle:hover .panel-toggle { opacity: 1; pointer-events: auto; }
-.sidebar-section[data-edge="top"] .focus-tooltip { top: calc(100% + 10px); bottom: auto; }
-.sidebar-section[data-edge="top"][data-expanded="false"] .sidebar-section-toggle { align-items: flex-start; }
-.sidebar-section[data-edge="bottom"][data-expanded="false"] .sidebar-section-toggle { align-items: flex-end; }
+.sidebar-section-toggle {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid #ffffff12;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #ffffff09, #ffffff02);
+  box-shadow: 0 2px 0 #00000030, inset 0 1px 0 #ffffff08;
+  color: #8e899a;
+}
+.sidebar-section-toggle:hover { background: #b497dc18; border-color: #b497dc40; color: #d1bde9; }
+.sidebar-section-toggle:focus-visible { outline: 2px solid #c6a4ef; outline-offset: 2px; color: #d1bde9; }
+.sidebar-section-toggle:hover .focus-tooltip,
+.sidebar-section-toggle:focus-visible .focus-tooltip { visibility: visible; opacity: 1; transform: none; }
+.sidebar-section-toggle .focus-tooltip { left: auto; right: 0; }
+.sidebar-section[data-edge="top"] .focus-tooltip { left: 50%; right: auto; translate: -50% 0; top: calc(100% + 6px); bottom: auto; }
 
 .bookmark-section + .bookmark-section { margin-top: 18px; padding-top: 14px; border-top: 1px solid #ffffff12; }
 .bookmark-section-toggle { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 4px; border: 0; border-radius: 5px; background: transparent; color: #b8adca; text-align: left; font-size: 11px; font-weight: 500; }

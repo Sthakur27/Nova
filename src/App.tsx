@@ -91,7 +91,6 @@ import { type EditorMode } from "./folders";
 import { folderPreference, folderWindowPreferences, migrateLocalFolders, rememberFolder, type RecentFolder } from "./localFolders";
 import VoiceControl from "./VoiceControl";
 import NovaStar from "./NovaStar";
-import NovaMark from "./NovaMark";
 import SignalBell from "./SignalBell";
 import SidebarAppearance from "./SidebarAppearance";
 import GalaxyMark from "./GalaxyMark";
@@ -184,7 +183,6 @@ export default function App() {
   const backgroundMode = !supportsFrosted && savedBackgroundMode === "frosted" ? "off" : savedBackgroundMode;
   const [frostedPanes, setFrostedPanes, frostedPanesError] = usePreference<boolean>("frosted-panes", false);
   const nextBackgroundMode = availableBackgroundModes[(availableBackgroundModes.indexOf(backgroundMode) + 1) % availableBackgroundModes.length];
-  const [supernova, setSupernova] = useState(0);
   const [showLineNumbers, setShowLineNumbers, numbersError] = usePreference<boolean>("line-numbers", true);
   const [showLineHighlight, setShowLineHighlight, highlightError] = usePreference<boolean>("line-highlight", false);
   const [wordWrap, setWordWrap, wrapError] = usePreference<boolean>("word-wrap", true);
@@ -1735,7 +1733,7 @@ export default function App() {
           </span>
         </button>
       )}
-      {galaxyMode && <PlasmaEffects performanceMode={galaxyPerformance} active={!compact && windowFocused} supernova={supernova} dirty={dirty} lineHighlight={showLineHighlight} />}
+      {galaxyMode && <PlasmaEffects performanceMode={galaxyPerformance} active={!compact && windowFocused} dirty={dirty} lineHighlight={showLineHighlight} />}
       {compact && <nav className="mobile-navigation" aria-label="Main navigation">
         <button aria-label="Your notes" aria-pressed={mobileView === "notes"} onClick={() => setMobileView("notes")}><FolderOpen size={20} /><span>Notes</span></button>
         <button aria-label="Write note" aria-pressed={mobileView === "editor"} onClick={() => setMobileView("editor")}><Pencil size={20} /><span>Write</span></button>
@@ -1745,15 +1743,9 @@ export default function App() {
       </nav>}
       <aside id="global-navigation" className="sidebar" hidden={compact ? mobileView !== "notes" : !navigation}>
         <SidebarSection edge="top" label="navigation header" compact={compact}>
+        {headerToggle => <>
         <div className="brand">
-          <button
-            className="brand-emblem"
-            aria-label="Supernova"
-            title="Supernova · Light up your workspace"
-            onClick={() => setSupernova(performance.now())}
-          >
-            <NovaMark className="brand-symbol" />
-          </button>
+          {headerToggle}
           <span>
             nova<span className="brand-period">.</span>
           </span>
@@ -1768,6 +1760,7 @@ export default function App() {
           <span>Find anything</span>
           <kbd>{mod} K</kbd>
         </button>
+        </>}
         </SidebarSection>
         <Explorer
           folders={folders.filter(folder => !folder.cloudSpace || (drive.status.connected && folder.cloudSpace.account === drive.status.account))}
@@ -1794,7 +1787,12 @@ export default function App() {
           onLoadDirectory={(root, path, more) => void loadDirectory(root, path, more)} onToggleDirectory={toggleDirectory} loadingDirectories={loadingDirectories}
           externalDrag={externalDrag}
         />
-        <SidebarSection edge="bottom" label="navigation controls" compact={compact}>
+        <SidebarSection edge="bottom" label="navigation controls" compact={compact}
+          cornerControls={galaxyMode && <>
+            {!mobile && <SidebarAppearance background={backgroundMode} backgrounds={availableBackgroundModes} labels={backgroundLabels}
+              onBackground={setBackgroundMode} frosted={frostedPanes} onFrosted={setFrostedPanes} supportsFrosted={supportsFrosted} />}
+            <SignalBell />
+          </>}>
         <div className="sidebar-bottom">
           {galaxyMode && <div className="launch-indicator">
             <span aria-hidden="true" />
@@ -1825,11 +1823,6 @@ export default function App() {
               </span>
             </button>
           </div>
-          {galaxyMode && <div className="sidebar-corner-controls">
-            {!mobile && <SidebarAppearance background={backgroundMode} backgrounds={availableBackgroundModes} labels={backgroundLabels}
-              onBackground={setBackgroundMode} frosted={frostedPanes} onFrosted={setFrostedPanes} supportsFrosted={supportsFrosted} />}
-            <SignalBell />
-          </div>}
         </div>
         </SidebarSection>
       </aside>
