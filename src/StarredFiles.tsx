@@ -7,7 +7,7 @@ export default function StarredFiles({ folders, activeRoot, activePath, onOpen, 
   folders: Workspace[];
   activeRoot: string;
   activePath: string;
-  onOpen: (folder: Workspace, path: string) => void;
+  onOpen: (folder: Workspace, path: string, pinned?: boolean) => void;
   onStar: (folder: Workspace, path: string, starred: boolean) => void;
 }) {
   return <div className="starred-files" aria-label="Starred files">
@@ -22,7 +22,9 @@ export default function StarredFiles({ folders, activeRoot, activePath, onOpen, 
           const active = folder.root === activeRoot && path === activePath;
           return <div className={`starred-file-row${active ? " current" : ""}`} key={path}>
             <button className="starred-file-open" title={`${folder.name} / ${path}`}
-              aria-current={active ? "page" : undefined} onClick={() => onOpen(folder, path)}>
+              aria-current={active ? "page" : undefined}
+              onClick={event => { if (event.detail <= 1) onOpen(folder, path); }}
+              onDoubleClick={() => onOpen(folder, path, true)}>
               <FileText size={15} aria-hidden="true" />
               <span><strong>{path.split("/").at(-1)}</strong><small>{path}</small></span>
             </button>

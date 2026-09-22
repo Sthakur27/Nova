@@ -24,6 +24,17 @@ it("navigates stars in unopened directories and distinguishes the same path acro
     await act(async () => host.querySelectorAll<HTMLButtonElement>('[aria-label="Unstar deep/note.md"]')[0].click());
     expect(onStar).toHaveBeenCalledExactlyOnceWith(cloud, "deep/note.md", false);
     expect(onOpen).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      buttons[1].dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+      buttons[1].dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 2 }));
+      buttons[1].dispatchEvent(new MouseEvent("dblclick", { bubbles: true, detail: 2 }));
+    });
+    expect(onOpen.mock.calls.slice(1)).toEqual([
+      [local, "deep/note.md"],
+      [local, "deep/note.md", true],
+    ]);
+    await act(async () => buttons[1].click());
+    expect(onOpen).toHaveBeenLastCalledWith(local, "deep/note.md");
     await act(async () => root.render(<StarredFiles folders={[{ ...local, starred: [], starsError: "Could not read stars" }]}
       activeRoot={local.root} activePath="" onOpen={onOpen} onStar={onStar} />));
     expect(host.querySelector(".empty-bookmarks")?.textContent).toContain("breadcrumb bar");

@@ -2063,7 +2063,7 @@ export default function App() {
             </button>}
           </header>
           {bookmarkView === "files" ? <StarredFiles folders={folders} activeRoot={workspace.root} activePath={path}
-            onOpen={(folder, file) => void openNote(file, undefined, folder)} onStar={starFile} /> : <>
+            onOpen={(folder, file, pinned) => void openNote(file, undefined, folder, undefined, pinned)} onStar={starFile} /> : <>
           <ScopeToggle label="Bookmark scope" scope={bookmarkScope} onChange={setBookmarkScope} currentLabel="Current tab" allLabel="All bookmarks" />
           <div className="rail-intro">{bookmarkScope === "current" ? "Your way back to the good parts." : "Across all added folders."}</div>
           {bookmarkScope === "everywhere" && bookmarksBusy && <div role="status" className="rail-intro">Loading bookmarks…</div>}
