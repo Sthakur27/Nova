@@ -91,9 +91,15 @@ pub(crate) async fn read_registry_document(root: String, access: State<'_, Acces
 }
 
 #[tauri::command]
-pub(crate) async fn validate_registry_document(root: String, text: String, access: State<'_, Access>) -> Result<(), String> {
+pub(crate) async fn validate_registry_document(root: String, text: String, revision: Option<String>, access: State<'_, Access>) -> Result<(), String> {
     let root = root_path(&access, &root)?;
-    tauri::async_runtime::spawn_blocking(move || validate(&text, &read(&root)?.text)).await.map_err(err)?
+    tauri::async_runtime::spawn_blocking(move || {
+        let disk = read(&root)?;
+        if revision.is_some_and(|expected| expected != disk.revision) {
+            return Err(".nova changed on disk. Copy your edits before discarding this draft and reopening the file.".into());
+        }
+        validate(&text, &disk.text)
+    }).await.map_err(err)?
 }
 
 #[tauri::command]

@@ -100,7 +100,7 @@ export default function Palette({
   }, [onClose]);
   const files = useMemo(() => {
     if (filter === "Settings" || filter === "Text" || filter === "Bookmarks") return [];
-    const loaded = searchFolders.flatMap(folder => folder.files.filter(file => file.path !== ".nova").map(file => ({
+    const loaded = searchFolders.flatMap(folder => folder.files.map(file => ({
       ...file, root: folder.root, folderName: folder.name,
     })));
     const found = currentOnly ? [] : remoteFiles.map(file => ({
@@ -402,7 +402,7 @@ export default function Palette({
             aria-controls="palette-advanced-fields" onClick={() => setAdvanced(value => !value)}>
             <ChevronRight size={14} className={advanced ? "expanded" : ""} aria-hidden="true" />
             Advanced search
-            {(options.include.trim() || options.exclude.trim()) && <span className="palette-filter-badge">Filters active</span>}
+            {(options.includeHidden || options.include.trim() || options.exclude.trim()) && <span className="palette-filter-badge">Filters active</span>}
           </button>
           {advanced && <div id="palette-advanced-fields" className="palette-advanced-fields">
             <label>Files to include
@@ -415,6 +415,8 @@ export default function Palette({
                 disabled={filter === "Settings"}
                 onChange={event => setOptions(previous => ({ ...previous, exclude: event.target.value }))} />
             </label>
+            <label className="palette-hidden-filter"><input type="checkbox" checked={options.includeHidden ?? false} disabled={filter === "Settings"}
+              onChange={event => setOptions(previous => ({...previous, includeHidden: event.target.checked}))}/>Include hidden files and folders</label>
             <p>Comma-separated paths or patterns: * matches a name, ** matches nested folders. Paths are relative to each folder.</p>
           </div>}
         </div>

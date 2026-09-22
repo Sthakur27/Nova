@@ -4,12 +4,15 @@ use serde::Deserialize;
 #[derive(Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct SearchSpec {
+    #[serde(default)]
+    include_hidden: bool,
     pattern: String,
     case_sensitive: bool,
     include: String,
     exclude: String,
 }
 pub(crate) struct Matcher {
+    include_hidden: bool,
     pattern: Regex,
     include: Option<Regex>,
     exclude: Option<Regex>,
@@ -24,16 +27,22 @@ impl Matcher {
             else { Regex::new(value).map(Some).map_err(|e| format!("Invalid file filter: {e}")) }
         };
         Ok(Self {
+            include_hidden: spec.include_hidden,
             pattern: RegexBuilder::new(&spec.pattern).case_insensitive(!spec.case_sensitive)
                 .build().map_err(|e| format!("Invalid or unsupported regex: {e}"))?,
             include: compile_path(&spec.include)?,
             exclude: compile_path(&spec.exclude)?,
         })
     }
+    pub(crate) fn visible_entry(&self, name: &str) -> bool {
+        !matches!(name, "node_modules" | "target" | ".nova-registry-backups")
+            && (self.include_hidden || !name.starts_with('.'))
+    }
     pub(crate) fn has_path_filters(&self) -> bool { self.include.is_some() || self.exclude.is_some() }
     pub(crate) fn matches(&self, text: &str) -> bool { self.pattern.is_match(text) }
     pub(crate) fn accepts_path(&self, path: &str) -> bool {
-        self.include.as_ref().is_none_or(|p| p.is_match(path))
+        (self.include_hidden || !path.split('/').any(|part| part.starts_with('.')))
+            && self.include.as_ref().is_none_or(|p| p.is_match(path))
             && !self.exclude.as_ref().is_some_and(|p| p.is_match(path))
     }
 }

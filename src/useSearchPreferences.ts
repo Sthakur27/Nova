@@ -15,7 +15,7 @@ function readPreferences(key: string): SearchPreferences {
     const value = JSON.parse(localStorage.getItem(key) ?? "null");
     if (!value || typeof value !== "object") return preferences;
     preferences.advanced = value.advanced === true;
-    for (const option of ["caseSensitive", "wholeWord", "regexp"] as const) {
+    for (const option of ["includeHidden", "caseSensitive", "wholeWord", "regexp"] as const) {
       if (typeof value.options?.[option] === "boolean") preferences.options[option] = value.options[option];
     }
     for (const option of ["include", "exclude"] as const) {

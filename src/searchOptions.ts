@@ -1,4 +1,5 @@
 export type SearchOptions = {
+  includeHidden?: boolean;
   caseSensitive: boolean;
   wholeWord: boolean;
   regexp: boolean;
@@ -6,9 +7,9 @@ export type SearchOptions = {
   exclude: string;
 };
 export const defaultSearchOptions: SearchOptions = {
-  caseSensitive: false, wholeWord: false, regexp: false, include: "", exclude: "",
+  includeHidden: false, caseSensitive: false, wholeWord: false, regexp: false, include: "", exclude: "",
 };
-export type SearchSpec = { pattern: string; caseSensitive: boolean; include: string; exclude: string };
+export type SearchSpec = { includeHidden: boolean; pattern: string; caseSensitive: boolean; include: string; exclude: string };
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // Comma-separated workspace-relative globs. Bare names match at any depth;
@@ -34,7 +35,7 @@ export function searchSpec(query: string, options = defaultSearchOptions): Searc
   const pattern = options.wholeWord && source ? `\\b(?:${source})\\b` : source;
   // Validate before dispatching a search; the native engine reports unsupported expressions.
   new RegExp(pattern, options.caseSensitive ? "u" : "iu");
-  return { pattern, caseSensitive: options.caseSensitive, include: globPattern(options.include), exclude: globPattern(options.exclude) };
+  return { includeHidden: options.includeHidden === true, pattern, caseSensitive: options.caseSensitive, include: globPattern(options.include), exclude: globPattern(options.exclude) };
 }
 export function searchMatcher(query: string, options = defaultSearchOptions) {
   const spec = searchSpec(query, options);
@@ -43,7 +44,7 @@ export function searchMatcher(query: string, options = defaultSearchOptions) {
   const exclude = spec.exclude ? new RegExp(spec.exclude) : null;
   return {
     matches: (text: string) => pattern.test(text),
-    acceptsPath: (path: string) => (!include || include.test(path)) && (!exclude || !exclude.test(path)),
+    acceptsPath: (path: string) => (options.includeHidden || !path.split("/").some(part => part.startsWith("."))) && (!include || include.test(path)) && (!exclude || !exclude.test(path)),
     pattern,
   };
 }

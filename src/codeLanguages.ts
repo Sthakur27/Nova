@@ -33,6 +33,7 @@ const languages = [
 ];
 
 export function codeLanguage(path = "") {
+  if (path === ".nova") return languages.find(language => language.name === "JSON");
   const extension = path.split(/[\\/]/).pop()?.split(".").pop()?.toLowerCase();
   return languages.find(language => language.extensions.includes(extension ?? ""));
 }

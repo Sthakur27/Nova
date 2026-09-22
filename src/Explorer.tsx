@@ -3,6 +3,8 @@ import { mobile } from "./platform";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import {
+  Eye,
+  EyeOff,
   Cloud,
   CloudOff,
   ChevronDown,
@@ -145,6 +147,7 @@ function FileTree({
 type Props = {
   folders: Workspace[];
   showHidden?: boolean;
+  onShowHidden?: (value: boolean) => void;
   recents?: RecentFolder[];
   onRecent?: (folder: RecentFolder) => void;
   onForgetRecents?: () => void;
@@ -174,7 +177,7 @@ export default function Explorer({
   activePath,
   onOpen,
   onRename,
-  showHidden = false,
+  showHidden = false, onShowHidden,
   onChange,
   onFileAction,
   onRemove,
@@ -291,6 +294,7 @@ export default function Explorer({
                 Cloud
               </button> : <span className="explorer-section-label">Local</span>}</h2>
               {!isCloud && <div className="explorer-section-actions">
+                {onShowHidden && <button className="icon-button hidden-files-toggle" aria-label={showHidden ? "Hide hidden files and folders" : "Show hidden files and folders"} title={showHidden ? "Hide hidden files and folders" : "Show hidden files and folders"} aria-pressed={showHidden} onClick={() => onShowHidden(!showHidden)}>{showHidden ? <Eye size={15}/> : <EyeOff size={15}/>}</button>}
                 <RecentFolders folders={recents.filter(recent => !ordered.some(folder => folder.root === recent.root))} onOpen={onRecent} onClear={onForgetRecents}/>
                 <button className="icon-button explorer-open-local" aria-label="Open local folder in new window" title="Open Folder in New Window…" onClick={onAdd}><Plus size={15}/></button>
               </div>}

@@ -2861,10 +2861,19 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 .cloud-file-issue { margin: 14px 0; padding-bottom: 14px; border-bottom: 1px solid #ffffff10; }
 .cloud-file-issue .cloud-space-actions { margin-top: 8px; align-items: center; }
 
-.sidebar > .hidden-files-toggle { position: absolute; top: 4px; right: 8px; z-index: 2; opacity: 0; }
-.sidebar:is(:hover, :focus-within) > .hidden-files-toggle { opacity: 1; }
-.sidebar > .hidden-files-toggle[aria-pressed="true"] { color: #d1bde9; }
-@media (hover: none) { .sidebar > .hidden-files-toggle { opacity: 1; } }
-.registry-editor { width: min(800px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; }
-.registry-editor textarea { display: block; box-sizing: border-box; width: 100%; min-height: 40vh; resize: vertical; padding: 12px; background: #17151d; color: #e4dfeb; border: 1px solid #ffffff30; border-radius: 6px; font: 13px/1.6 monospace; tab-size: 2; }
-.registry-editor .dialog-buttons { flex-wrap: wrap; }
+/* Keep the hidden-file control beside Local actions without adding visual noise. */
+.explorer-section-actions .hidden-files-toggle { opacity: 0; }
+.explorer-section-header:is(:hover, :focus-within) .hidden-files-toggle,
+.hidden-files-toggle:focus-visible { opacity: 1; }
+.hidden-files-toggle[aria-pressed="true"] { color: #d1bde9; }
+@media (hover: none) { .explorer-section-actions .hidden-files-toggle { opacity: 1; } }
+.registry-validation { padding: 8px 24px; font-size: 12px; color: #aaa2ba; border-bottom: 1px solid #ffffff15; }
+.registry-validation p { margin: 4px 0; }
+.registry-validation [role="alert"] { color: #f5aaa4; white-space: pre-wrap; }
+
+.palette-advanced-fields .palette-hidden-filter { display: flex; align-items: center; gap: 8px; }
+.palette-advanced-fields .palette-hidden-filter input { width: auto; }
+
+.document-area[data-registry="true"] { display: flex; flex-direction: column; }
+.document-area[data-registry="true"] > .registry-validation { flex: 0 0 auto; max-height: 30%; overflow: auto; }
+.document-area[data-registry="true"] > :is(.write-pane, .read-pane) { flex: 1; min-height: 0; height: auto; }

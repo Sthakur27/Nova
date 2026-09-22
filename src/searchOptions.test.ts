@@ -20,3 +20,11 @@ it("filters current text before collecting matches and safely bounds zero-width 
   expect(searchCurrentNote(note, "a", { ...defaults, exclude: "archive" })).toEqual([]);
   expect(searchCurrentNote(note, "a*", { ...defaults, regexp: true }).length).toBeLessThanOrEqual(80);
 });
+
+it("filters hidden paths independently from include/exclude globs", () => {
+  for (const path of [".env", ".config/note.txt", "notes/.private.txt"]) {
+    expect(searchMatcher("", defaults).acceptsPath(path)).toBe(false);
+    expect(searchMatcher("", {...defaults, includeHidden:true}).acceptsPath(path)).toBe(true);
+  }
+  expect(searchMatcher("", {...defaults, includeHidden:true, exclude:".config/**"}).acceptsPath(".config/note.txt")).toBe(false);
+});

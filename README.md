@@ -130,7 +130,7 @@ Nova for **iPhone and iPad is in development**. The same quiet writing space is 
 4. **Mark a good passage.** Select some text and use **Add bookmark** in the bookmarks panel. Give it a name so you can find it again.
 5. **Save your work.** For Local notes, press **⌘ S** on Mac or **Ctrl S** on Windows to write changes to the original file. Cloud notes autosave. Nova also keeps recovery drafts on this computer as you work.
 
-Show dotfiles and dotfolders with the eye button at the top of navigation or **Show hidden files and folders** in Cmd/Ctrl-K settings. Open a workspace’s `.nova` file there for validated JSON editing with explicit saves and recovery drafts. See the [reference guide](docs/user-guide.md#workspace-metadata).
+Show dotfiles and dotfolders with the hover eye button beside Local’s Recent and + controls, Settings, or **Show hidden files and folders** in Cmd/Ctrl-K settings. Open a workspace’s `.nova` file there in a normal editor tab with JSON validation, explicit saves, and recovery drafts. Cmd/Ctrl-K’s **Advanced search → Include hidden files and folders** separately controls search results. See the [reference guide](docs/user-guide.md#workspace-metadata).
 
 ### A few handy shortcuts
 

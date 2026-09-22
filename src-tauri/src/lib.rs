@@ -483,7 +483,7 @@ fn scan_search_with_matcher(
             break;
         }
         for entry in WalkDir::new(&root).follow_links(false).into_iter()
-            .filter_entry(|e| e.depth() == 0 || local_tree::visible(&e.file_name().to_string_lossy())) {
+            .filter_entry(|e| e.depth() == 0 || matcher.visible_entry(&e.file_name().to_string_lossy())) {
             if generation.load(Ordering::Relaxed) != ticket { return response; }
             let entry = match entry {
                 Ok(entry) => entry,
@@ -543,7 +543,7 @@ fn scan_search_with_matcher(
                 }
             }
             if !listing && response.hits.len() == 80 && response.bookmarks.len() == 80 { return response; }
-            if listing || response.hits.len() == 80 || !supported(&path) {
+            if listing || response.hits.len() == 80 || !(supported(&path) || note.path == ".nova") {
                 continue;
             }
             let file = match fs::File::open(&path) {
@@ -1091,6 +1091,27 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn hidden_content_and_bookmarks_follow_search_preference() {
+        let dir = tempfile::tempdir().unwrap();
+        let meta = tempfile::tempdir().unwrap();
+        fs::create_dir(dir.path().join(".config")).unwrap();
+        for name in ["visible.txt", ".config/note.txt", ".nova"] {
+            fs::write(dir.path().join(name), r#"{"custom":"needle"}"#).unwrap();
+        }
+        let hidden = fs::canonicalize(dir.path().join(".config/note.txt")).unwrap();
+        fs::write(meta.path().join(format!("{}.json", revision(hidden.to_string_lossy().as_bytes()))),
+            r#"[{"id":"mark","name":"needle","quote":"needle","from":11,"to":17}]"#).unwrap();
+        let run = |hidden| {
+            let spec = serde_json::from_value(serde_json::json!({"pattern":"needle", "caseSensitive":false,"include":"","exclude":"","includeHidden":hidden})).unwrap();
+            scan_search_with_matcher(vec![dir.path().to_path_buf()], "needle".into(), Arc::new(AtomicU64::new(1)), 1,
+                meta.path().to_path_buf(), search_options::Matcher::new("needle", Some(spec)).unwrap())
+        };
+        assert_eq!(run(false).hits.len(), 1);
+        assert!(run(false).bookmarks.is_empty());
+        assert_eq!(run(true).hits.len(), 3);
+        assert_eq!(run(true).bookmarks.len(), 1);
+    }
     #[test]
     fn recovery_survives_reopening_and_has_stable_scoped_identity() {
         let directory = tempfile::tempdir().unwrap();

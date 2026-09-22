@@ -29,3 +29,23 @@ it("finds files in unopened directories and cancels the traversal on close", asy
   } finally { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); }
   expect(cancelSearch).toHaveBeenCalledWith(true);
 });
+
+it("keeps hidden search results opt-in and remembers the advanced search checkbox", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true); localStorage.clear();
+  const host = document.createElement("div"), root = createRoot(host);
+  const folder = {root:"/hidden-test",name:"Notes",files:["plain.txt", ".env", ".config/note.txt", ".nova"].map(path=>({path,name:path}))};
+  const render = () => <Palette folders={[folder]} initialFilter="Files" activeNote={null} getActiveText={()=>""} scope="everywhere" onScopeChange={()=>{}} onNavigateCurrent={()=>{}} onClose={()=>{}} onOpen={()=>{}}/>;
+  try {
+    await act(async()=>root.render(render()));
+    expect(host.querySelectorAll('[role="option"]')).toHaveLength(1);
+    await act(async()=>host.querySelector<HTMLButtonElement>('[aria-controls="palette-advanced-fields"]')!.click());
+    await act(async()=>host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click());
+    expect(host.querySelectorAll('[role="option"]')).toHaveLength(4);
+    await act(async()=>root.render(null));
+    await act(async()=>root.render(render()));
+    expect(host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.checked).toBe(true);
+    expect(host.querySelectorAll('[role="option"]')).toHaveLength(4);
+    await act(async()=>host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click());
+    expect(host.querySelectorAll('[role="option"]')).toHaveLength(1);
+  } finally { await act(async()=>root.unmount()); localStorage.clear(); vi.unstubAllGlobals(); }
+});

@@ -13,13 +13,6 @@ use tauri::State;
 use walkdir::WalkDir;
 
 const PAGE_SIZE: usize = 300;
-pub(crate) fn visible(name: &str) -> bool {
-    !matches!(
-        name,
-        ".git" | "node_modules" | "target" | ".obsidian" | ".Trash" | ".nova-registry-backups"
-    )
-}
-
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct Listing {
@@ -146,7 +139,7 @@ fn find_files_with_matcher(
         for entry in WalkDir::new(&root)
             .follow_links(false)
             .into_iter()
-            .filter_entry(|e| e.depth() == 0 || visible(&e.file_name().to_string_lossy()))
+            .filter_entry(|e| e.depth() == 0 || matcher.visible_entry(&e.file_name().to_string_lossy()))
         {
             if generation.load(Ordering::Relaxed) != ticket {
                 return result;
@@ -170,7 +163,7 @@ fn find_files_with_matcher(
                 .to_string_lossy()
                 .replace('\\', "/");
             // Sniff only matching filenames, not every file in the workspace.
-            if !matcher.accepts_path(&path) || !matcher.matches(&path) || !supported(entry.path()) {
+            if !matcher.accepts_path(&path) || !matcher.matches(&path) || !(supported(entry.path()) || path == ".nova") {
                 continue;
             }
             result.files.push(FileMatch {
@@ -211,6 +204,23 @@ pub(crate) async fn search_files(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn hidden_filename_search_is_opt_in_and_reaches_hidden_directories() {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir(dir.path().join(".git")).unwrap();
+        for name in ["visible.txt", ".hidden.txt", ".git/nested.txt", ".nova"] {
+            fs::write(dir.path().join(name), "{}").unwrap();
+        }
+        let run = |hidden| {
+            let spec = serde_json::from_value(serde_json::json!({"pattern":"", "caseSensitive":false,"include":".*","exclude":"","includeHidden":hidden})).unwrap();
+            find_files_with_matcher(vec![dir.path().to_path_buf()], "", Arc::new(AtomicU64::new(1)), 1,
+                crate::search_options::Matcher::new("", Some(spec)).unwrap())
+        };
+        let ordinary = run(false);
+        assert_eq!(ordinary.files.len(), 1);
+        assert_eq!(ordinary.files[0].path, "visible.txt");
+        assert_eq!(run(true).files.len(), 4);
+    }
     #[test]
     fn browsing_exposes_dot_entries_but_not_internal_backups_or_temporary_files() {
         let dir = tempfile::tempdir().unwrap();

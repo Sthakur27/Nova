@@ -165,6 +165,10 @@ export async function readNote(
   root: string,
   path: string,
 ): Promise<DocumentData> {
+  if (path === ".nova") {
+    const data = await invoke<{text: string; revision: string}>("read_registry_document", { root });
+    return {...data, text: data.text.replace(/\r\n/g, "\n"), bookmarks: []};
+  }
   if (root !== "demo") {
     const data = await invoke<DocumentData>("read_note", { root, path });
     return { ...data, bookmarks: reanchor(data.bookmarks, data.text) };
@@ -207,6 +211,7 @@ export async function saveNote(
   text: string,
   revision: string,
 ): Promise<string> {
+  if (path === ".nova") return invoke<string>("save_registry_document", {root, text, revision});
   if (root !== "demo")
     return invoke<string>("save_note", { root, path, text, revision });
   if (textFor(path) !== revision)
@@ -221,6 +226,7 @@ export async function saveBookmarks(
   path: string,
   bookmarks: Bookmark[],
 ): Promise<void> {
+  if (path === ".nova") return;
   if (root !== "demo")
     return invoke("save_bookmarks", { root, path, bookmarks });
   localStorage.setItem(prefix + path + ":bookmarks", JSON.stringify(bookmarks));

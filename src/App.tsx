@@ -1,4 +1,4 @@
-import RegistryEditor from "./RegistryEditor";
+import RegistryValidation from "./RegistryValidation";
 import { documentChanged } from "./documentChanged";
 import SettingDialog from "./SettingDialog";
 import { settingChoices, toggleSetting } from "./settingCommands";
@@ -52,8 +52,6 @@ import {
   useState,
 } from "react";
 import {
-  Eye,
-  EyeOff,
   Cloud,
   CloudOff,
   Bookmark as BookmarkIcon,
@@ -300,7 +298,6 @@ export default function App() {
   const [terminalStarted, setTerminalStarted] = useState(false);
   const [terminalControls, setTerminalControls] = useState<HTMLDivElement | null>(null);
   const [rail, setRail, railError] = usePreference<boolean>("bookmarks-panel", true);
-  const [registryFolder, setRegistryFolder] = useState<Workspace | null>(null);
   const [showHidden, setShowHidden, showHiddenError] = usePreference<boolean>("show-hidden-files", false);
   const [navigation, setNavigation, navigationError] = usePreference<boolean>("navigation-panel", true);
   const [topBars, setTopBars, topBarsError] = usePreference<boolean>("top-bars", true);
@@ -446,7 +443,7 @@ export default function App() {
     const pane = paneLeaves(paneLayoutRef.current).find(p => p.id === id);
     const session = pane?.selected ? paneSessions.current.get(pane.selected) : undefined;
     if (!session) return false;
-    if (current.current.workspace.cloudSpace && dirtyRef.current) {
+    if (current.current.path !== ".nova" && current.current.workspace.cloudSpace && dirtyRef.current) {
       void save().then(saved => { if (saved) paneActions.current?.activate(id); });
       return false;
     }
@@ -676,7 +673,8 @@ export default function App() {
           );
         await saveBookmarks(ws.root, file, marks);
         savedDocuments.current.set(tabId({ root: ws.root, path: file }), { text, bookmarks: marks, revision: revision.current });
-        if (ws.cloudSpace) uploads.schedule(ws.root);
+        if (file === ".nova") await refreshFolder(ws.root);
+        else if (ws.cloudSpace) uploads.schedule(ws.root);
         if (!refreshDirty()) {
           await clearDraft(ws.root, file);
           if (!refreshDirty()) {
@@ -703,14 +701,14 @@ export default function App() {
     }
   }, [preserveDraft, refreshDirty]);
   useEffect(() => {
-    if (!workspace.cloudSpace || !dirty) return;
+    if (path === ".nova" || !workspace.cloudSpace || !dirty) return;
     const timer = setTimeout(() => { if (!operation.current && !voiceBusy.current) void save(); }, 700);
     const retry = setInterval(() => { if (dirtyRef.current && !operation.current && !voiceBusy.current) void save(); }, 4000);
     return () => { clearTimeout(timer); clearInterval(retry); };
-  }, [workspace.root, workspace.cloudSpace, dirty, editVersion, save]);
+  }, [path, workspace.root, workspace.cloudSpace, dirty, editVersion, save]);
   useEffect(() => {
     if (!mobile) return;
-    const preserve = () => { if (document.hidden) { void preserveDraft(); if (current.current.workspace.cloudSpace) void save(); } };
+    const preserve = () => { if (document.hidden) { void preserveDraft(); if (current.current.path !== ".nova" && current.current.workspace.cloudSpace) void save(); } };
     const flush = () => { void preserveDraft(); };
     document.addEventListener("visibilitychange", preserve);
     window.addEventListener("pagehide", flush);
@@ -747,7 +745,6 @@ export default function App() {
       reportError = true,
     ) => {
       const requested = nextWorkspace ?? current.current.workspace;
-      if (nextPath === ".nova") { setRegistryFolder(requested); return false; }
       setMobileView("editor");
       if (pinned) {
         pendingPins.current.add(
@@ -773,7 +770,7 @@ export default function App() {
       if (operation.current || saveInFlight.current) return false;
       operation.current = true;
       try {
-        if (current.current.workspace.cloudSpace && dirtyRef.current && !await save()) return false;
+        if (current.current.path !== ".nova" && current.current.workspace.cloudSpace && dirtyRef.current && !await save()) return false;
         if (!(await preserveDraft())) return false;
         setLoading(true);
         const ws = nextWorkspace ?? current.current.workspace;
@@ -816,7 +813,7 @@ export default function App() {
         applyMarks(note.bookmarks);
         setActiveMark(null);
         setCursor([1, 1]);
-        setMode(sharedViewMode.current ? paneMode(sharedViewMode.current, nextPath) : readFileMode(nextPath));
+        setMode(nextPath === ".nova" ? "source" : sharedViewMode.current ? paneMode(sharedViewMode.current, nextPath) : readFileMode(nextPath));
         if (bookmarkId) {
           const mark = note.bookmarks.find((b) => b.id === bookmarkId);
           if (mark && !mark.unresolved) {
@@ -856,7 +853,7 @@ export default function App() {
     let nextPath: string | undefined;
     let folder: Workspace | undefined;
     try {
-      if (current.current.workspace.cloudSpace && dirtyRef.current && !await save()) return;
+      if (current.current.path !== ".nova" && current.current.workspace.cloudSpace && dirtyRef.current && !await save()) return;
       if (!(await preserveDraft())) return;
       folder = current.current.folders.find(f => f.root === (requested?.root ?? current.current.workspace.root) && !f.error)
         ?? current.current.folders.find(f => !f.error);
@@ -943,7 +940,7 @@ export default function App() {
       const parked = paneSessions.current.get(tabId(tab));
       const draft = active ? null : parked?.dirty ? parked.data : await loadDraft(tab.root, tab.path);
       if ((active && dirtyRef.current) || draft) {
-        const choice = current.current.folders.find(folder => folder.root === tab.root)?.cloudSpace ? "save" : await new Promise<CloseTabChoice>(resolve => setClosePrompt({ path: tab.path, resolve }));
+        const choice = tab.path !== ".nova" && current.current.folders.find(folder => folder.root === tab.root)?.cloudSpace ? "save" : await new Promise<CloseTabChoice>(resolve => setClosePrompt({ path: tab.path, resolve }));
         setClosePrompt(null);
         if (choice === "cancel") return;
         if (choice === "save") {
@@ -956,7 +953,8 @@ export default function App() {
             await saveBookmarks(tab.root, tab.path, draft.bookmarks);
             await clearDraft(tab.root, tab.path);
             const folder = current.current.folders.find(folder => folder.root === tab.root);
-            if (folder?.cloudSpace) uploads.schedule(tab.root);
+            if (tab.path === ".nova") await refreshFolder(tab.root);
+            else if (folder?.cloudSpace) uploads.schedule(tab.root);
           }
         } else {
           await clearDraft(tab.root, tab.path);
@@ -1182,7 +1180,7 @@ export default function App() {
   uploads.configure({
     focusedFile: () => {
       const note = current.current;
-      return note.hasDocument && note.workspace.cloudSpace && note.path
+      return note.hasDocument && note.path !== ".nova" && note.workspace.cloudSpace && note.path
         ? { root: note.workspace.root, path: note.path } : null;
     },
     roots: foldersReady ? folders.filter(folder => !!folder.cloudSpace && folder.cloudSpace.account === drive.status.account && folder.root !== "demo" && !folder.error && !folder.syncError
@@ -1303,7 +1301,7 @@ export default function App() {
     };
   }, []);
   const beginBookmark = useCallback(() => {
-    if (!editor.current) return;
+    if (!editor.current || current.current.path === ".nova") return;
     let selection = editor.current.selection();
     const browserSelection = window.getSelection();
     if (
@@ -1362,7 +1360,7 @@ export default function App() {
     setFocusMode(focused);
   }), [transitionFocus, focusMode, setFocusMode, setNavigation, setRail, setTopBars, setStatusBar]);
   useEffect(() => {
-    if (compact || registryFolder || syncFolder || settingsOpen || activeSettingId || palette || bookmarkDraft || renameTarget || fileAction) return;
+    if (compact || syncFolder || settingsOpen || activeSettingId || palette || bookmarkDraft || renameTarget || fileAction) return;
     return installPanelShortcuts(window, mod === "⌘", panel => {
       if (focusMode) setFocusMode(false);
       if (panel === "left") setNavigation(focusMode || !navigation);
@@ -1370,17 +1368,17 @@ export default function App() {
       else if (panel === "top") setTopBars(focusMode || !topBars);
       else changeTerminalOpen(focusMode || !(terminalOpen && statusBar));
     });
-  }, [compact, registryFolder, syncFolder, settingsOpen, activeSettingId, palette, bookmarkDraft, renameTarget, fileAction, focusMode, navigation, rail, topBars, terminalOpen, statusBar, changeTerminalOpen, setFocusMode, setNavigation, setRail, setTopBars]);
+  }, [compact, syncFolder, settingsOpen, activeSettingId, palette, bookmarkDraft, renameTarget, fileAction, focusMode, navigation, rail, topBars, terminalOpen, statusBar, changeTerminalOpen, setFocusMode, setNavigation, setRail, setTopBars]);
   useEffect(() => {
     const toggleFocus = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "g" || event.isComposing) return;
       event.preventDefault();
       event.stopPropagation();
-      if (!event.repeat && !registryFolder && !syncFolder && !settingsOpen && !activeSettingId && !palette && !bookmarkDraft && !renameTarget && !fileAction) changeFocusMode(!focusModeActive);
+      if (!event.repeat && !syncFolder && !settingsOpen && !activeSettingId && !palette && !bookmarkDraft && !renameTarget && !fileAction) changeFocusMode(!focusModeActive);
     };
     window.addEventListener("keydown", toggleFocus, { capture: true });
     return () => window.removeEventListener("keydown", toggleFocus, { capture: true });
-  }, [focusModeActive, changeFocusMode, registryFolder, syncFolder, settingsOpen, activeSettingId, palette, bookmarkDraft, renameTarget, fileAction]);
+  }, [focusModeActive, changeFocusMode, syncFolder, settingsOpen, activeSettingId, palette, bookmarkDraft, renameTarget, fileAction]);
   useEffect(() => installFileSearchShortcut(window, mod === "⌘", () => {
     if (syncFolder || (mobile && !drive.status.connected) || settingsOpen || activeSettingId || bookmarkDraft || renameTarget || fileAction || document.querySelector("dialog[open]")) return;
     setSearchScope("everywhere");
@@ -1604,7 +1602,7 @@ export default function App() {
                     onDoubleClick={() => {
                       if (!tab.pinned) { pin(tab.root, tab.path); return; }
                       const folder = folders.find(f => f.root === tab.root);
-                      if (folder) setRenameTarget({ folder, path: tab.path });
+                      if (folder && tab.path !== ".nova") setRenameTarget({ folder, path: tab.path });
                     }}
                     onClick={() => {
                       const folder = folders.find((f) => f.root === tab.root);
@@ -1615,7 +1613,7 @@ export default function App() {
                     <span>{name}</span>
                     {active && (tabId(tab) === tabId({ root: workspace.root, path }) ? dirty : paneSessions.current.get(tabId(tab))?.dirty) && <span className="dirty-dot" />}
                   </TabButton>
-                  {drive.status.connected && tabFolder?.cloudSpace && <button className="tab-sync" data-selected={selectedForSync} data-state={syncState}
+                  {tab.path !== ".nova" && drive.status.connected && tabFolder?.cloudSpace && <button className="tab-sync" data-selected={selectedForSync} data-state={syncState}
                     aria-label={`Sync settings for ${name}: ${syncStatus}`}
                     title={syncDetails}
                     aria-haspopup="dialog" disabled={!tabFolder}
@@ -1654,7 +1652,8 @@ export default function App() {
       const isMarkdown = /\.(md|markdown|mdx)$/i.test(path);
       const documentView = isMarkdown && !(mode === "read" && readingLayout === "pages") && supportsDocumentView(data?.text.length ?? 0, editorSnapshot?.state.doc.length ?? 0, preview.length);
       return (
-        <div className="document-area">
+        <div className="document-area" data-registry={path === ".nova"}>
+          {data && path === ".nova" && <RegistryValidation root={workspace.root} text={paneEditors.current.get(tabId({root: workspace.root, path}))?.text() ?? data.text} revision={isActive ? revision.current : data.revision} />}
           {loading && <div className="loading">Opening your note…</div>}
           {data && (
             <div className={"write-pane " + (mode === "read" && !documentView ? "hidden" : "")}>
@@ -1678,7 +1677,7 @@ export default function App() {
                 onSourceSearch={() => setMode("source")}
                 isMarkdown={isMarkdown}
                 filePath={path}
-                onRename={name => renameFile(workspace, path, name)}
+                onRename={path === ".nova" ? undefined : name => renameFile(workspace, path, name)}
                 documentMode={documentView && mode !== "source" ? mode : undefined}
                 showLineNumbers={showLineNumbers}
                 showLineHighlight={showLineHighlight}
@@ -1694,7 +1693,7 @@ export default function App() {
                 <div className="document-eyebrow">
                   {isMarkdown ? "A NOTE IN YOUR SPACE" : "PLAIN & SIMPLE"}
                 </div>
-                <FileTitle key={path} path={path} onRename={name => renameFile(workspace, path, name)} />
+                <FileTitle key={path} path={path} onRename={path === ".nova" ? undefined : name => renameFile(workspace, path, name)} />
                 <Suspense fallback={<p>Rendering your note…</p>}>
                   {readingLayout === "pages" || preview.length > RICH_DOCUMENT_LIMIT ? (
                     <LargeRead bookmarks={bookmarks} layout={readingLayout} ref={isActive ? largeRead : undefined} text={preview} markdown={isMarkdown} controlsContainer={isActive ? readControls : null} onToggleTask={toggleReadTask} />
@@ -1785,12 +1784,7 @@ export default function App() {
         <button aria-label="Search notes" onClick={() => setPalette("All")}><Search size={20} /><span>Search</span></button>
         <button aria-label="Mobile settings" onClick={() => setSettingsOpen(true)}><SettingsIcon size={20} /><span>Settings</span></button>
       </nav>}
-      {registryFolder && <RegistryEditor key={registryFolder.root} folder={registryFolder} onClose={() => setRegistryFolder(null)} onSaved={() => refreshFolder(registryFolder.root)} />}
       <aside id="global-navigation" className="sidebar" hidden={compact ? mobileView !== "notes" : !navigation}>
-        <button className="icon-button hidden-files-toggle" aria-label={showHidden ? "Hide hidden files and folders" : "Show hidden files and folders"}
-          title={showHidden ? "Hide hidden files and folders" : "Show hidden files and folders"} aria-pressed={showHidden} onClick={() => setShowHidden(!showHidden)}>
-          {showHidden ? <Eye size={15} /> : <EyeOff size={15} />}
-        </button>
         <SidebarSection edge="top" label="navigation header" compact={compact}>
         {headerToggle => <>
         <div className="brand">
@@ -1812,7 +1806,7 @@ export default function App() {
         </>}
         </SidebarSection>
         <Explorer
-          showHidden={showHidden}
+          showHidden={showHidden} onShowHidden={setShowHidden}
           folders={folders.filter(folder => !folder.cloudSpace || (drive.status.connected && folder.cloudSpace.account === drive.status.account))}
           activeRoot={workspace.root}
           activePath={path}
@@ -1898,7 +1892,7 @@ export default function App() {
             <span className="breadcrumb-file">{path.split("/").at(-1)}</span>
             <button className="icon-button breadcrumb-star" aria-label={activeFileStarred ? "Unstar file" : "Star file"}
               title={activeFileStarred ? "Remove file from starred files" : "Star file for quick access in Bookmarks"}
-              aria-pressed={activeFileStarred} disabled={!data || !path || !activeStarFolder}
+              aria-pressed={activeFileStarred} disabled={path === ".nova" || !data || !path || !activeStarFolder}
               onClick={() => { if (activeStarFolder) starFile(activeStarFolder, path, !activeFileStarred); }}>
               <NovaStar size={16} />
             </button>
@@ -1915,7 +1909,7 @@ export default function App() {
             className="icon-button toolbar-icon"
             aria-label="Open in File Location"
             title={workspace.root === "demo" ? "Sample notes have no file location" : "Open in File Location"}
-            disabled={!desktop || !workspace.root || workspace.root === "demo" || !path}
+            disabled={path === ".nova" || !desktop || !workspace.root || workspace.root === "demo" || !path}
             onClick={() => void revealNote(workspace.root, path).catch(error => setNotice(String(error)))}
           >
             <FolderOpen size={17} aria-hidden="true" />
@@ -2028,7 +2022,7 @@ export default function App() {
             </button>
           </div>
           <button
-            hidden={!!workspace.cloudSpace}
+            hidden={!!workspace.cloudSpace && path !== ".nova"}
             className="icon-button"
             data-unsaved={dirty}
             aria-label="Save note"
@@ -2076,8 +2070,8 @@ export default function App() {
             {saving
               ? "Saving…"
               : dirty
-                ? workspace.cloudSpace ? "Saving on this device…" : draftStatus === "saving" ? "Saving draft…" : draftStatus === "error" ? "Draft not saved" : "Draft saved · Unsaved to file"
-                : workspace.cloudSpace ? uploads.errors[workspace.root] ? "Saved on this device · Sync needs attention" : uploads.items[`${workspace.root}\n${path}`]?.state === "local" ? "Saved on this device · Edit or rename to sync" : uploads.transferringRoot === workspace.root ? "Syncing…" : uploads.completed[workspace.root] ? "Up to date" : "Saved on this device · Waiting to sync" : "All changes saved"}
+                ? workspace.cloudSpace && path !== ".nova" ? "Saving on this device…" : draftStatus === "saving" ? "Saving draft…" : draftStatus === "error" ? "Draft not saved" : "Draft saved · Unsaved to file"
+                : workspace.cloudSpace && path !== ".nova" ? uploads.errors[workspace.root] ? "Saved on this device · Sync needs attention" : uploads.items[`${workspace.root}\n${path}`]?.state === "local" ? "Saved on this device · Edit or rename to sync" : uploads.transferringRoot === workspace.root ? "Syncing…" : uploads.completed[workspace.root] ? "Up to date" : "Saved on this device · Waiting to sync" : "All changes saved"}
           </span>
           <span>
             {mode !== "read"
@@ -2279,6 +2273,7 @@ export default function App() {
         storageError={showHiddenError || editorFontError || spacingError || widthError || galaxyError || galaxyPerformanceError || translucencyError || frostedPanesError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
       {settingsOpen && <Settings onResetLocal={mobile ? resetLocalState : undefined} resetDisabled={!drive.status.connected || drive.busy || !!uploads.activeRoot || cloud.loading || saving} updater={desktop ? appUpdate : undefined} syncConnected={drive.status.connected} onSyncSetup={() => { setSettingsOpen(false); showSync(workspace); }} onClose={() => setSettingsOpen(false)}
         onOpenDrive={() => void uploads.openFolder(workspace.root)} openDriveDisabled={!!uploads.activeRoot || workspace.root === "demo"}
+        showHidden={showHidden} onShowHidden={setShowHidden}
         galaxy={galaxyMode} onGalaxy={setGalaxyMode}
         tooltips={showTooltips} onTooltips={setShowTooltips}
         galaxyPerformance={galaxyPerformance} onGalaxyPerformance={setGalaxyPerformance}

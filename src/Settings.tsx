@@ -23,6 +23,7 @@ function Toggle({ title, description, checked, onChange }: {
 }
 
 type Props = {
+  showHidden?: boolean; onShowHidden?: (value: boolean) => void;
   onResetLocal?: () => Promise<void>; resetDisabled?: boolean;
   updater?: ReturnType<typeof useAppUpdate>;
   onClose: () => void;
@@ -81,6 +82,7 @@ export default function Settings(props: Props) {
       <fieldset disabled={resetting} style={{border:0, padding:0, margin:0, minWidth:0}}>
       {props.updater && <AppUpdate updater={props.updater} />}
       <section aria-labelledby="settings-appearance"><h2 id="settings-appearance">Appearance</h2>
+        {props.onShowHidden && <Toggle title="Show hidden files and folders" description="Show dotfiles and dotfolders in navigation." checked={props.showHidden ?? false} onChange={props.onShowHidden} />}
         <Toggle title="Show tooltips" description="Show helpful hints when hovering over controls." checked={props.tooltips} onChange={props.onTooltips} />
         <Toggle title="Galaxy mode" description="A translucent backdrop with motion and glow around your workspace." checked={props.galaxy} onChange={props.onGalaxy} />
         <div className="settings-row"><div><label htmlFor="settings-galaxy-performance">Galaxy performance</label>

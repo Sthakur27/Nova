@@ -12,8 +12,8 @@ Entries describe source changes; availability in published installers has not be
 
 #### Added
 
-- A remembered hidden-file toggle in global navigation and Cmd/Ctrl-K settings, including dotfolders previously omitted from local browsing.
-- Dedicated `.nova` JSON editing with explicit saves, validation errors, recovery drafts, and stale-save protection. Nova-managed Cloud identities and tracking fields remain protected.
+- A remembered hidden-file toggle beside Local’s Recent and + buttons (shown on hover/focus), also available in Settings and Cmd/Ctrl-K settings. Advanced search has a separate remembered option to include hidden files and folders in search results.
+- `.nova` JSON editing in normal tabs and editor panels with syntax highlighting, inline validation errors, explicit saves, recovery drafts, and stale-save protection. Nova-managed Cloud identities and tracking fields remain protected.
 
 - Desktop Settings now always offers **Open README** under **About Nova**, opening the guide in your default browser even when no update is available.
 - Filename search with Command-P / Ctrl-P, plus case-sensitive, whole-word, and regular-expression search and include/exclude path patterns. Matching options and path filters are remembered per workspace.
