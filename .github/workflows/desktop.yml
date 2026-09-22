@@ -123,7 +123,7 @@ jobs:
 
           Voice typing downloads its model on first use.
           EOF
-          printf '\nBuilt from commit `%s`.\n' "$GITHUB_SHA" >> release-notes.md
+          printf '\n## What changed\n\nSee the [changelog for this build](https://github.com/%s/blob/%s/CHANGELOG.md) for feature summaries, fixes, and migration notes. Changelog dates describe development history; this installer is built from commit `%s`.\n' "$GH_REPO" "$GITHUB_SHA" "$GITHUB_SHA" >> release-notes.md
           gh release create "$tag" --target "$GITHUB_SHA" --title "Nova · $(date -u +%Y-%m-%d) · ${GITHUB_SHA:0:7}" --notes-file release-notes.md --draft
           gh release upload "$tag" release/*
           gh release edit "$tag" --draft=false --latest

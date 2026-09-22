@@ -41,11 +41,11 @@ Quit the installed Nova before starting development: both use the same saved fol
 
 ### Native window backgrounds
 
-Both Windows and macOS use the transparent window in `src-tauri/tauri.conf.json`, so Galaxy mode’s Translucent, Black, and Frosted background choices remain available on both platforms.
+Both Windows and macOS use the transparent window in `src-tauri/tauri.conf.json`. Galaxy mode offers Translucent and Black on both platforms; Frosted backgrounds and panels are available only on macOS.
 
 On Windows, `configure_window_menu` hides only the native menu strip, which can expose the desktop when a transparent window is maximized. It keeps the native title bar and window controls, and retains the registered menu for keyboard accelerators. This runs for the startup window and additional windows created by `new_window`. macOS keeps its visible system menu unchanged. Do not disable window transparency to fix a menu-strip rendering issue.
 
-For native visual verification, maximize, restore, resize, minimize/restore, and enter/exit fullscreen with both Galaxy modes, then repeat in a newly opened window. On Windows, check that no menu strip remains below the title bar, the window controls and Ctrl-Q/Ctrl-A/Ctrl-C/Ctrl-V/Ctrl-Z shortcuts work, and the Background control cycles between Translucent, Black, and Frosted, and Frosted panels changes the surrounding panels independently. On macOS, check the traffic lights, system menu, fullscreen transitions, and Galaxy translucency.
+For native visual verification, maximize, restore, resize, minimize/restore, and enter/exit fullscreen with both Galaxy modes, then repeat in a newly opened window. On Windows, check that no menu strip remains below the title bar, the window controls and Ctrl-Q/Ctrl-A/Ctrl-C/Ctrl-V/Ctrl-Z shortcuts work, and the Background control cycles between Translucent and Black with no Frosted option. On macOS, check the traffic lights, system menu, fullscreen transitions, Galaxy translucency, and independent Frosted background and panel controls.
 
 ### Generate installers
 
