@@ -10,6 +10,7 @@ import { useCloudSpaces } from "./useCloudSpaces";
 import CloseTabDialog, { type CloseTabChoice } from "./CloseTabDialog";
 import { installTabCloseShortcut } from "./tabShortcuts";
 import ReadFind from "./ReadFind";
+import { installFileSearchShortcut } from "./fileSearchShortcut";
 import FileTitle from "./FileTitle";
 import { mobile, supportsFrosted } from "./platform";
 import { useCompactLayout } from "./useCompactLayout";
@@ -262,7 +263,7 @@ export default function App() {
   const sharedViewMode = useRef<EditorMode | null>(null);
   const [preview, setPreview] = useState("");
   const [searchScope,setSearchScope]=useState<SearchScope>("everywhere");
-  const [palette, setPalette] = useState(false);
+  const [palette, setPalette] = useState<false | "All" | "Files">(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalStarted, setTerminalStarted] = useState(false);
   const [terminalControls, setTerminalControls] = useState<HTMLDivElement | null>(null);
@@ -1252,6 +1253,11 @@ export default function App() {
     window.addEventListener("keydown", toggleFocus, { capture: true });
     return () => window.removeEventListener("keydown", toggleFocus, { capture: true });
   }, [focusModeActive, changeFocusMode, syncFolder, settingsOpen, activeSettingId, palette, bookmarkDraft, renameTarget, fileAction]);
+  useEffect(() => installFileSearchShortcut(window, mod === "⌘", () => {
+    if (syncFolder || (mobile && !drive.status.connected) || settingsOpen || activeSettingId || bookmarkDraft || renameTarget || fileAction || document.querySelector("dialog[open]")) return;
+    setSearchScope("everywhere");
+    setPalette("Files");
+  }), [syncFolder, drive.status.connected, settingsOpen, activeSettingId, bookmarkDraft, renameTarget, fileAction]);
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (syncFolder || (mobile && !drive.status.connected)) return;
@@ -1279,7 +1285,7 @@ export default function App() {
       if (settingsOpen || activeSettingId || renameTarget || fileAction) return;
       if (e.key.toLowerCase() === "k") {
         e.preventDefault();
-        setPalette((p) => !p);
+        setPalette((p) => p ? false : "All");
       }
       if (e.key.toLowerCase() === "s") {
         e.preventDefault();
@@ -1642,7 +1648,7 @@ export default function App() {
         <button aria-label="Your notes" aria-pressed={mobileView === "notes"} onClick={() => setMobileView("notes")}><FolderOpen size={20} /><span>Notes</span></button>
         <button aria-label="Write note" aria-pressed={mobileView === "editor"} onClick={() => setMobileView("editor")}><Pencil size={20} /><span>Write</span></button>
         <button aria-label="Your bookmarks" aria-pressed={mobileView === "bookmarks"} onClick={() => setMobileView("bookmarks")}><BookmarkIcon size={20} /><span>Bookmarks</span></button>
-        <button aria-label="Search notes" onClick={() => setPalette(true)}><Search size={20} /><span>Search</span></button>
+        <button aria-label="Search notes" onClick={() => setPalette("All")}><Search size={20} /><span>Search</span></button>
         <button aria-label="Mobile settings" onClick={() => setSettingsOpen(true)}><SettingsIcon size={20} /><span>Settings</span></button>
       </nav>}
       <aside id="global-navigation" className="sidebar" hidden={compact ? mobileView !== "notes" : !navigation}>
@@ -1664,7 +1670,7 @@ export default function App() {
             <GalaxyMark className="galaxy-symbol" />
           </button>
         </div>
-        <button className="search-trigger" onClick={() => setPalette(true)}>
+        <button className="search-trigger" onClick={() => setPalette("All")}>
           <Search size={16} />
           <span>Find anything</span>
           <kbd>{mod} K</kbd>
@@ -2056,6 +2062,8 @@ export default function App() {
       )}
       {palette && (
         <Palette
+          key={palette}
+          initialFilter={palette}
           folders={folders}
           commands={settingCommands.map(command => command.configuration
             ? { ...command, run: () => setActiveSettingId(command.id) }

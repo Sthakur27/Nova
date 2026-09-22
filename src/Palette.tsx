@@ -25,6 +25,7 @@ import {
 export default function Palette({
   folders,
   commands = [],
+  initialFilter = "All",
   activeNote,
   getActiveText,
   scope,
@@ -34,6 +35,7 @@ export default function Palette({
   onOpen,
 }: {
   folders: Workspace[];
+  initialFilter?: "All" | "Files";
   commands?: { id: string; label: string; description: string; keywords?: string; run: () => void }[];
   activeNote: Omit<CurrentNote, "text"> | null;
   getActiveText: () => string;
@@ -67,7 +69,7 @@ export default function Palette({
     [folders, currentOnly, activeNote],
   );
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState("All");
+  const [filter, setFilter] = useState<string>(initialFilter);
   const [hits, setHits] = useState<FolderSearchHit[]>([]);
   const [bookmarks, setBookmarks] = useState<BookmarkSearchHit[]>([]);
   const [busy, setBusy] = useState(false);
@@ -334,9 +336,9 @@ export default function Palette({
             autoCapitalize="none"
             autoFocus
             ref={input}
-            aria-label="Search files, bookmarks, text, and settings"
+            aria-label={filter === "Files" ? "Search files by name" : "Search files, bookmarks, text, and settings"}
             placeholder={
-              filter === "Settings" ? "Find a setting…" : currentOnly
+              filter === "Files" ? "Search files by name…" : filter === "Settings" ? "Find a setting…" : currentOnly
                 ? "Find in this note…"
                 : "A filename, a bookmark, a setting…"
             }

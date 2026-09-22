@@ -121,3 +121,36 @@ it("keeps toggle configuration open, reports save failures, and links to all set
     expect(openSettings).toHaveBeenCalledOnce();
   } finally { await act(async () => root.unmount()); host.remove(); }
 });
+
+
+it("opens filename search focused, filters paths without reading contents, and opens the selected file", async () => {
+  (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+  Element.prototype.scrollIntoView = vi.fn();
+  vi.mocked(searchNotes).mockClear();
+  const host = document.createElement("div"); document.body.append(host);
+  const root = createRoot(host);
+  const open = vi.fn(), close = vi.fn(), getActiveText = vi.fn();
+  try {
+    await act(async () => root.render(<Palette initialFilter="Files"
+      folders={[{ root: "/notes", name: "Notes", files: [
+        { name: "Alpha.md", path: "Alpha.md" }, { name: "Beta.md", path: "drafts/Beta.md" },
+      ] }]}
+      commands={[{ id: "beta", label: "Beta setting", description: "", run: vi.fn() }]}
+      activeNote={null} getActiveText={getActiveText} scope="everywhere" onScopeChange={() => {}}
+      onNavigateCurrent={() => {}} onClose={close} onOpen={open} />));
+    const input = host.querySelector("input")!;
+    expect(document.activeElement).toBe(input);
+    expect(input.getAttribute("aria-label")).toBe("Search files by name");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "beta");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(host.querySelectorAll('[role="option"]')).toHaveLength(1);
+    expect(host.querySelector('[role="option"]')!.textContent).toContain("Beta.md");
+    await act(async () => { input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })); });
+    expect(open).toHaveBeenCalledWith("/notes", "drafts/Beta.md", undefined, undefined);
+    expect(close).toHaveBeenCalled();
+    expect(searchNotes).not.toHaveBeenCalled();
+    expect(getActiveText).not.toHaveBeenCalled();
+  } finally { await act(async () => root.unmount()); host.remove(); }
+});

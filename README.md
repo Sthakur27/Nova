@@ -114,6 +114,7 @@ Use **⌘ + arrow keys** on Mac or **Ctrl + arrow keys** on Windows to toggle pa
 
 | What you'd like to do | Mac | Windows |
 | --- | --- | --- |
+| Find a file by name | ⌘ P | Ctrl P |
 | Find a note, bookmark, or phrase | ⌘ K | Ctrl K |
 | Open / close find within the current note | ⌘ F | Ctrl F |
 | Create a note | ⌘ T | Ctrl T |
