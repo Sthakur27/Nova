@@ -971,7 +971,7 @@ pub fn run() {
             drive_upload::cloud_spaces::cloud_move_in,
             drive_upload::drive_workspaces,
             drive_upload::drive_restore,
-            drive_upload::drive_upload,
+            drive_upload::drive_upload, drive_upload::drive_resolve_missing,
             drive_upload::drive_open_folder, drive_upload::drive_open_file,
             drive_auth::drive_status,
             drive_auth::drive_connect,
@@ -1046,7 +1046,7 @@ pub fn run() {
         drive_upload::cloud_reset::cloud_reset_local,
         drive_auth::drive_status, drive_auth::drive_connect, drive_auth::drive_cancel, drive_auth::drive_disconnect,
         drive_upload::cloud_spaces::cloud_setup, drive_upload::cloud_spaces::cloud_move_in,
-        drive_upload::drive_upload, drive_upload::drive_open_folder, drive_upload::drive_open_file, drive_upload::drive_workspaces, drive_upload::drive_restore,
+        drive_upload::drive_upload, drive_upload::drive_resolve_missing, drive_upload::drive_open_folder, drive_upload::drive_open_file, drive_upload::drive_workspaces, drive_upload::drive_restore,
         open_workspace, set_file_star, set_sync_choice, read_note, save_note, save_bookmarks, search_notes, cancel_search, load_draft, save_draft, load_explorer, save_explorer, create_note, rename_note, move_note, delete_note
     ]);
     #[cfg(not(target_os = "ios"))]

@@ -2856,3 +2856,6 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 .bookmark-section-content[hidden] { display: none; }
 .section-empty.empty-bookmarks { padding: 12px 8px 20px; margin: 0; text-align: left; }
 .app-shell[data-compact="true"] .bookmark-section-toggle { min-height: 44px; }
+
+.cloud-file-issue { margin: 14px 0; padding-bottom: 14px; border-bottom: 1px solid #ffffff10; }
+.cloud-file-issue .cloud-space-actions { margin-top: 8px; align-items: center; }

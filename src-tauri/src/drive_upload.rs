@@ -16,7 +16,7 @@ mod reconcile;
 const API: &str = "https://www.googleapis.com/drive/v3/files";
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Item { pub path: String, pub state: String, pub message: String }
+pub struct Item { #[serde(default, skip_serializing_if = "Option::is_none")] pub missing_drive_id: Option<String>, pub path: String, pub state: String, pub message: String }
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Report { root: String, folder_url: String, items: Vec<Item>, changes: Vec<Change>, uploaded: bool }
@@ -192,7 +192,7 @@ fn upload_workspace(app: tauri::AppHandle, root: PathBuf, protected_paths: Vec<S
             #[cfg(target_os = "ios")]
             let root_id = crate::mobile_storage::identity(&data_dir, &root)?;
             return Ok(Report { root: root_id, folder_url: String::new(),
-                items: vec![Item {path:path.into(),state:"uploaded".into(),message:"Saved file is up to date in Drive.".into()}],
+                items: vec![Item { missing_drive_id: None,path:path.into(),state:"uploaded".into(),message:"Saved file is up to date in Drive.".into()}],
                 changes: vec![], uploaded: false });
         }
     }
@@ -209,7 +209,7 @@ fn upload_workspace(app: tauri::AppHandle, root: PathBuf, protected_paths: Vec<S
         let registry = crate::read_registry(&root)?;
         let policy = crate::sync_policy::read(&registry)?;
         report.items = remote.iter().filter(|entry| (registry["cloudSpace"].is_object() || policy.included(&entry.path))
-            && registry["driveObjects"][&account][id(&entry.file).unwrap_or_default()]["deleted"] != true).map(|entry| Item {path:entry.path.clone(),
+            && registry["driveObjects"][&account][id(&entry.file).unwrap_or_default()]["deleted"] != true).map(|entry| Item { missing_drive_id: None,path:entry.path.clone(),
             state:"uploaded".into(),message:"Saved file is up to date in Drive.".into()}).collect();
         return Ok(report);
     }
@@ -321,7 +321,7 @@ fn upload_workspace(app: tauri::AppHandle, root: PathBuf, protected_paths: Vec<S
             Err(error) => ("error",error),
         };
         emit(state,&message);
-        report.items.push(Item { path:file.path,state:state.into(),message });
+        report.items.push(Item { missing_drive_id: None, path:file.path,state:state.into(),message });
     }
     Ok(report)
 }
@@ -330,6 +330,65 @@ pub async fn drive_upload(root: String, protected_paths: Option<Vec<String>>, on
     let root = crate::root_path(&access,&root)?;
     let guard = drive_auth::transfer_guard(&auth)?;
     tauri::async_runtime::spawn_blocking(move || { let _guard = guard; upload_workspace(app,root,protected_paths.unwrap_or_default(),only_path) }).await.map_err(crate::err)?
+}
+// Explicit resolution keeps the old ID tombstoned so a moved/restored original
+// cannot take over the local path. A reserved replacement ID makes retries safe.
+fn resolve_missing_local(root: &Path, path: &str, account: &str, expected_id: &str,
+    replacement: Option<&str>, remote: &[reconcile::Remote]) -> Result<(), String> {
+    let source = crate::scoped_path(root, path)?;
+    let registry = crate::read_registry(root)?;
+    let tracked = identities::at_path(&registry, account, path);
+    if id(tracked)? != expected_id || tracked["pending"] == true {
+        return Err("This note’s sync state changed. Refresh Cloud and try again.".into());
+    }
+    if remote.iter().any(|entry| entry.file["id"] == expected_id) {
+        return Err("This note is back in Drive. Refresh Cloud before resolving it.".into());
+    }
+    if replacement.is_some() && remote.iter().any(|entry| entry.path.eq_ignore_ascii_case(path)) {
+        return Err("Another Drive note occupies this path. Rename it before restoring.".into());
+    }
+    let stars = crate::registry_stars(&registry)?;
+    let mut next = registry.clone();
+    next["driveObjects"][account][expected_id]["deleted"] = json!(true);
+    if let Some(replacement) = replacement {
+        if !source.is_file() { return Err("The local note is no longer available.".into()); }
+        next["driveObjects"][account][replacement] = json!({"id":replacement,"localPath":path,"remotePath":path,"pending":true});
+        crate::write_registry(root, next, &stars)
+    } else {
+        crate::sync_policy::relocate(&mut next, path, None)?;
+        let remaining = stars.iter().filter(|star| star.as_str() != path).cloned().collect::<Vec<_>>();
+        crate::write_registry(root, next, &remaining)?;
+        if let Err(error) = fs::remove_file(source) {
+            crate::write_registry(root, registry, &stars)?;
+            return Err(crate::err(error));
+        }
+        Ok(())
+    }
+}
+#[tauri::command]
+pub async fn drive_resolve_missing(root: String, path: String, missing_drive_id: String,
+    restore: bool, protected_paths: Vec<String>, app: tauri::AppHandle,
+    access: State<'_, Access>, auth: State<'_, DriveAuth>) -> Result<(), String> {
+    let root = crate::root_path(&access, &root)?;
+    let guard = drive_auth::transfer_guard(&auth)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let _guard = guard;
+        let drive = Drive::new()?;
+        let account = drive_auth::account_key()?;
+        let folder = workspace_folder(&drive, &root)?;
+        let remote = reconcile::remote_tree(&drive, &folder)?;
+        let replacement = if restore { Some(drive.generate_id()?) } else { None };
+        let access = app.state::<Access>();
+        let _lock = access.writes.lock().map_err(crate::err)?;
+        let data_dir = app.path().app_data_dir().map_err(crate::err)?;
+        if protected_paths.contains(&path) || reconcile::saved_draft(&data_dir, &root, &path)? {
+            return Err("Save or discard this note’s unsaved changes before resolving its Cloud deletion.".into());
+        }
+        let metadata = crate::metadata_path(&app, &crate::scoped_path(&root, &path)?)?;
+        resolve_missing_local(&root, &path, &account, &missing_drive_id, replacement.as_deref(), &remote)?;
+        if !restore { let _ = fs::remove_file(metadata); }
+        Ok(())
+    }).await.map_err(crate::err)?
 }
 #[tauri::command]
 pub async fn drive_open_folder(app: tauri::AppHandle, root: String, access: State<'_,Access>, auth: State<'_,DriveAuth>) -> Result<(),String> {
@@ -480,6 +539,51 @@ pub async fn drive_restore(parent: String, workspace_id: String, access: State<'
 
 #[cfg(test)]
 mod tests {
+    fn missing_fixture() -> tempfile::TempDir {
+        let dir = tempfile::tempdir_in(fs::canonicalize(std::env::temp_dir()).unwrap()).unwrap();
+        fs::write(dir.path().join("note.txt"), "retained text").unwrap();
+        let mut registry = json!({"cloudSpace":{"name":"Notes"},"starred":["note.txt"]});
+        identities::record(&mut registry, "account", "old-id", "note.txt", "note.txt", "baseline", &Value::Null);
+        crate::write_registry(dir.path(), registry, &["note.txt".into()]).unwrap();
+        dir
+    }
+    #[test]
+    fn explicit_missing_restore_reserves_new_identity_and_preserves_content() {
+        let dir = missing_fixture();
+        resolve_missing_local(dir.path(), "note.txt", "account", "old-id", Some("new-id"), &[]).unwrap();
+        let registry = crate::read_registry(dir.path()).unwrap();
+        assert_eq!(registry["driveObjects"]["account"]["old-id"]["deleted"], true);
+        assert_eq!(identities::at_path(&registry, "account", "note.txt")["id"], "new-id");
+        assert_eq!(identities::at_path(&registry, "account", "note.txt")["pending"], true);
+        assert_eq!(fs::read_to_string(dir.path().join("note.txt")).unwrap(), "retained text");
+        assert_eq!(crate::registry_stars(&registry).unwrap(), vec!["note.txt"]);
+        assert!(resolve_missing_local(dir.path(), "note.txt", "account", "old-id", Some("duplicate"), &[]).is_err());
+    }
+    #[test]
+    fn explicit_missing_delete_removes_local_note_and_star_but_keeps_tombstone() {
+        let dir = missing_fixture();
+        resolve_missing_local(dir.path(), "note.txt", "account", "old-id", None, &[]).unwrap();
+        let registry = crate::read_registry(dir.path()).unwrap();
+        assert!(!dir.path().join("note.txt").exists());
+        assert!(crate::registry_stars(&registry).unwrap().is_empty());
+        assert_eq!(registry["driveObjects"]["account"]["old-id"]["deleted"], true);
+        assert!(identities::at_path(&registry, "account", "note.txt").is_null());
+    }
+    #[test]
+    fn missing_resolution_rejects_stale_identity_returned_file_and_path_collision() {
+        let dir = missing_fixture();
+        let before = fs::read(dir.path().join(".nova")).unwrap();
+        let remote = vec![reconcile::Remote {path:"note.txt".into(), file:json!({"id":"old-id"})}];
+        for replacement in [None, Some("new-id")] {
+            assert!(resolve_missing_local(dir.path(), "note.txt", "account", "old-id", replacement, &remote).is_err());
+            assert!(resolve_missing_local(dir.path(), "note.txt", "account", "stale-id", replacement, &[]).is_err());
+        }
+        let collision = vec![reconcile::Remote {path:"NOTE.txt".into(), file:json!({"id":"other-id"})}];
+        assert!(resolve_missing_local(dir.path(), "note.txt", "account", "old-id", Some("new-id"), &collision).is_err());
+        assert_eq!(fs::read(dir.path().join(".nova")).unwrap(), before);
+        assert_eq!(fs::read_to_string(dir.path().join("note.txt")).unwrap(), "retained text");
+    }
+
     #[test]
     fn untouched_notes_stay_local_until_saved_content_or_name_changes() {
         let dir = tempfile::tempdir().unwrap();

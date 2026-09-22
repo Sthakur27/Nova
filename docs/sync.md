@@ -68,7 +68,13 @@ edits and saved recovery drafts are protected. Automatic merge is not implemente
 **Deletion remains device-only in this version.** The delete dialog explains that
 Drive copies are retained. A local tombstone prevents the retained copy from
 reappearing on that device. A file removed from Drive pauses sync and retains its
-local copy; Nova does not silently recreate it. Restore it in Drive to resume.
+local copy; Nova does not silently recreate it. In Cloud settings, each missing
+file offers **Restore to Cloud**, which uploads the saved local note as a new Drive
+copy, or **Acknowledge & delete…**, which requires confirmation before permanently
+removing the local note, bookmarks, and star. Copies in Drive Trash or moved
+elsewhere in Drive are left untouched. Unsaved edits must be saved or discarded
+first. Nova rechecks the remote listing and file identity before resolving the
+warning; restoration reserves a new ID so retries do not create duplicates.
 
 Disconnect requires confirmation, removes this device's saved credential, and
 retains local and Drive files. Mobile returns to setup. It does not revoke Google's

@@ -3,10 +3,10 @@ import { invoke } from "./resetLocalState";
 import { listen } from "@tauri-apps/api/event";
 import { driveTransfer } from "./driveTransfer";
 import { driveSupported } from "./platform";
-export type UploadItem = { path: string; state: "uploading" | "uploaded" | "local" | "error"; message: string };
+export type UploadItem = { path: string; state: "uploading" | "uploaded" | "local" | "error"; message: string; missingDriveId?: string };
 export type SyncChange = { path: string; previousPath: string };
 type Report = { root: string; folderUrl: string; items: UploadItem[]; changes?: SyncChange[]; uploaded?: boolean };
-type SyncContext = { roots: string[]; focusedFile?: () => { root: string; path: string } | null; protectedPaths: (root: string) => string[]; onComplete: (root: string, changes: SyncChange[]) => Promise<void> };
+type SyncContext = { roots: string[]; focusedFile?: () => { root: string; path: string } | null; protectedPaths: (root: string) => string[]; onDeleted?: (root: string, path: string) => Promise<void>; onComplete: (root: string, changes: SyncChange[]) => Promise<void> };
 export function useDriveUploads(connected: boolean) {
   const context = useRef<SyncContext | null>(null);
   const queuedRoots = useRef(new Set<string>());
@@ -113,10 +113,29 @@ export function useDriveUploads(connected: boolean) {
     }, 5000);
     return () => clearInterval(timer);
   }, [connected, upload]);
+  async function resolveMissing(root: string, item: UploadItem, restore: boolean) {
+    if (!enabled.current || !item.missingDriveId) throw new Error("Reconnect Drive and refresh Cloud first.");
+    const task = queue.current.then(async () => {
+      setActiveRoot(root);
+      try {
+        await driveTransfer(() => {
+          if (!enabled.current) throw new Error("Reconnect Google Drive first.");
+          const protectedPaths = context.current?.protectedPaths(root) ?? [];
+          if (protectedPaths.includes(item.path)) throw new Error("Save or discard this note’s unsaved changes first.");
+          return invoke("drive_resolve_missing", {root, path:item.path, missingDriveId:item.missingDriveId, restore, protectedPaths});
+        });
+        if (!restore) await context.current?.onDeleted?.(root, item.path);
+        setItems(old => { const next = {...old}; delete next[`${root}\n${item.path}`]; return next; });
+      } finally { setActiveRoot(null); }
+    });
+    queue.current = task.catch(() => {});
+    await task;
+    await upload(root);
+  }
   async function openFolder(root: string) {
     try { await driveTransfer(() => invoke("drive_open_folder",{root})); }
     catch (error) { setErrors(old => ({...old,[root]:String(error)})); }
   }
-  return {activeRoot,transferringRoot,items,errors,completed,lastSyncedAt,pending,upload,schedule,openFolder, configure: (next: SyncContext) => { context.current = next; }};
+  return {activeRoot,transferringRoot,items,errors,completed,lastSyncedAt,pending,upload,schedule,openFolder,resolveMissing, configure: (next: SyncContext) => { context.current = next; }};
 }
 export type DriveUploads = ReturnType<typeof useDriveUploads>;

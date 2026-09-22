@@ -188,7 +188,7 @@ fn read_local(path: &Path) -> Result<Option<Vec<u8>>, String> {
     }
     Ok(Some(bytes))
 }
-fn saved_draft(data_dir: &Path, root: &Path, path: &str) -> Result<bool, String> {
+pub(super) fn saved_draft(data_dir: &Path, root: &Path, path: &str) -> Result<bool, String> {
     let directory = data_dir.join("drafts");
     #[cfg(desktop)] let root_id = root.to_string_lossy().into_owned();
     #[cfg(target_os = "ios")] let root_id = crate::mobile_storage::identity(data_dir, root)?;
@@ -285,7 +285,7 @@ fn pull_local(
         for path in unresolved.keys() {
             if only_path.is_none_or(|p| p == path) {
                 blocked.insert(path.clone());
-                report.items.push(Item {path:path.clone(),state:"error".into(),message:"This old sync record has no Drive ID. Local content is retained; move it into Cloud as a new note.".into()});
+                report.items.push(Item { missing_drive_id: None,path:path.clone(),state:"error".into(),message:"This old sync record has no Drive ID. Local content is retained; move it into Cloud as a new note.".into()});
             }
         }
     }
@@ -297,7 +297,7 @@ fn pull_local(
         }
         if !remote.iter().any(|r| r.file["id"] == identity["id"]) && allowed(root, path)? {
             blocked.insert(path.clone());
-            report.items.push(Item { path:path.clone(),state:"error".into(),message:"Removed or moved outside this workspace in Drive. Local copy retained; restore the Drive copy to resume. Nothing was recreated.".into() });
+            report.items.push(Item { missing_drive_id: Some(id(identity)?), path:path.clone(),state:"error".into(),message:"Removed or moved outside this workspace in Drive. Your local copy is retained. Restore it to Cloud or acknowledge the deletion.".into() });
         }
     }
     let mut download_budget = 512_u64 * 1024 * 1024;
@@ -351,7 +351,7 @@ fn pull_local(
                 })
             {
                 blocked.insert(path.clone());
-                report.items.push(Item {
+                report.items.push(Item { missing_drive_id: None,
                     path: path.clone(),
                     state: "uploaded".into(),
                     message: "Saved file is up to date in Drive.".into(),
@@ -512,7 +512,7 @@ fn pull_local(
             if decision != Action::Upload && (!local_renamed || remote_renamed) {
                 blocked.insert(destination.into());
                 if decision == Action::Agreed && !remote_renamed {
-                    report.items.push(Item {
+                    report.items.push(Item { missing_drive_id: None,
                         path: destination.into(),
                         state: "uploaded".into(),
                         message: "Saved file is up to date in Drive.".into(),
@@ -524,7 +524,7 @@ fn pull_local(
                     path: destination.into(),
                     previous_path: path.clone(),
                 });
-                report.items.push(Item {
+                report.items.push(Item { missing_drive_id: None,
                     path: destination.into(),
                     state: "uploaded".into(),
                     message: "Downloaded changes from Google Drive.".into(),
@@ -535,7 +535,7 @@ fn pull_local(
         if let Err(error) = result {
             blocked.insert(path.clone());
             blocked.insert(entry.path.clone());
-            report.items.push(Item {
+            report.items.push(Item { missing_drive_id: None,
                 path,
                 state: "error".into(),
                 message: error,

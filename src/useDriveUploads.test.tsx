@@ -207,3 +207,39 @@ it("keeps no-change polls silent and reports activity only for real transfers", 
     expect(uploads.lastSyncedAt["/notes"]).toBeGreaterThan(firstSync);
   } finally { await act(async()=>root.unmount()); vi.useRealTimers(); }
 });
+
+it("resolves missing identities, refreshes sync, and preserves warnings on failure", async () => {
+  vi.mocked(invoke).mockReset();
+  let uploads!: DriveUploads;
+  let protectedPaths: string[] = [];
+  const onDeleted = vi.fn(async () => {});
+  function Harness() {
+    uploads = useDriveUploads(true);
+    uploads.configure({roots:[], protectedPaths:()=>protectedPaths, onComplete:async()=>{}, onDeleted});
+    return null;
+  }
+  const root = createRoot(document.createElement("div"));
+  const item = {path:"note.txt",state:"error" as const,message:"Missing",missingDriveId:"old-id"};
+  try {
+    await act(async () => root.render(<Harness />));
+    vi.mocked(invoke).mockResolvedValueOnce({items:[item]});
+    await act(async () => { await uploads.upload("/notes"); });
+    protectedPaths = ["note.txt"];
+    await act(async () => { await expect(uploads.resolveMissing("/notes",item,false)).rejects.toThrow("unsaved"); });
+    expect(onDeleted).not.toHaveBeenCalled();
+    expect(uploads.items["/notes\nnote.txt"]).toEqual(item);
+    protectedPaths = [];
+    vi.mocked(invoke).mockRejectedValueOnce("Offline");
+    await act(async () => { await expect(uploads.resolveMissing("/notes",item,true)).rejects.toBe("Offline"); });
+    expect(uploads.items["/notes\nnote.txt"]).toEqual(item);
+    for (const restore of [true,false]) {
+      vi.mocked(invoke).mockResolvedValueOnce(undefined).mockResolvedValueOnce({items:[]});
+      await act(async () => { await uploads.resolveMissing("/notes",item,restore); });
+      expect(invoke).toHaveBeenCalledWith("drive_resolve_missing",{root:"/notes",path:"note.txt",missingDriveId:"old-id",restore,protectedPaths:[]});
+    }
+    expect(onDeleted).toHaveBeenCalledTimes(1);
+    expect(onDeleted).toHaveBeenCalledWith("/notes","note.txt");
+    expect(uploads.errors["/notes"]).toBeFalsy();
+    expect(uploads.items["/notes\nnote.txt"]).toBeUndefined();
+  } finally { await act(async () => root.unmount()); }
+});

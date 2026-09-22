@@ -1182,6 +1182,17 @@ export default function App() {
       ...Array.from(paneSessions.current.values()).filter(s => s.workspace.root === root && s.dirty).map(s => s.path),
       ...(current.current.workspace.root === root && (dirtyRef.current || operation.current || !!saveInFlight.current || voiceBusy.current) ? [current.current.path] : []),
     ])],
+    onDeleted: async (root, path) => {
+      const id = tabId({ root, path });
+      snapshots.current.delete(id);
+      createdNotes.current.delete(id);
+      updateTabs(tabsRef.current.filter(tab => tabId(tab) !== id));
+      if (current.current.workspace.root === root && current.current.path === path) {
+        setData(null); setPath(""); applyMarks([]); setEditorSnapshot(undefined);
+        current.current = { ...current.current, path: "", hasDocument: false };
+      }
+      await refreshFolder(root);
+    },
     onComplete: async (root, changes) => {
       if (!changes.length) return;
       await refreshFolder(root);
