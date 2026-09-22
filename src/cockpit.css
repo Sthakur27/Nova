@@ -195,17 +195,6 @@
   background: linear-gradient(180deg, #b393df1c, #b393df03);
   box-shadow: inset 0 1px #e5d1ff12;
 }
-.app-shell[data-galaxy="true"] .note-tab.active > [role="tab"]::before {
-  content: "";
-  width: 5px;
-  height: 5px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  background: #d8bbfc;
-  box-shadow: 0 0 7px #c6a1f680;
-}
-
-
 
 .app-shell[data-galaxy="true"] .sidebar-action.focus-mode-exit {
   border-radius: 50%;

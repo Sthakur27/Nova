@@ -9,10 +9,48 @@ import { expect, it, vi } from "vitest";
 import Editor, { type EditorHandle } from "./Editor";
 import { DocumentEditor } from "./DocumentEditor";
 import { RICH_DOCUMENT_LIMIT, supportsDocumentView } from "./documentLimits";
+import { documentChanged } from "./documentChanged";
 
 // jsdom has no layout engine; CodeMirror measures ranges during viewport updates.
 Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
 Range.prototype.getBoundingClientRect = () => new DOMRect();
+
+it("clears unsaved state on undo or manual restoration and restores it on redo", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  const ref = createRef<EditorHandle>();
+  let saved = { text: "Original text", revision: "1", bookmarks: [] };
+  let dirty = false;
+  const update = () => { dirty = documentChanged(saved, ref.current!.text(), ref.current!.marks()); };
+  try {
+    await act(async () => root.render(<Editor ref={ref} initial={saved.text}
+      bookmarks={[]} onChange={update} onBookmarks={update}
+      onCursor={() => {}} onBookmark={() => {}} onSave={() => {}}
+      isMarkdown={false} showLineNumbers showLineHighlight={false} wordWrap={false} spellcheck={false} />));
+    const view = EditorView.findFromDOM(container.querySelector(".cm-editor")!)!;
+    await act(async () => view.dispatch({ changes: { from: view.state.doc.length, insert: "!" } }));
+    expect(dirty).toBe(true);
+    await act(async () => ref.current!.undo());
+    expect(dirty).toBe(false);
+    await act(async () => ref.current!.redo());
+    expect(dirty).toBe(true);
+    await act(async () => view.dispatch({ changes: { from: view.state.doc.length - 1, to: view.state.doc.length } }));
+    expect(dirty).toBe(false);
+    // A new save becomes the baseline for subsequent undo/redo operations.
+    await act(async () => ref.current!.undo());
+    saved = { ...saved, text: ref.current!.text(), revision: "2" };
+    update();
+    expect(dirty).toBe(false);
+    await act(async () => ref.current!.redo());
+    expect(dirty).toBe(true);
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+    vi.unstubAllGlobals();
+  }
+});
 
 vi.mock("./DocumentEditor", () => ({
   DocumentEditor: vi.fn(function () { throw new Error("Large notes must not construct the rich editor"); }),

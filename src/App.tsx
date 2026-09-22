@@ -1,3 +1,4 @@
+import { documentChanged } from "./documentChanged";
 import SettingDialog from "./SettingDialog";
 import { settingChoices, toggleSetting } from "./settingCommands";
 import ViewOptions from "./ViewOptions";
@@ -146,12 +147,6 @@ function BlackHoleIcon() {
   );
 }
 
-async function readRecoverableNote(root: string, path: string) {
-  const draft = await loadDraft(root, path);
-  // Retain the original revision so Save still detects external changes.
-  return { note: draft ?? await readNote(root, path), recovered: !!draft };
-}
-
 type PaneSession = { workspace: Workspace; path: string; data: DocumentData; mode: EditorMode; snapshot?: EditorSnapshot; dirty: boolean; cursor: [number, number]; preview: string; formats?: FormatAction[]; paragraph?: FormatAction };
 
 export default function App() {
@@ -266,6 +261,30 @@ export default function App() {
   const closingTab = useRef(false);
   const [dirty, setDirty] = useState(false);
   const dirtyRef = useRef(false);
+  const savedDocuments = useRef(new Map<string, DocumentData>());
+  const readRecoverableNote = useCallback(async (root: string, path: string) => {
+    const draft = await loadDraft(root, path);
+    const id = tabId({ root, path });
+    // A recovery draft must still open if the original file is unavailable.
+    let saved: DocumentData | undefined;
+    try { saved = await readNote(root, path); }
+    catch (error) { if (!draft) throw error; }
+    if (saved) savedDocuments.current.set(id, saved);
+    else savedDocuments.current.delete(id);
+    const note = draft ?? saved!;
+    const recovered = documentChanged(saved, note.text, note.bookmarks);
+    if (draft && !recovered) await clearDraft(root, path);
+    // Keep a changed draft's original revision for conflict detection on Save.
+    return { note: recovered ? note : saved!, recovered };
+  }, []);
+  const refreshDirty = useCallback(() => {
+    const c = current.current;
+    const next = documentChanged(savedDocuments.current.get(tabId({ root: c.workspace.root, path: c.path })),
+      editor.current?.text() ?? "", marksRef.current);
+    dirtyRef.current = next;
+    setDirty(next);
+    return next;
+  }, []);
   const [draftStatus, setDraftStatus] = useState<"saving" | "saved" | "error">("saved");
   const draftWrite = useRef(0);
   const draftFailed = useRef(false);
@@ -385,13 +404,14 @@ export default function App() {
   const preserveDraft = useCallback(async (): Promise<boolean> => {
     if (localResetInProgress()) return true;
     const c = current.current;
-    if (!c.hasDocument || !editor.current || !dirtyRef.current) return true;
+    if (!c.hasDocument || !editor.current) return true;
     const write = ++draftWrite.current;
     setDraftStatus("saving");
     try {
-      await storeDraft(c.workspace.root, c.path, {
+      if (dirtyRef.current) await storeDraft(c.workspace.root, c.path, {
         text: editor.current.text(), revision: revision.current, bookmarks: marksRef.current,
       });
+      else await clearDraft(c.workspace.root, c.path);
       if (write === draftWrite.current) {
         draftFailed.current = false;
         setDraftStatus("saved");
@@ -494,12 +514,11 @@ export default function App() {
   const editGeneration = useRef(0);
   const changed = useCallback(() => {
     pin(current.current.workspace.root, current.current.path);
-    dirtyRef.current = true;
-    setDirty(true);
+    refreshDirty();
     editGeneration.current++;
     setEditVersion(value => value + 1);
     // The editor immediately supplies the updated anchors via onBookmarks.
-  }, [pin]);
+  }, [pin, refreshDirty]);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -649,10 +668,11 @@ export default function App() {
             revision.current,
           );
         await saveBookmarks(ws.root, file, marks);
+        savedDocuments.current.set(tabId({ root: ws.root, path: file }), { text, bookmarks: marks, revision: revision.current });
         if (ws.cloudSpace) uploads.schedule(ws.root);
-        if (editor.current?.text() === text) {
+        if (!refreshDirty()) {
           await clearDraft(ws.root, file);
-          if (editor.current?.text() === text && marksRef.current === marks) {
+          if (!refreshDirty()) {
             dirtyRef.current = false;
             draftFailed.current = false;
             setDirty(false);
@@ -674,7 +694,7 @@ export default function App() {
     } finally {
       saveInFlight.current = null;
     }
-  }, [preserveDraft]);
+  }, [preserveDraft, refreshDirty]);
   useEffect(() => {
     if (!workspace.cloudSpace || !dirty) return;
     const timer = setTimeout(() => { if (!operation.current && !voiceBusy.current) void save(); }, 700);
@@ -847,6 +867,8 @@ export default function App() {
   const renamePaneTab = (oldId: string, nextTab: NoteTab) => {
     const nextId = tabId(nextTab);
     if (oldId === nextId) return;
+    const saved = savedDocuments.current.get(oldId);
+    if (saved) { savedDocuments.current.set(nextId, saved); savedDocuments.current.delete(oldId); }
     const session = paneSessions.current.get(oldId);
     if (session) paneSessions.current.set(nextId, { ...session, path: nextTab.path, snapshot: paneEditors.current.get(oldId)?.snapshot() ?? session.snapshot });
     let layout = paneLayoutRef.current;
@@ -1177,6 +1199,7 @@ export default function App() {
         if (!session || session.dirty || (before.workspace.root === root && before.path === session.path)) continue;
         const note = await readNote(root, change.path);
         if (paneSessions.current.get(id) !== session || session.dirty || (current.current.workspace.root === root && current.current.path === session.path)) continue;
+        savedDocuments.current.set(id, note);
         paneSessions.current.set(id, { ...session, data: note, preview: note.text, snapshot: undefined });
         updatePaneLayout({ ...paneLayoutRef.current });
       }
@@ -1188,6 +1211,7 @@ export default function App() {
       }
       const note = await readNote(root, change.path);
       if (current.current.workspace.root !== root || current.current.path !== before.path || dirtyRef.current || operation.current || saveInFlight.current) return;
+      savedDocuments.current.set(tabId({ root, path: change.path }), note);
       setEditorSnapshot(undefined);
       revision.current = note.revision;
       setData(note); setPreview(note.text); applyMarks(note.bookmarks);
@@ -1303,8 +1327,7 @@ export default function App() {
   }, [mode]);
   const persistMarks = async (marks: Bookmark[]) => {
     applyMarks(marks);
-    dirtyRef.current = true;
-    setDirty(true);
+    refreshDirty();
     preserveDraft();
   };
   const transitionFocus = useFocusTransition(galaxyMode && !compact);
@@ -1626,7 +1649,7 @@ export default function App() {
                 snapshot={editorSnapshot}
                 bookmarks={bookmarks}
                 onChange={() => { if (activatePane(pane.id)) changed(); }}
-                onBookmarks={(marks) => { if (activatePane(pane.id)) { applyMarks(marks); void preserveDraft(); } }}
+                onBookmarks={(marks) => { if (activatePane(pane.id)) { applyMarks(marks); refreshDirty(); void preserveDraft(); } }}
                 onParagraphStyle={style => { if (isActive) setParagraphStyle(style); }}
                 onFormatting={formats => { if (isActive) setActiveFormats(formats); }}
                 onCursor={(line, col) => { if (isActive) setCursor([line, col]); }}
