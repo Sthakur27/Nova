@@ -33,6 +33,8 @@ import { useTooltips } from "./useTooltips";
 import { DEFAULT_EXTENSION } from "./fileExtensions";
 import { useBackgroundBlur } from "./useBackgroundBlur";
 import ScopeToggle from "./ScopeToggle";
+import BookmarkSections from "./BookmarkSections";
+import StarredFiles from "./StarredFiles";
 import type {SearchScope} from "./currentSearch";
 import { openTab, pinTab, reorderTab, tabId, type NoteTab } from "./tabs";
 import { useTabReorder, type PaneDrop } from "./useTabReorder";
@@ -88,10 +90,12 @@ import type { FormatAction } from "./richMarkdown";
 import { type EditorMode } from "./folders";
 import { folderPreference, folderWindowPreferences, migrateLocalFolders, rememberFolder, type RecentFolder } from "./localFolders";
 import VoiceControl from "./VoiceControl";
+import NovaStar from "./NovaStar";
 import NovaMark from "./NovaMark";
 import SignalBell from "./SignalBell";
 import SidebarAppearance from "./SidebarAppearance";
 import GalaxyMark from "./GalaxyMark";
+import SidebarSection from "./SidebarSection";
 import { useAppUpdate } from "./useAppUpdate";
 import { initialScrollTop } from "./scrollSpace";
 import { readFileMode, saveFileMode } from "./fileModes";
@@ -292,12 +296,15 @@ export default function App() {
   const [hoveredBottom, setHoveredBottom] = useState(false);
   const [hoveredTop, setHoveredTop] = useState(false);
   const [hoveredEdge, setHoveredEdge] = useState<"left" | "right" | null>(null);
+  const [bookmarkView, setBookmarkView] = useState<"passages" | "files">("files");
+  const activeStarFolder = folders.find(folder => folder.root === workspace.root);
+  const activeFileStarred = activeStarFolder?.starred?.includes(path) ?? false;
   const [bookmarkScope, setBookmarkScope] = useState<SearchScope>("current");
   const [allBookmarks, setAllBookmarks] = useState<BookmarkSearchHit[]>([]);
   const [bookmarksBusy, setBookmarksBusy] = useState(false);
   const [bookmarksError, setBookmarksError] = useState("");
   useEffect(() => {
-    if ((!rail && !compact) || bookmarkScope !== "everywhere") {
+    if ((!rail && !compact) || bookmarkScope !== "everywhere" || bookmarkView !== "passages") {
       setBookmarksBusy(false);
       return;
     }
@@ -314,7 +321,7 @@ export default function App() {
       if (!cancelled) setBookmarksBusy(false);
     });
     return () => { cancelled = true; };
-  }, [rail, compact, bookmarkScope, folders, path, workspace.root]);
+  }, [rail, compact, bookmarkScope, bookmarkView, folders, path, workspace.root]);
   const currentBookmarks = data ? bookmarks.map((bookmark) => ({ root: workspace.root, path, bookmark })) : [];
   const visibleBookmarks = bookmarkScope === "current" ? currentBookmarks : [
     ...currentBookmarks,
@@ -990,7 +997,8 @@ export default function App() {
     if (tab) void closeTab(tab);
   }));
   const changeFolders = (next: Workspace[]) => {
-    if (current.current.foldersReady) setFolders(next);
+    // Explorer can hide disconnected Cloud spaces; retain their state when revealing a tab.
+    if (current.current.foldersReady) setFolders(old => old.map(folder => next.find(item => item.root === folder.root) ?? folder));
   };
   const switchLocalFolder = async (folder: Workspace | null) => {
     if (!current.current.foldersReady) return;
@@ -1736,6 +1744,7 @@ export default function App() {
         <button aria-label="Mobile settings" onClick={() => setSettingsOpen(true)}><SettingsIcon size={20} /><span>Settings</span></button>
       </nav>}
       <aside id="global-navigation" className="sidebar" hidden={compact ? mobileView !== "notes" : !navigation}>
+        <SidebarSection edge="top" label="navigation header" compact={compact}>
         <div className="brand">
           <button
             className="brand-emblem"
@@ -1759,6 +1768,7 @@ export default function App() {
           <span>Find anything</span>
           <kbd>{mod} K</kbd>
         </button>
+        </SidebarSection>
         <Explorer
           folders={folders.filter(folder => !folder.cloudSpace || (drive.status.connected && folder.cloudSpace.account === drive.status.account))}
           activeRoot={workspace.root}
@@ -1775,7 +1785,6 @@ export default function App() {
           onNew={folder => void newTab(folder)}
           onCloudMove={drive.status.connected ? (folder, path) => void moveToCloud(folder, path) : undefined}
           syncBusy={!!uploads.activeRoot}
-          onStar={starFile}
           onRename={(folder, path) => setRenameTarget({ folder, path })}
           onChange={changeFolders}
           onRemove={(root) => void removeFolder(root)}
@@ -1785,6 +1794,7 @@ export default function App() {
           onLoadDirectory={(root, path, more) => void loadDirectory(root, path, more)} onToggleDirectory={toggleDirectory} loadingDirectories={loadingDirectories}
           externalDrag={externalDrag}
         />
+        <SidebarSection edge="bottom" label="navigation controls" compact={compact}>
         <div className="sidebar-bottom">
           {galaxyMode && <div className="launch-indicator">
             <span aria-hidden="true" />
@@ -1821,6 +1831,7 @@ export default function App() {
             <SignalBell />
           </div>}
         </div>
+        </SidebarSection>
       </aside>
       <main ref={tabStripRef} className="main-panel" hidden={compact && mobileView !== "editor"}
         onPointerMove={(event) => {
@@ -1841,7 +1852,13 @@ export default function App() {
           <div className="breadcrumbs">
             <span>{workspace.name}</span>
             <ChevronRight size={13} />
-            <span>{path.split("/").at(-1)}</span>
+            <span className="breadcrumb-file">{path.split("/").at(-1)}</span>
+            <button className="icon-button breadcrumb-star" aria-label={activeFileStarred ? "Unstar file" : "Star file"}
+              title={activeFileStarred ? "Remove file from starred files" : "Star file for quick access in Bookmarks"}
+              aria-pressed={activeFileStarred} disabled={!data || !path || !activeStarFolder}
+              onClick={() => { if (activeStarFolder) starFile(activeStarFolder, path, !activeFileStarred); }}>
+              <NovaStar size={16} />
+            </button>
           </div>
           <ViewOptions>
             <label className="view-option-row"><span>Reading layout</span><select aria-label="Reading layout" value={readingLayout} onChange={event => setReadingLayout(event.target.value as "continuous" | "pages")}>
@@ -2035,24 +2052,34 @@ export default function App() {
       {(compact ? mobileView === "bookmarks" : rail) && (
         <aside id="bookmarks-panel" className="bookmark-rail">
           <header>
-            <BookmarkIcon size={16} />
-            <strong>Bookmarks</strong>
-            <span className="count">{visibleBookmarks.length}</span>
-            <button
+            <div className="scope-toggle bookmark-view-toggle" role="group" aria-label="Bookmark view">
+              <button aria-label="Starred files" title="Starred files" aria-pressed={bookmarkView === "files"} onClick={() => setBookmarkView("files")}>
+                <NovaStar size={17} />
+              </button>
+              <button aria-label="Passages" title="Passages" aria-pressed={bookmarkView === "passages"} onClick={() => setBookmarkView("passages")}>
+                <BookmarkIcon size={17} aria-hidden="true" />
+              </button>
+            </div>
+            {bookmarkView === "passages" && <button
               className="icon-button"
               onClick={beginBookmark}
               title={`Add bookmark (${mod} Shift B)`}
               aria-label="Add bookmark"
             >
               <Plus size={17} />
-            </button>
+            </button>}
           </header>
+          {bookmarkView === "files" ? <StarredFiles folders={folders} activeRoot={workspace.root} activePath={path}
+            onOpen={(folder, file) => void openNote(file, undefined, folder)} onStar={starFile} /> : <>
           <ScopeToggle label="Bookmark scope" scope={bookmarkScope} onChange={setBookmarkScope} currentLabel="Current tab" allLabel="All bookmarks" />
           <div className="rail-intro">{bookmarkScope === "current" ? "Your way back to the good parts." : "Across all added folders."}</div>
           {bookmarkScope === "everywhere" && bookmarksBusy && <div role="status" className="rail-intro">Loading bookmarks…</div>}
           {bookmarkScope === "everywhere" && bookmarksError && <div role="status" className="rail-intro">{bookmarksError}</div>}
           <div className="bookmark-list">
-            {visibleBookmarks.map(({ bookmark: b, root, path: bookmarkPath }, i) => {
+            <BookmarkSections view="passages" items={visibleBookmarks}
+              isCloud={hit => !!folders.find(folder => folder.root === hit.root)?.cloudSpace}
+              emptyMessage={bookmarksBusy ? "Loading bookmarks…" : bookmarkScope === "current" ? "No passages bookmarked here in the current tab." : "No passages bookmarked here yet."}
+              renderItem={({ bookmark: b, root, path: bookmarkPath }, i) => {
               const isCurrent = root === workspace.root && bookmarkPath === path;
               return (
               <div
@@ -2111,7 +2138,7 @@ export default function App() {
                   </button>
                 </div>}
               </div>
-            ); })}
+            ); }} />
           </div>
           {!visibleBookmarks.length && !bookmarksBusy && (
             <div className="empty-bookmarks">
@@ -2132,6 +2159,7 @@ export default function App() {
             <kbd>B</kbd>
             <span>to bookmark</span>
           </footer>
+          </>}
         </aside>
       )}
       {notice && (

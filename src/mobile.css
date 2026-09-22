@@ -30,7 +30,7 @@
 .app-shell[data-compact="true"] .icon-button { min-width: 44px; }
 .app-shell[data-compact="true"] .sidebar-actions { display: flex; gap: 10px; }
 .app-shell[data-compact="true"] .sidebar-action { width: 44px; height: 44px; }
-.app-shell[data-compact="true"] :is(.file-star, .file-edit) { opacity: 1; }
+.app-shell[data-compact="true"] .file-edit { opacity: 1; }
 .app-shell[data-compact="true"] :is(.folder-drag-handle, .sidebar-action.focus-toggle, .search-trigger kbd, .rail-footer, .panel-toggle-zone, .status-terminal-controls, .terminal-panel) { display: none; }
 .app-shell[data-compact="true"] .note-tabs { min-width: 0; }
 .app-shell[data-compact="true"] .note-tab { min-width: 100px; max-width: 180px; }
@@ -39,7 +39,7 @@
 .app-shell[data-compact="true"] .document-toolbar { gap: 6px; padding: 0 10px; height: 52px; }
 .app-shell[data-compact="true"] .document-toolbar > :is(.toolbar-preference, .line-numbers-toggle, .toolbar-icon:not(.transparency-control), .voice-control) { display: none; }
 .app-shell[data-compact="true"] .document-toolbar > :not(.breadcrumbs, .view-options, .transparency-control, .view-switch, .read-controls, [aria-label="Save note"]) { display: none; }
-.app-shell[data-compact="true"] .breadcrumbs > :not(:last-child) { display: none; }
+.app-shell[data-compact="true"] .breadcrumbs > :not(.breadcrumb-file, .breadcrumb-star) { display: none; }
 .app-shell[data-compact="true"] .view-switch button { min-width: 44px; min-height: 44px; padding: 8px; color: #b7b0c3; }
 .app-shell[data-compact="true"] .view-switch button.selected { color: #f0e5ff; background: #40364f; }
 .app-shell[data-compact="true"] .view-switch svg { display: block; width: 20px; height: 20px; }

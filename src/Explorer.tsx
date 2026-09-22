@@ -20,14 +20,8 @@ import { syncIncluded, type SyncPolicy } from "./syncPolicy";
 import type { Workspace } from "./model";
 import RecentFolders from "./RecentFolders";
 import type { RecentFolder } from "./localFolders";
+import { revealFile, fileAncestors } from "./revealFile";
 import { closedDirectories } from "./folders";
-function NovaStar({ size }: { size: number }) {
-  return (
-    <svg className="nova-star" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 2 14.7 9.3 22 12 14.7 14.7 12 22 9.3 14.7 2 12 9.3 9.3Z" />
-    </svg>
-  );
-}
 function FileTree({
   paths,
   directories = [], directoryPages = {}, directoryErrors = {}, loadingDirectories = [], onLoadDirectory,
@@ -35,8 +29,6 @@ function FileTree({
   onOpen,
   onRename,
   onContextMenu,
-  starred,
-  onStar,
   syncPolicy, syncDisabled, onToggleSync,
   prefix = "",
   closed,
@@ -52,8 +44,6 @@ function FileTree({
   onOpen: (path: string, pinned?: boolean) => void;
   onRename: (path: string) => void;
   onContextMenu: (event: MouseEvent, path: string) => void;
-  starred: Set<string>;
-  onStar: (path: string, starred: boolean) => void;
   syncPolicy?: SyncPolicy;
   syncDisabled: boolean;
   onToggleSync?: (path: string) => void;
@@ -110,8 +100,6 @@ function FileTree({
                   onOpen={onOpen}
                   onRename={onRename}
                   onContextMenu={onContextMenu}
-                  starred={starred}
-                  onStar={onStar}
                   syncPolicy={syncPolicy} syncDisabled={syncDisabled} onToggleSync={onToggleSync}
                   prefix={prefix + name + "/"}
                 />
@@ -138,15 +126,6 @@ function FileTree({
             onClick={() => onToggleSync(path)}>
             {syncIncluded(syncPolicy, path) ? <Cloud size={14} /> : <CloudOff size={14} />}
           </button>}
-          <button
-            className="icon-button file-star"
-            aria-label={`${starred.has(path) ? "Unstar" : "Star"} ${path}`}
-            title={starred.has(path) ? "Unstar file" : "Star file"}
-            aria-pressed={starred.has(path)}
-            onClick={() => onStar(path, !starred.has(path))}
-          >
-            <NovaStar size={15} />
-          </button>
           <button
             className="icon-button file-edit"
             aria-label={mobile ? `Actions for ${path}` : `Rename ${path}`}
@@ -175,7 +154,6 @@ type Props = {
   activePath: string;
   onOpen: (folder: Workspace, path: string, pinned?: boolean) => void;
   onRename: (folder: Workspace, path: string) => void;
-  onStar: (folder: Workspace, path: string, starred: boolean) => void;
   onFileAction: (folder: Workspace, path: string, action: "move" | "delete" | "reveal" | "drive") => void;
   onChange: (folders: Workspace[]) => void;
   onRemove: (root: string) => void;
@@ -195,7 +173,6 @@ export default function Explorer({
   activePath,
   onOpen,
   onRename,
-  onStar,
   onChange,
   onFileAction,
   onRemove,
@@ -236,8 +213,34 @@ export default function Explorer({
     return () => { window.removeEventListener("pointerdown", outside); window.removeEventListener("resize", close); window.removeEventListener("blur", close); window.removeEventListener("scroll", close, true); };
   }, [menu]);
   const [cloudCollapsed, setCloudCollapsed] = usePreference<boolean>("explorer-cloud-collapsed", false);
-  const [starredOnly, setStarredOnly] = useState(false);
   const [syncOnly, setSyncOnly] = useState(false);
+  const revealed = useRef("");
+  const pendingScroll = useRef(false);
+  useEffect(() => {
+    const identity = JSON.stringify([activeRoot, activePath]);
+    if (!activePath) { revealed.current = ""; return; }
+    if (revealed.current === identity) return;
+    const folder = folders.find(folder => folder.root === activeRoot);
+    if (!folder) return;
+    revealed.current = identity;
+    pendingScroll.current = true;
+    setSyncOnly(false);
+    if (folder.cloudSpace) setCloudCollapsed(false);
+    onChange(folders.map(item => item.root === activeRoot ? revealFile(item, activePath) : item));
+    if (folder.directories) {
+      for (const directory of fileAncestors(activePath)) {
+        if (!folder.expandedDirectories?.includes(directory)) onLoadDirectory?.(activeRoot, directory);
+      }
+    }
+  }, [activeRoot, activePath, folders, onChange, onLoadDirectory, setCloudCollapsed]);
+  useEffect(() => {
+    if (!pendingScroll.current) return;
+    const row = treeRef.current?.querySelector<HTMLElement>(".file-row.active");
+    if (!row || row.closest("[hidden]")) return;
+    row.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    pendingScroll.current = false;
+  }, [activeRoot, activePath, folders, cloudCollapsed, syncOnly]);
+
   return (
     <>
       <div className="workspace-label">
@@ -245,15 +248,6 @@ export default function Explorer({
           EXPLORER <span className="explorer-count">{folders.length}</span>
         </span>
         <div className="explorer-actions">
-        <button
-          className="icon-button stars-toggle"
-          onClick={() => setStarredOnly(value => !value)}
-          title={starredOnly ? "Clear starred filter" : "Show starred files only"}
-          aria-label="Show starred files only"
-          aria-pressed={starredOnly}
-        >
-          <NovaStar size={17} />
-        </button>
         <button
           className="icon-button sync-toggle"
           hidden={!onToggleSync}
@@ -302,15 +296,13 @@ export default function Explorer({
             </div>
             <div id={`explorer-${kind.toLowerCase()}`} hidden={collapsed}>
         {ordered.map((folder) => {
-          const starred = new Set(folder.starred ?? []);
           const collapsed = folder.collapsed ?? true;
           const closed = closedDirectories(folder);
-          const available = starredOnly && folder.directories
-            ? [...new Map([...folder.files, ...(folder.starred ?? []).map(path => ({ path, name: path.split("/").at(-1)! }))].map(file => [file.path, file])).values()]
+          // An open tab can point past a directory's loaded page.
+          const available = folder.root === activeRoot && activePath && !folder.files.some(file => file.path === activePath)
+            ? [...folder.files, { path: activePath, name: activePath.split("/").at(-1)! }]
             : folder.files;
-          const files = available.filter(file =>
-            (!starredOnly || starred.has(file.path)) &&
-            (!syncOnly || (!folder.syncError && syncIncluded(folder.syncPolicy, file.path))));
+          const files = available.filter(file => !syncOnly || (!folder.syncError && syncIncluded(folder.syncPolicy, file.path)));
           return (
           <section
             key={folder.root}
@@ -377,8 +369,8 @@ export default function Explorer({
                 ) : files.length || folder.directories?.length || Object.keys(folder.directoryPages ?? {}).length || Object.keys(folder.directoryErrors ?? {}).length ? (
                   <FileTree
                     closed={new Set(closed)}
-                    directories={starredOnly || syncOnly ? [] : folder.directories}
-                    directoryPages={starredOnly || syncOnly ? {} : folder.directoryPages}
+                    directories={syncOnly ? [] : folder.directories}
+                    directoryPages={syncOnly ? {} : folder.directoryPages}
                     directoryErrors={folder.directoryErrors}
                     loadingDirectories={loadingDirectories[folder.root]}
                     onLoadDirectory={(path, more) => onLoadDirectory?.(folder.root, path, more)}
@@ -395,13 +387,11 @@ export default function Explorer({
                     syncPolicy={folder.syncError ? undefined : folder.syncPolicy}
                     syncDisabled={syncBusy || !!folder.syncError}
                     onToggleSync={onToggleSync ? path => onToggleSync(folder, path) : undefined}
-                    starred={starred}
-                    onStar={(path, value) => onStar(folder, path, value)}
-                  />
+                    />
                 ) : (
                   <p className="folder-empty">{syncOnly
-                    ? folder.syncError ? "Sync selection unavailable." : starredOnly ? "No starred files selected for sync in this folder." : "No files selected for sync in this folder."
-                    : starredOnly ? "No starred files in this folder." : "No text or Markdown files."}</p>
+                    ? folder.syncError ? "Sync selection unavailable." : "No files selected for sync in this folder."
+                    : "No text or Markdown files."}</p>
                 )}
               </div>
             )}

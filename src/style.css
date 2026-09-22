@@ -349,7 +349,7 @@ kbd {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.breadcrumbs span:last-child {
+.breadcrumbs .breadcrumb-file {
   color: #aaa7b4;
 }
 .view-switch {
@@ -670,20 +670,18 @@ kbd {
 }
 .bookmark-rail header {
   height: 66px;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: 9px;
   font-size: 11px;
   flex-shrink: 0;
-}
-.bookmark-rail header > svg {
-  color: #a790bf;
 }
 .bookmark-rail strong {
   font-weight: 500;
 }
 .bookmark-rail header .icon-button {
-  margin-left: auto;
+  grid-column: 3;
+  justify-self: end;
 }
 .count {
   background: #ffffff05;
@@ -1687,6 +1685,9 @@ kbd {
   outline-offset: 1px;
 }
 .bookmark-rail > .scope-toggle { margin-bottom: 12px; }
+.bookmark-view-toggle { grid-column: 2; }
+.bookmark-view-toggle button { display: grid; place-items: center; width: 52px; min-height: 44px; padding: 12px 16px; }
+.bookmark-view-toggle button[aria-pressed="true"] .nova-star { fill: #b580ff30; }
 .bookmark-source {
   display: block;
   margin: 0 0 7px;
@@ -2150,37 +2151,33 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 .file-open span:first-of-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Hidden actions must not reserve filename space. Keep them focusable so
    keyboard focus reveals the full action group, just like hovering the row. */
-.file-row > :is(.file-sync, .file-star, .file-edit) {
+.file-row > :is(.file-sync, .file-edit) {
   width: 0;
   padding: 0;
   overflow: hidden;
   opacity: 0;
 }
-.file-row:is(:hover, :focus-within) > :is(.file-sync, .file-star, .file-edit),
-.file-row > :is(.file-sync, .file-star)[aria-pressed="true"] {
+.file-row:is(:hover, :focus-within) > :is(.file-sync, .file-edit),
+.file-row > .file-sync[aria-pressed="true"] {
   width: 26px;
   margin-left: 3px;
   opacity: 1;
 }
-.file-star, .stars-toggle { color: #9582ae; }
 .nova-star { fill: transparent; stroke: currentColor; stroke-width: 1.4; stroke-linejoin: miter; }
-.file-star:hover, .stars-toggle:hover { color: #dfcaff; background: #b58aff12; }
-.file-star[aria-pressed="true"], .stars-toggle[aria-pressed="true"] { color: #cfacff; }
-.file-star[aria-pressed="true"] .nova-star,
-.stars-toggle[aria-pressed="true"] .nova-star {
-  fill: #b580ff30;
-}
-.app-shell[data-galaxy="true"] .file-star[aria-pressed="true"] .nova-star,
-.app-shell[data-galaxy="true"] .stars-toggle[aria-pressed="true"] .nova-star {
-  filter: drop-shadow(0 0 3px #b580ff99);
-}
-.app-shell[data-galaxy="true"] .stars-toggle[aria-pressed="true"], .app-shell[data-galaxy="true"] .sync-toggle[aria-pressed="true"] {
+.breadcrumb-star { color: #9582ae; }
+.breadcrumb-star:hover { color: #dfcaff; background: #b58aff12; }
+.breadcrumb-star[aria-pressed="true"] { color: #cfacff; }
+.breadcrumb-star[aria-pressed="true"] .nova-star,
+.starred-file-row .nova-star { fill: #b580ff30; }
+.app-shell[data-galaxy="true"] .breadcrumb-star[aria-pressed="true"] .nova-star,
+.app-shell[data-galaxy="true"] .starred-file-row .nova-star { filter: drop-shadow(0 0 3px #b580ff99); }
+.app-shell[data-galaxy="true"] .sync-toggle[aria-pressed="true"] {
   background: radial-gradient(ellipse at center, #b580ff25, #b580ff08);
   box-shadow: inset 0 0 0 1px #c39aff30, 0 0 10px #a36aff12;
 }
-.file-star:focus-visible, .stars-toggle:focus-visible { outline: 1px solid #cfacff; outline-offset: 2px; }
+.breadcrumb-star:focus-visible { outline: 1px solid #cfacff; outline-offset: 2px; }
 @media (hover: none) {
-  .file-row > :is(.file-sync, .file-star, .file-edit) {
+  .file-row > :is(.file-sync, .file-edit) {
     width: 26px;
     margin-left: 3px;
     opacity: 1;
@@ -2793,3 +2790,45 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 .recent-label { display: block; padding: 8px 10px 4px; }
 .recent-clear { margin-top: 5px; }
 .tree-load-more { margin: 6px 12px; color: var(--muted); font-size: 12px; }
+
+.breadcrumb-star { flex-shrink: 0; }
+.breadcrumb-star[aria-pressed="true"], .starred-file-row > .icon-button { color: #c8abd9; }
+.starred-files { overflow: auto; min-height: 0; padding-bottom: 16px; }
+.starred-files h3 { font-size: 11px; color: #aaa7b4; font-weight: 500; margin: 14px 0 8px; overflow-wrap: anywhere; }
+.starred-file-row { display: flex; align-items: center; border-radius: 7px; margin-bottom: 5px; border: 1px solid transparent; }
+.starred-file-row:hover, .starred-file-row.current { background: #a790bf12; border-color: #b297d638; }
+.starred-file-open { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; padding: 10px 7px; text-align: left; background: transparent; border: 0; color: #d6d0df; }
+.starred-file-open > svg { flex-shrink: 0; color: #a790bf; }
+.starred-file-open > span { min-width: 0; }
+.starred-file-open strong, .starred-file-open small { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.starred-file-open strong { font-size: 12px; }
+.starred-file-open small { font-size: 10px; color: #8e899a; margin-top: 4px; }
+.starred-file-row > .icon-button { flex-shrink: 0; }
+.starred-files .rail-intro { margin-bottom: 12px; }
+
+/* Nested navigation panels share the workspace's hover and keyboard controls. */
+.sidebar-section { position: relative; flex-shrink: 0; }
+.sidebar-section > [hidden] { display: none; }
+.sidebar-section[data-expanded="false"] { height: 24px; }
+.sidebar-section .sidebar-section-toggle {
+  inset: auto 0 -12px;
+  width: auto;
+  height: 24px;
+  pointer-events: auto;
+}
+.sidebar-section[data-edge="bottom"] .sidebar-section-toggle { top: 0; bottom: auto; }
+.sidebar-section[data-expanded="false"] .sidebar-section-toggle { inset: 0; }
+.sidebar-section-toggle:hover .panel-toggle { opacity: 1; pointer-events: auto; }
+.sidebar-section[data-edge="top"] .focus-tooltip { top: calc(100% + 10px); bottom: auto; }
+.sidebar-section[data-edge="top"][data-expanded="false"] .sidebar-section-toggle { align-items: flex-start; }
+.sidebar-section[data-edge="bottom"][data-expanded="false"] .sidebar-section-toggle { align-items: flex-end; }
+
+.bookmark-section + .bookmark-section { margin-top: 18px; padding-top: 14px; border-top: 1px solid #ffffff12; }
+.bookmark-section-toggle { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 4px; border: 0; border-radius: 5px; background: transparent; color: #b8adca; text-align: left; font-size: 11px; font-weight: 500; }
+.bookmark-section-toggle:hover { background: #a790bf12; color: #e1d2f0; }
+.bookmark-section-toggle:focus-visible { outline: 2px solid #a790bf; outline-offset: -2px; }
+.bookmark-section-toggle svg { flex-shrink: 0; }
+.bookmark-section-content { padding-top: 8px; }
+.bookmark-section-content[hidden] { display: none; }
+.section-empty.empty-bookmarks { padding: 12px 8px 20px; margin: 0; text-align: left; }
+.app-shell[data-compact="true"] .bookmark-section-toggle { min-height: 44px; }
