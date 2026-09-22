@@ -100,7 +100,7 @@ export default function Palette({
   }, [onClose]);
   const files = useMemo(() => {
     if (filter === "Settings" || filter === "Text" || filter === "Bookmarks") return [];
-    const loaded = searchFolders.flatMap(folder => folder.files.map(file => ({
+    const loaded = searchFolders.flatMap(folder => folder.files.filter(file => file.path !== ".nova").map(file => ({
       ...file, root: folder.root, folderName: folder.name,
     })));
     const found = currentOnly ? [] : remoteFiles.map(file => ({

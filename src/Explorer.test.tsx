@@ -164,3 +164,36 @@ it("reveals a switched tab in a collapsed Cloud folder without loading the entir
     vi.unstubAllGlobals();
   }
 });
+
+it("hides dot paths by default, reveals them on request, and protects the metadata row", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  localStorage.clear();
+  const host = document.createElement("div"), root = createRoot(host);
+  document.body.append(host);
+  const folder: Workspace = { root: "/notes", name: "Notes", collapsed: false,
+    files: ["visible.md", ".env", ".nova", ".config/nested.md"].map(path => ({ path, name: path.split("/").at(-1)! })),
+    directories: [".config", ".empty", "ordinary"], expandedDirectories: [".config"] };
+  const onOpen = vi.fn(), noop = () => {};
+  const render = (showHidden = false) => <Explorer folders={[folder]} showHidden={showHidden} activeRoot="" activePath=""
+    onOpen={onOpen} onRename={noop} onFileAction={noop} onToggleSync={noop} onChange={noop} onRemove={noop} onRefresh={noop} onAdd={noop} externalDrag={false}/>;
+  try {
+    await act(async () => root.render(render()));
+    expect(host.textContent).toContain("visible.md");
+    expect(host.textContent).not.toContain(".env");
+    expect(host.textContent).not.toContain(".config");
+    expect(host.textContent).not.toContain(".empty");
+    await act(async () => root.render(render(true)));
+    expect(host.textContent).toContain(".env");
+    expect(host.textContent).toContain(".empty");
+    expect(host.textContent).toContain("nested.md");
+    const registry = host.querySelector<HTMLButtonElement>('button[title=".nova"]')!;
+    expect(registry.parentElement!.querySelector('.file-edit, .file-sync')).toBeNull();
+    await act(async () => registry.click());
+    expect(onOpen).toHaveBeenCalledWith(folder, ".nova", undefined);
+    await act(async () => registry.parentElement!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true })));
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+    await act(async () => root.render(render(false)));
+    expect(host.textContent).not.toContain("nested.md");
+    expect(host.textContent).not.toContain(".nova");
+  } finally { await act(async () => root.unmount()); host.remove(); localStorage.clear(); vi.unstubAllGlobals(); }
+});

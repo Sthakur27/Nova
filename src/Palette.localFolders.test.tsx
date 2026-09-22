@@ -2,6 +2,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
+import { defaultSearchOptions } from "./searchOptions";
 import Palette from "./Palette";
 import { searchFiles, cancelSearch } from "./storage";
 vi.mock("./storage", () => ({ searchNotes: vi.fn(), searchFiles: vi.fn(), cancelSearch: vi.fn() }));
@@ -20,7 +21,7 @@ it("finds files in unopened directories and cancels the traversal on close", asy
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 220)); });
-    expect(searchFiles).toHaveBeenCalledWith([folder], "needle");
+    expect(searchFiles).toHaveBeenCalledWith([folder], "needle", defaultSearchOptions);
     const option = host.querySelector<HTMLButtonElement>('[role="option"]')!;
     expect(option.textContent).toContain("unopened/needle.md");
     await act(async () => option.click());

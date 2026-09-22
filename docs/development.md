@@ -131,3 +131,7 @@ Use `python3 scripts/test-drive-connection.py --help` for the standalone Drive s
 ## iPhone and iPad
 
 See [the iOS port guide](mobile.md) for the mobile scope, prerequisites, simulator commands, and outstanding device checks.
+
+## Workspace metadata editor
+
+`registry_editor.rs` exposes separate read, validate, and save commands for the root `.nova` file. Ordinary note scope and sync scans continue to reject it. Native saves validate under the shared write lock and compare disk revisions before atomic replacement. Cloud identity/tracking fields must equal their saved values. `RegistryEditor.tsx` uses the existing draft store, explicit Save, debounced native validation, and a modal JSON editor; it never invokes note autosave. Local directory listing exposes dot entries for frontend navigation filtering while recursive search retains its existing exclusions.

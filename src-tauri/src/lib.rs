@@ -1,3 +1,4 @@
+mod registry_editor;
 mod search_options;
 #[cfg(any(mobile, test))]
 mod mobile_storage;
@@ -325,7 +326,11 @@ async fn open_workspace(root: String, access: State<'_, Access>) -> Result<Works
     let cloud = cloud_space.is_some();
     let (files, directories, directory_pages, warnings) = tauri::async_runtime::spawn_blocking(move || {
         if cloud {
-            Ok((files_in(&scan)?, None, None, Vec::new()))
+            let mut files = files_in(&scan)?;
+            if fs::symlink_metadata(scan.join(".nova")).is_ok_and(|m| m.is_file()) {
+                files.push(NoteFile { path: ".nova".into(), name: ".nova".into() });
+            }
+            Ok((files, None, None, Vec::new()))
         } else {
             let listing = local_tree::list(&scan, "", 0)?;
             let mut pages = std::collections::HashMap::new();
@@ -1002,6 +1007,7 @@ pub fn run() {
             terminal::terminal_write,
             terminal::terminal_resize,
             terminal::terminal_close,
+            registry_editor::read_registry_document, registry_editor::validate_registry_document, registry_editor::save_registry_document,
             open_workspace, local_tree::list_directory, local_tree::search_files,
             set_file_star,
             set_sync_choice,
@@ -1069,10 +1075,12 @@ pub fn run() {
         drive_auth::drive_status, drive_auth::drive_connect, drive_auth::drive_cancel, drive_auth::drive_disconnect,
         drive_upload::cloud_spaces::cloud_setup, drive_upload::cloud_spaces::cloud_move_in,
         drive_upload::drive_upload, drive_upload::drive_resolve_missing, drive_upload::drive_open_folder, drive_upload::drive_open_file, drive_upload::drive_workspaces, drive_upload::drive_restore,
+        registry_editor::read_registry_document, registry_editor::validate_registry_document, registry_editor::save_registry_document,
         open_workspace, set_file_star, set_sync_choice, read_note, save_note, save_bookmarks, search_notes, cancel_search, load_draft, save_draft, load_explorer, save_explorer, create_note, rename_note, move_note, delete_note
     ]);
     #[cfg(not(target_os = "ios"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
+            registry_editor::read_registry_document, registry_editor::validate_registry_document, registry_editor::save_registry_document,
             open_workspace, set_file_star, set_sync_choice, read_note, save_note,
             save_bookmarks, search_notes, cancel_search, load_draft, save_draft, load_explorer,
             save_explorer, create_note, rename_note, move_note, delete_note

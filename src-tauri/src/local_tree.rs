@@ -61,7 +61,7 @@ pub(crate) fn list(root: &Path, relative: &str, offset: usize) -> Result<Listing
                 continue;
             }
         };
-        if !visible(&entry.file_name().to_string_lossy()) {
+        if matches!(entry.file_name().to_str(), Some("node_modules" | "target" | ".nova-registry-backups")) {
             continue;
         }
         let kind = match entry.file_type() {
@@ -80,7 +80,7 @@ pub(crate) fn list(root: &Path, relative: &str, offset: usize) -> Result<Listing
         // Do not follow symlinks into an unrelated directory or open named pipes.
         if kind.is_dir() {
             result.directories.push(name);
-        } else if kind.is_file() && supported(&child) {
+        } else if kind.is_file() && (supported(&child) || (relative.as_os_str().is_empty() && entry.file_name() == ".nova")) {
             result.files.push(NoteFile {
                 path: name,
                 name: entry.file_name().to_string_lossy().into_owned(),
@@ -211,6 +211,24 @@ pub(crate) async fn search_files(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn browsing_exposes_dot_entries_but_not_internal_backups_or_temporary_files() {
+        let dir = tempfile::tempdir().unwrap();
+        for name in [".git", ".config", ".empty", ".nova-registry-backups", "node_modules", "target"] {
+            fs::create_dir(dir.path().join(name)).unwrap();
+        }
+        for name in [".nova", ".env", "ordinary.md", ".tmp123", ".nova.backup"] {
+            fs::write(dir.path().join(name), "{}").unwrap();
+        }
+        let root = fs::canonicalize(dir.path()).unwrap();
+        let listing = list(&root, "", 0).unwrap();
+        let paths: std::collections::HashSet<_> = listing.files.iter().map(|f| f.path.as_str()).collect();
+        assert_eq!(paths, [".nova", ".env", "ordinary.md"].into_iter().collect());
+        let dirs: std::collections::HashSet<_> = listing.directories.iter().map(String::as_str).collect();
+        assert_eq!(dirs, [".git", ".config", ".empty"].into_iter().collect());
+        fs::write(dir.path().join(".config/.nova"), "{}").unwrap();
+        assert!(list(&root, ".config", 0).unwrap().files.is_empty());
+    }
     #[test]
     fn search_filters_apply_before_filename_limit() {
         let temp = tempfile::tempdir().unwrap();

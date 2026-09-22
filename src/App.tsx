@@ -1,3 +1,4 @@
+import RegistryEditor from "./RegistryEditor";
 import { documentChanged } from "./documentChanged";
 import SettingDialog from "./SettingDialog";
 import { settingChoices, toggleSetting } from "./settingCommands";
@@ -51,6 +52,8 @@ import {
   useState,
 } from "react";
 import {
+  Eye,
+  EyeOff,
   Cloud,
   CloudOff,
   Bookmark as BookmarkIcon,
@@ -297,6 +300,8 @@ export default function App() {
   const [terminalStarted, setTerminalStarted] = useState(false);
   const [terminalControls, setTerminalControls] = useState<HTMLDivElement | null>(null);
   const [rail, setRail, railError] = usePreference<boolean>("bookmarks-panel", true);
+  const [registryFolder, setRegistryFolder] = useState<Workspace | null>(null);
+  const [showHidden, setShowHidden, showHiddenError] = usePreference<boolean>("show-hidden-files", false);
   const [navigation, setNavigation, navigationError] = usePreference<boolean>("navigation-panel", true);
   const [topBars, setTopBars, topBarsError] = usePreference<boolean>("top-bars", true);
   const [statusBar, setStatusBar, statusBarError] = usePreference<boolean>("status-bar", true);
@@ -568,9 +573,11 @@ export default function App() {
           const folder = restored.find(f => f.root === tab.root);
           if (folder) candidates.push({ folder, path: tab.path });
         }
-        for (const folder of prefs?.tabs ? [] : restored)
-          if (!folder.error && folder.files.length)
-            candidates.push({ folder, path: folder.files[0].path });
+        for (const folder of prefs?.tabs ? [] : restored) {
+          const firstNote = folder.files.find(file => file.path !== ".nova");
+          if (!folder.error && firstNote)
+            candidates.push({ folder, path: firstNote.path });
+        }
         let opened = false;
         for (const candidate of candidates) {
           try {
@@ -739,8 +746,9 @@ export default function App() {
       pinned = false,
       reportError = true,
     ) => {
-      setMobileView("editor");
       const requested = nextWorkspace ?? current.current.workspace;
+      if (nextPath === ".nova") { setRegistryFolder(requested); return false; }
+      setMobileView("editor");
       if (pinned) {
         pendingPins.current.add(
           tabId({ root: requested.root, path: nextPath }),
@@ -1117,7 +1125,8 @@ export default function App() {
     if (currentSpace) setWorkspace(currentSpace);
     else if ((!current.current.workspace.root || !!current.current.workspace.cloudSpace) && spaces.length) {
       setWorkspace(spaces[0]);
-      if (spaces[0].files.length) void openNote(spaces[0].files[0].path, undefined, spaces[0]);
+      const firstNote = spaces[0].files.find(file => file.path !== ".nova");
+      if (firstNote) void openNote(firstNote.path, undefined, spaces[0]);
     }
   });
   async function moveToCloud(folder: Workspace, notePath: string) {
@@ -1353,7 +1362,7 @@ export default function App() {
     setFocusMode(focused);
   }), [transitionFocus, focusMode, setFocusMode, setNavigation, setRail, setTopBars, setStatusBar]);
   useEffect(() => {
-    if (compact || syncFolder || settingsOpen || activeSettingId || palette || bookmarkDraft || renameTarget || fileAction) return;
+    if (compact || registryFolder || syncFolder || settingsOpen || activeSettingId || palette || bookmarkDraft || renameTarget || fileAction) return;
     return installPanelShortcuts(window, mod === "⌘", panel => {
       if (focusMode) setFocusMode(false);
       if (panel === "left") setNavigation(focusMode || !navigation);
@@ -1361,17 +1370,17 @@ export default function App() {
       else if (panel === "top") setTopBars(focusMode || !topBars);
       else changeTerminalOpen(focusMode || !(terminalOpen && statusBar));
     });
-  }, [compact, syncFolder, settingsOpen, activeSettingId, palette, bookmarkDraft, renameTarget, fileAction, focusMode, navigation, rail, topBars, terminalOpen, statusBar, changeTerminalOpen, setFocusMode, setNavigation, setRail, setTopBars]);
+  }, [compact, registryFolder, syncFolder, settingsOpen, activeSettingId, palette, bookmarkDraft, renameTarget, fileAction, focusMode, navigation, rail, topBars, terminalOpen, statusBar, changeTerminalOpen, setFocusMode, setNavigation, setRail, setTopBars]);
   useEffect(() => {
     const toggleFocus = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "g" || event.isComposing) return;
       event.preventDefault();
       event.stopPropagation();
-      if (!event.repeat && !syncFolder && !settingsOpen && !activeSettingId && !palette && !bookmarkDraft && !renameTarget && !fileAction) changeFocusMode(!focusModeActive);
+      if (!event.repeat && !registryFolder && !syncFolder && !settingsOpen && !activeSettingId && !palette && !bookmarkDraft && !renameTarget && !fileAction) changeFocusMode(!focusModeActive);
     };
     window.addEventListener("keydown", toggleFocus, { capture: true });
     return () => window.removeEventListener("keydown", toggleFocus, { capture: true });
-  }, [focusModeActive, changeFocusMode, syncFolder, settingsOpen, activeSettingId, palette, bookmarkDraft, renameTarget, fileAction]);
+  }, [focusModeActive, changeFocusMode, registryFolder, syncFolder, settingsOpen, activeSettingId, palette, bookmarkDraft, renameTarget, fileAction]);
   useEffect(() => installFileSearchShortcut(window, mod === "⌘", () => {
     if (syncFolder || (mobile && !drive.status.connected) || settingsOpen || activeSettingId || bookmarkDraft || renameTarget || fileAction || document.querySelector("dialog[open]")) return;
     setSearchScope("everywhere");
@@ -1736,6 +1745,7 @@ export default function App() {
     toggleSetting("line-highlight", "Line highlight", showLineHighlight, setShowLineHighlight, "current line"),
     toggleSetting("word-wrap", "Word wrap", wordWrap, setWordWrap, "long lines"),
     toggleSetting("spellcheck", "Spellcheck", spellcheck, setSpellcheck, "spelling"),
+    toggleSetting("show-hidden-files", "Show hidden files and folders", showHidden, setShowHidden, "navigation dotfiles dotfolders eye"),
     toggleSetting("bookmarks-panel", "Bookmarks panel", rail, setRail, "sidebar"),
     ...(!compact ? [
       toggleSetting("navigation-panel", "Navigation panel", navigation, setNavigation, "sidebar files"),
@@ -1775,7 +1785,12 @@ export default function App() {
         <button aria-label="Search notes" onClick={() => setPalette("All")}><Search size={20} /><span>Search</span></button>
         <button aria-label="Mobile settings" onClick={() => setSettingsOpen(true)}><SettingsIcon size={20} /><span>Settings</span></button>
       </nav>}
+      {registryFolder && <RegistryEditor key={registryFolder.root} folder={registryFolder} onClose={() => setRegistryFolder(null)} onSaved={() => refreshFolder(registryFolder.root)} />}
       <aside id="global-navigation" className="sidebar" hidden={compact ? mobileView !== "notes" : !navigation}>
+        <button className="icon-button hidden-files-toggle" aria-label={showHidden ? "Hide hidden files and folders" : "Show hidden files and folders"}
+          title={showHidden ? "Hide hidden files and folders" : "Show hidden files and folders"} aria-pressed={showHidden} onClick={() => setShowHidden(!showHidden)}>
+          {showHidden ? <Eye size={15} /> : <EyeOff size={15} />}
+        </button>
         <SidebarSection edge="top" label="navigation header" compact={compact}>
         {headerToggle => <>
         <div className="brand">
@@ -1797,6 +1812,7 @@ export default function App() {
         </>}
         </SidebarSection>
         <Explorer
+          showHidden={showHidden}
           folders={folders.filter(folder => !folder.cloudSpace || (drive.status.connected && folder.cloudSpace.account === drive.status.account))}
           activeRoot={workspace.root}
           activePath={path}
@@ -2260,7 +2276,7 @@ export default function App() {
       {activeSetting && <SettingDialog configuration={activeSetting}
         onClose={() => setActiveSettingId(null)}
         onOpenSettings={() => { setActiveSettingId(null); setSettingsOpen(true); }}
-        storageError={editorFontError || spacingError || widthError || galaxyError || galaxyPerformanceError || translucencyError || frostedPanesError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
+        storageError={showHiddenError || editorFontError || spacingError || widthError || galaxyError || galaxyPerformanceError || translucencyError || frostedPanesError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
       {settingsOpen && <Settings onResetLocal={mobile ? resetLocalState : undefined} resetDisabled={!drive.status.connected || drive.busy || !!uploads.activeRoot || cloud.loading || saving} updater={desktop ? appUpdate : undefined} syncConnected={drive.status.connected} onSyncSetup={() => { setSettingsOpen(false); showSync(workspace); }} onClose={() => setSettingsOpen(false)}
         onOpenDrive={() => void uploads.openFolder(workspace.root)} openDriveDisabled={!!uploads.activeRoot || workspace.root === "demo"}
         galaxy={galaxyMode} onGalaxy={setGalaxyMode}
@@ -2274,7 +2290,7 @@ export default function App() {
         editorFont={editorFont} onEditorFont={setEditorFont}
         textWidth={textWidth} onTextWidth={setTextWidth}
         lineSpacing={lineSpacing} onLineSpacing={setLineSpacing}
-        storageError={tooltipsError || editorFontError || extensionError || spacingError || widthError || galaxyError || galaxyPerformanceError || translucencyError || frostedPanesError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
+        storageError={showHiddenError || tooltipsError || editorFontError || extensionError || spacingError || widthError || galaxyError || galaxyPerformanceError || translucencyError || frostedPanesError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
       {bookmarkDraft && (
         <div
           className="overlay"

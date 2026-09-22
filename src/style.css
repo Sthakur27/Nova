@@ -62,6 +62,7 @@ kbd {
   overflow: hidden;
 }
 .sidebar {
+  position: relative;
   width: var(--navigation-width);
   flex-shrink: 0;
   background: #18191c;
@@ -2859,3 +2860,11 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 
 .cloud-file-issue { margin: 14px 0; padding-bottom: 14px; border-bottom: 1px solid #ffffff10; }
 .cloud-file-issue .cloud-space-actions { margin-top: 8px; align-items: center; }
+
+.sidebar > .hidden-files-toggle { position: absolute; top: 4px; right: 8px; z-index: 2; opacity: 0; }
+.sidebar:is(:hover, :focus-within) > .hidden-files-toggle { opacity: 1; }
+.sidebar > .hidden-files-toggle[aria-pressed="true"] { color: #d1bde9; }
+@media (hover: none) { .sidebar > .hidden-files-toggle { opacity: 1; } }
+.registry-editor { width: min(800px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; }
+.registry-editor textarea { display: block; box-sizing: border-box; width: 100%; min-height: 40vh; resize: vertical; padding: 12px; background: #17151d; color: #e4dfeb; border: 1px solid #ffffff30; border-radius: 6px; font: 13px/1.6 monospace; tab-size: 2; }
+.registry-editor .dialog-buttons { flex-wrap: wrap; }

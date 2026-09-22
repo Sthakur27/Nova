@@ -108,7 +108,7 @@ function FileTree({
           </div>
         ))}
       {files.sort().map((path) => (
-        <div key={path} onContextMenu={event => onContextMenu(event, path)} className={"tree-row file-row " + (path === active ? "active" : "")}>
+        <div key={path} onContextMenu={event => { if (path === ".nova") event.preventDefault(); else onContextMenu(event, path); }} className={"tree-row file-row " + (path === active ? "active" : "")}>
           <button
             className="file-open"
             title={path}
@@ -119,21 +119,21 @@ function FileTree({
             <span>{path.slice(prefix.length)}</span>
             {path === active && <span className="active-dot" />}
           </button>
-          {onToggleSync && <button className="icon-button file-sync"
+          {onToggleSync && path !== ".nova" && <button className="icon-button file-sync"
             aria-label={`${syncIncluded(syncPolicy, path) ? "Exclude from" : "Include in"} sync: ${path}`}
             aria-pressed={syncIncluded(syncPolicy, path)} disabled={syncDisabled}
             title={syncDisabled ? "Sync selection unavailable" : syncIncluded(syncPolicy, path) ? "Selected for sync · Click to keep local" : "Keep local · Click to include in sync"}
             onClick={() => onToggleSync(path)}>
             {syncIncluded(syncPolicy, path) ? <Cloud size={14} /> : <CloudOff size={14} />}
           </button>}
-          <button
+          {path !== ".nova" && <button
             className="icon-button file-edit"
             aria-label={mobile ? `Actions for ${path}` : `Rename ${path}`}
             title={mobile ? "Note actions" : "Rename file"}
             onClick={event => mobile ? onContextMenu(event, path) : onRename(path)}
           >
             {mobile ? <MoreHorizontal size={18} /> : <Pencil size={14} />}
-          </button>
+          </button>}
         </div>
       ))}
       {loading && <p className="folder-empty" role="status">Loading…</p>}
@@ -144,6 +144,7 @@ function FileTree({
 }
 type Props = {
   folders: Workspace[];
+  showHidden?: boolean;
   recents?: RecentFolder[];
   onRecent?: (folder: RecentFolder) => void;
   onForgetRecents?: () => void;
@@ -173,6 +174,7 @@ export default function Explorer({
   activePath,
   onOpen,
   onRename,
+  showHidden = false,
   onChange,
   onFileAction,
   onRemove,
@@ -302,7 +304,9 @@ export default function Explorer({
           const available = folder.root === activeRoot && activePath && !folder.files.some(file => file.path === activePath)
             ? [...folder.files, { path: activePath, name: activePath.split("/").at(-1)! }]
             : folder.files;
-          const files = available.filter(file => !syncOnly || (!folder.syncError && syncIncluded(folder.syncPolicy, file.path)));
+          const visible = (path: string) => showHidden || !path.split("/").some(name => name.startsWith("."));
+          const files = available.filter(file => visible(file.path) && (!syncOnly || (file.path !== ".nova" && !folder.syncError && syncIncluded(folder.syncPolicy, file.path))));
+          const directories = folder.directories?.filter(visible);
           return (
           <section
             key={folder.root}
@@ -366,10 +370,10 @@ export default function Explorer({
                       Retry
                     </button>
                   </div>
-                ) : files.length || folder.directories?.length || Object.keys(folder.directoryPages ?? {}).length || Object.keys(folder.directoryErrors ?? {}).length ? (
+                ) : files.length || directories?.length || Object.keys(folder.directoryPages ?? {}).length || Object.keys(folder.directoryErrors ?? {}).length ? (
                   <FileTree
                     closed={new Set(closed)}
-                    directories={syncOnly ? [] : folder.directories}
+                    directories={syncOnly ? [] : directories}
                     directoryPages={syncOnly ? {} : folder.directoryPages}
                     directoryErrors={folder.directoryErrors}
                     loadingDirectories={loadingDirectories[folder.root]}

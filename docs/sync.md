@@ -158,6 +158,8 @@ and the HTTP-backed reconciliation suite cover failure protection separately.
 
 While Nova is visible and focused, the active Cloud note is checked every five seconds. Other notes keep the 60-second schedule. The faster check pauses for unsaved edits, a Local tab, or an unfocused window. This is polling, not live collaborative editing.
 
+The navigation hidden-file toggle can reveal the local `.nova` registry. Its dedicated editor validates stars and sync choices before saving; Cloud identity and tracking fields retain their saved values. Visibility does not include hidden files in sync or turn a Local folder into a Cloud space. See [workspace metadata](user-guide.md#workspace-metadata).
+
 ### Drive identity (registry v2)
 
 Sync objects and receipts are keyed by account and Drive file ID in `driveObjects`.

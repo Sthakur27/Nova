@@ -130,6 +130,8 @@ Nova for **iPhone and iPad is in development**. The same quiet writing space is 
 4. **Mark a good passage.** Select some text and use **Add bookmark** in the bookmarks panel. Give it a name so you can find it again.
 5. **Save your work.** For Local notes, press **⌘ S** on Mac or **Ctrl S** on Windows to write changes to the original file. Cloud notes autosave. Nova also keeps recovery drafts on this computer as you work.
 
+Show dotfiles and dotfolders with the eye button at the top of navigation or **Show hidden files and folders** in Cmd/Ctrl-K settings. Open a workspace’s `.nova` file there for validated JSON editing with explicit saves and recovery drafts. See the [reference guide](docs/user-guide.md#workspace-metadata).
+
 ### A few handy shortcuts
 
 Use **⌘ + arrow keys** on Mac or **Ctrl + arrow keys** on Windows to toggle panels: **← navigation**, **→ bookmarks**, **↑ top bars**, and **↓ terminal**. These shortcuts also work while editing a note or using the terminal; adding Shift keeps the normal text-selection shortcut.
