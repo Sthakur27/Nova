@@ -91,7 +91,7 @@ type Callbacks = {
   undo: () => void;
   redo: () => void;
   save: () => void;
-  bookmark: () => void;
+  bookmark: (from?: number, to?: number, removeIds?: string[]) => void;
   find?: () => void;
   formatting?: (active: FormatAction[]) => void;
 };
@@ -152,18 +152,45 @@ export class DocumentEditor {
             if (owner.editor && !owner.editor.isEditable && !state.selection.empty && !(state.selection instanceof AllSelection)) {
               selected.push(Decoration.inline(state.selection.from, state.selection.to, { class: "read-search-selection" }));
             }
-            if (!owner.bookmarks.length || !owner.editor) return DecorationSet.create(state.doc, selected);
-            const mapping = documentPositions(state.doc, owner.source);
-            return DecorationSet.create(state.doc, [...selected, ...owner.bookmarks.flatMap(mark => {
-              const from = mapping.toDocument(mark.from), to = mapping.toDocument(mark.to);
-              if (mark.unresolved || from >= to) return [];
+            const mapping = owner.bookmarks.length ? documentPositions(state.doc, owner.source) : undefined;
+            const markedBlocks = new Map<number, Bookmark[]>();
+            for (const mark of owner.bookmarks) {
+              const from = mapping!.toDocument(mark.from), to = mapping!.toDocument(mark.to);
+              if (mark.unresolved || from >= to) continue;
               const start = state.doc.resolve(from);
               const pos = start.depth ? start.before(start.depth) : from;
-              const node = state.doc.nodeAt(pos);
-              return node ? [Decoration.node(pos, pos + node.nodeSize, {
-                class: "document-bookmarked", title: `Bookmarked: ${mark.name}`,
-              })] : [];
-            })]);
+              markedBlocks.set(pos, [...(markedBlocks.get(pos) ?? []), mark]);
+            }
+            state.doc.descendants((node, pos) => {
+              if (!node.isTextblock || !node.textContent.trim()) return;
+              const marks = markedBlocks.get(pos) ?? [];
+              // Match Source's active-line affordance without adding thousands of
+              // interactive DOM nodes to long documents.
+              const active = state.selection.head > pos && state.selection.head < pos + node.nodeSize;
+              if (!marks.length && !active) return;
+              selected.push(Decoration.node(pos, pos + node.nodeSize, {
+                class: `document-bookmark-control${marks.length ? " document-bookmarked" : ""}`,
+              }));
+              selected.push(Decoration.widget(pos + 1, () => {
+                const button = document.createElement("button");
+                button.type = "button";
+                button.className = `line-bookmark-button document-bookmark-button${marks.length ? " is-bookmarked" : ""}`;
+                button.contentEditable = "false";
+                button.title = marks.length ? `Remove bookmark: ${marks.map(mark => mark.name).join(", ")}` : "Bookmark this passage";
+                button.setAttribute("aria-label", button.title);
+                button.setAttribute("aria-pressed", String(!!marks.length));
+                button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
+                button.addEventListener("mousedown", event => event.preventDefault());
+                button.addEventListener("click", event => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const sourceMapping = owner.mapping();
+                  callbacks.bookmark(sourceMapping.toSource(pos + 1), sourceMapping.toSource(pos + 1 + node.content.size), marks.map(mark => mark.id));
+                });
+                return button;
+              }, { side: -1, stopEvent: () => true }));
+            });
+            return DecorationSet.create(state.doc, selected);
           } },
         })];
       },

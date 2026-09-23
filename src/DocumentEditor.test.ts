@@ -14,9 +14,10 @@ function create(source: string) {
   document.body.append(mount);
   const change = vi.fn();
   const formatting = vi.fn();
-  const editor = new DocumentEditor(mount, source, { change, formatting, selection: vi.fn(), undo: vi.fn(), redo: vi.fn(), save: vi.fn(), bookmark: vi.fn() });
+  const bookmark = vi.fn();
+  const editor = new DocumentEditor(mount, source, { change, formatting, selection: vi.fn(), undo: vi.fn(), redo: vi.fn(), save: vi.fn(), bookmark });
   editors.push(editor);
-  return { editor, mount, change, formatting };
+  return { editor, mount, change, formatting, bookmark };
 }
 afterEach(() => { editors.splice(0).forEach(e => e.destroy()); document.body.replaceChildren(); });
 
@@ -456,4 +457,30 @@ it("keeps unfinished inline backticks literal until closed and does not turn pro
   typeText(editor, "example ```");
   pressKey(editor, "Enter");
   expect(editor.editor.isActive("codeBlock")).toBe(false);
+});
+
+it("adds and removes bookmarks from formatted list controls in Edit and Read without editing the list", () => {
+  const source = "- First item\n- **Saved** item\n  - Nested item\n\n1. Numbered item\n\n- [ ] Task item";
+  const { editor, mount, bookmark, change } = create(source);
+  const from = source.indexOf("Saved"), to = source.indexOf("\n", from);
+  for (const editable of [true, false]) {
+    editor.setEditable(editable, false);
+    editor.setBookmarks([{ id: "saved", name: "Saved passage", from, to, quote: source.slice(from, to) }]);
+    const remove = mount.querySelector<HTMLButtonElement>('button[aria-label="Remove bookmark: Saved passage"]')!;
+    expect(remove.getAttribute("aria-pressed")).toBe("true");
+    remove.click();
+    expect(bookmark).toHaveBeenLastCalledWith(expect.any(Number), expect.any(Number), ["saved"]);
+    editor.setBookmarks([]);
+    editor.select(source.indexOf("Nested item"), undefined, false);
+    const nested = [...mount.querySelectorAll("p")].find(node => node.textContent === "Nested item")!;
+    nested.querySelector<HTMLButtonElement>("button")!.click();
+    const [start, end, ids] = bookmark.mock.lastCall!;
+    expect(source.slice(start, end)).toBe("Nested item");
+    expect(ids).toEqual([]);
+    expect(mount.querySelectorAll("ul li").length).toBeGreaterThanOrEqual(4);
+    expect(mount.querySelector("ol li")?.textContent).toBe("Numbered item");
+    expect(mount.querySelector('input[type="checkbox"]')).not.toBeNull();
+  }
+  expect(editor.source).toBe(source);
+  expect(change).not.toHaveBeenCalled();
 });

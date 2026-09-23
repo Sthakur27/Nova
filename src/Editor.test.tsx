@@ -169,3 +169,28 @@ it("toggles Find from the editor and search field while preserving the query", (
     container.remove();
   }
 });
+
+it("removes a saved Source bookmark from its gutter without changing Markdown", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  const ref = createRef<EditorHandle>();
+  const onBookmarks = vi.fn();
+  const text = "- Saved item";
+  try {
+    await act(async () => root.render(<Editor ref={ref} initial={text}
+      bookmarks={[{ id: "saved", name: "Saved item", from: 2, to: text.length, quote: "Saved item" }]}
+      onChange={() => {}} onBookmarks={onBookmarks} onCursor={() => {}} onBookmark={() => {}} onSave={() => {}}
+      isMarkdown showLineNumbers showLineHighlight={false} wordWrap={false} spellcheck={false} />));
+    const button = container.querySelector<HTMLButtonElement>('.cm-bookmark-entry button.is-bookmarked')!;
+    expect(button.title).toBe("Remove bookmark: Saved item");
+    await act(async () => button.click());
+    expect(onBookmarks).toHaveBeenCalledWith([]);
+    expect(ref.current!.text()).toBe(text);
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+    vi.unstubAllGlobals();
+  }
+});

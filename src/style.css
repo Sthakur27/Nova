@@ -2734,7 +2734,7 @@ body[data-tooltips="hidden"] [role="tooltip"] {
   .signal-bell:active { transform: none; }
 }
 
-.line-bookmark-button.is-bookmarked { color: #fff; cursor: default; }
+.line-bookmark-button.is-bookmarked { color: #fff; }
 .line-bookmark-button.is-bookmarked svg { fill: currentColor; }
 .line-bookmark-button.is-bookmarked:hover { background: transparent; }
 .prose .document-bookmarked { position: relative; }
@@ -2877,3 +2877,19 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 .document-area[data-registry="true"] { display: flex; flex-direction: column; }
 .document-area[data-registry="true"] > .registry-validation { flex: 0 0 auto; max-height: 30%; overflow: auto; }
 .document-area[data-registry="true"] > :is(.write-pane, .read-pane) { flex: 1; min-height: 0; height: auto; }
+
+/* Keep bookmark controls separate from list bullets, numbers, and task boxes. */
+.prose .document-bookmark-control { position: relative; }
+.prose .document-bookmark-control::before { content: none; }
+.prose .document-bookmark-button { position: absolute; left: -30px; top: .15em; opacity: .55; }
+.prose .document-bookmark-button:is(.is-bookmarked, :hover, :focus-visible) { opacity: 1; }
+
+.prose :is(li, blockquote) .document-bookmark-button { left: -54px; }
+.editor-group .document-content.prose { padding-inline: clamp(38px, 5cqw, 66px); }
+
+.prose li.document-bookmarked::before,
+.prose li .document-bookmarked::before { left: -50px; }
+.prose pre.document-bookmark-control { padding-left: 44px; }
+.prose pre .document-bookmark-button { left: 8px; }
+.prose :is(td, th) .document-bookmark-control { padding-left: 28px; }
+.prose :is(td, th) .document-bookmark-button { left: 0; }

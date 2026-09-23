@@ -67,7 +67,7 @@ class BookmarkEntry extends GutterMarker {
     const button = document.createElement(this.onBookmark ? "button" : "span");
     if (button instanceof HTMLButtonElement) button.type = "button";
     button.className = `line-bookmark-button${this.name ? " is-bookmarked" : ""}`;
-    button.title = this.name ? `Bookmarked: ${this.name}` : "Bookmark this line or selection";
+    button.title = this.name ? `Remove bookmark: ${this.name}` : "Bookmark this line or selection";
     button.setAttribute("aria-label", button.title);
     if (!this.onBookmark) button.setAttribute("role", "img");
     const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -281,7 +281,9 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
         lineMarker: (v, line) => {
           const saved = v.state.field(bookmarkField).filter(mark =>
             !mark.unresolved && mark.to > mark.from && v.state.doc.lineAt(mark.from).from === line.from);
-          if (saved.length) return new BookmarkEntry(undefined, saved.map(mark => mark.name).join(", "));
+          if (saved.length) return new BookmarkEntry(() => {
+            latest.current.onBookmarks(v.state.field(bookmarkField).filter(mark => !saved.some(item => item.id === mark.id)));
+          }, saved.map(mark => mark.name).join(", "));
           const selection = v.state.selection.main;
           const activeLine = v.state.doc.lineAt(selection.head);
           return line.from === activeLine.from &&
@@ -482,7 +484,14 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
         undo: () => { undo(v); },
         redo: () => { redo(v); },
         save: () => latest.current.onSave(),
-        bookmark: () => latest.current.onBookmark(),
+        bookmark: (from, to, removeIds) => {
+          if (removeIds?.length) {
+            latest.current.onBookmarks(v.state.field(bookmarkField).filter(mark => !removeIds.includes(mark.id)));
+          } else {
+            if (from !== undefined) v.dispatch({ selection: { anchor: from, head: Math.min(to ?? from, from + 500) } });
+            latest.current.onBookmark();
+          }
+        },
         find: () => {
           latest.current.onSourceSearch?.();
           requestAnimationFrame(() => { openSearchPanel(v); });

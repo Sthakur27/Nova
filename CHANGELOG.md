@@ -17,6 +17,8 @@ Entries describe source changes; availability in published installers has not be
 
 #### Fixed
 
+- Bookmark buttons now add and remove passage bookmarks in Markdown Edit and Read, and filled Source gutter bookmarks can be removed directly. Bookmark icons no longer cover list bullets.
+
 - Typing a checkbox marker after a bullet converts that item into a task without changing neighboring items.
 
 ### 2026-09-22
