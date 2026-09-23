@@ -3,7 +3,19 @@ import { ArrowDownToLine, ExternalLink, RefreshCw } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import type { useAppUpdate } from "./useAppUpdate";
 
+type Updater = ReturnType<typeof useAppUpdate>;
+
+export function AppUpdateIndicator({ updater: { phase, version }, onClick }: { updater: Updater; onClick: () => void }) {
+  if (!version || phase === "idle" || phase === "current") return null;
+  const label = phase === "ready" ? "Restart to update Nova" : phase === "downloading" ? "View Nova update download" : `Nova ${version} update available`;
+  return <button className="icon-button app-update-indicator" aria-label={label} title={label} aria-haspopup="dialog" onClick={onClick}>
+    {phase === "ready" ? <RefreshCw size={16} aria-hidden="true" /> : <ArrowDownToLine size={16} aria-hidden="true" />}
+  </button>;
+}
+
 export default function AppUpdate({ updater }: { updater: ReturnType<typeof useAppUpdate> }) {
+  const { checkNow } = updater;
+  useEffect(() => { void checkNow(); }, [checkNow]);
   const [open, setOpen] = useState(false);
   const [readmeError, setReadmeError] = useState("");
   const [openingReadme, setOpeningReadme] = useState(false);
@@ -38,6 +50,13 @@ export default function AppUpdate({ updater }: { updater: ReturnType<typeof useA
         </button>
       </div>
       {readmeError && <p role="alert">{readmeError}</p>}
+      <div role="status" aria-live="polite">
+        {phase === "checking" && <p>Checking for updates…</p>}
+        {phase === "current" && <p>Nova is up to date.</p>}
+      </div>
+      {error && !open && <p role="alert" className="app-update-error">{error}</p>}
+      {(phase === "idle" || phase === "current" || phase === "checking" || (error && phase === "available")) &&
+        <button disabled={busy} onClick={() => void checkNow()}>Check for updates</button>}
       {showUpdate && <div className="settings-row">
         <div><label>Nova {version}</label><p>{phase === "ready" ? "Downloaded and ready to install." : phase === "downloading" ? "Your update is downloading." : "A new version of Nova is available."}</p></div>
         <button className="settings-update-button" data-available={available} aria-label={label} aria-haspopup="dialog" onClick={() => setOpen(true)}>

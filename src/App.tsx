@@ -1,3 +1,4 @@
+import { AppUpdateIndicator } from "./AppUpdate";
 import RegistryValidation from "./RegistryValidation";
 import { documentChanged } from "./documentChanged";
 import SettingDialog from "./SettingDialog";
@@ -1792,6 +1793,7 @@ export default function App() {
           <span>
             nova<span className="brand-period">.</span>
           </span>
+          {desktop && <AppUpdateIndicator updater={appUpdate} onClick={() => setSettingsOpen(true)} />}
           <button className="galaxy-toggle" aria-label="Galaxy mode" aria-pressed={galaxyMode}
             title={galaxyMode ? "Galaxy mode on · Click to turn off" : "Galaxy mode off · Click to turn on"}
             onClick={toggleGalaxy}>

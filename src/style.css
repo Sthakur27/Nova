@@ -2895,3 +2895,5 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 }
 .prose :is(td, th) .document-bookmark-control { padding-left: 28px; }
 .prose :is(td, th) .document-bookmark-button { left: 0; }
+
+.app-update-indicator { color: #c6a4ef; flex-shrink: 0; }

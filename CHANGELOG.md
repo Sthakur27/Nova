@@ -21,6 +21,8 @@ Entries describe source changes; availability in published installers has not be
 
 #### Fixed
 
+- Opening Settings checks for fresh desktop updates without restarting Nova, with visible check status and retry controls. Restored the top-left update indicator.
+
 - Bookmark buttons now add and remove passage bookmarks in Markdown Edit and Read, and filled Source gutter bookmarks can be removed directly. Bookmark icons no longer cover list bullets and align with the first text line in code blocks.
 
 - Typing a checkbox marker after a bullet converts that item into a task without changing neighboring items.

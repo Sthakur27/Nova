@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
-import AppUpdate from "./AppUpdate";
+import AppUpdate, { AppUpdateIndicator } from "./AppUpdate";
 import type { useAppUpdate } from "./useAppUpdate";
 import { invoke } from "@tauri-apps/api/core";
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
@@ -59,5 +59,32 @@ it("reports browser launch failure and lets the user retry", async () => {
     expect(button.disabled).toBe(false);
     await act(async () => button.click());
     expect(host.querySelector('[role="alert"]')).toBeNull();
+  } finally { await act(async () => root.unmount()); }
+});
+
+it.each(["available", "checking", "downloading", "ready", "installing", "idle", "current"] as const)("shows the top-left indicator appropriately while %s", async phase => {
+  const host = document.createElement("div"), root = createRoot(host);
+  const updater = { phase, version: "0.2.42", error: "", progress: undefined, checkNow: vi.fn(), download: vi.fn(), restart: vi.fn() };
+  const onClick = vi.fn();
+  try {
+    await act(async () => root.render(<AppUpdateIndicator updater={updater} onClick={onClick} />));
+    const button = host.querySelector("button");
+    if (phase === "idle" || phase === "current") expect(button).toBeNull();
+    else {
+      expect(button?.getAttribute("aria-label")).toContain("Nova");
+      await act(async () => button!.click());
+      expect(onClick).toHaveBeenCalledOnce();
+    }
+  } finally { await act(async () => root.unmount()); }
+});
+it("shows check failures and lets the user retry without closing Settings", async () => {
+  const host = document.createElement("div"), root = createRoot(host);
+  const updater = { phase: "idle" as const, version: "", error: "Could not check for updates. offline", progress: undefined, checkNow: vi.fn(), download: vi.fn(), restart: vi.fn() };
+  try {
+    await act(async () => root.render(<AppUpdate updater={updater} />));
+    expect(updater.checkNow).toHaveBeenCalledOnce();
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("offline");
+    await act(async () => Array.from(host.querySelectorAll("button")).find(b => b.textContent === "Check for updates")!.click());
+    expect(updater.checkNow).toHaveBeenCalledTimes(2);
   } finally { await act(async () => root.unmount()); }
 });

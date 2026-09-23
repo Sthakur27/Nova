@@ -175,7 +175,7 @@ Recovery drafts help you return to unfinished work; for Local notes, **Save** wr
 
 On desktop, **Settings → About Nova → Open README** opens this guide in your default browser, whether or not an update is available.
 
-Nova checks for updates shortly after launch. An **Update Nova** button appears in Settings only when an update is available. Click it to download, then choose **Restart to update** when ready. Downloads do not interrupt writing.
+Nova checks for updates shortly after launch and whenever Settings opens. A top-left update icon opens Settings when an update is available. An **Update Nova** button appears in Settings only when an update is available. Click it to download, then choose **Restart to update** when ready. Downloads do not interrupt writing.
 
 Before installation, Nova preserves the current session and recovery draft. Finish voice typing and close other Nova windows first; terminal sessions end on restart. Existing installations without this feature need one manual installation of an updater-enabled release.
 

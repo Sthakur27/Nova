@@ -125,3 +125,40 @@ it("does not reinstall if only relaunch failed", async () => {
   await act(async () => state.restart());
   expect(update.install).toHaveBeenCalledOnce();
 });
+it("finds a newly published update when Settings is reopened", async () => {
+  const { default: AppUpdate } = await import("./AppUpdate");
+  function Harness({ settings }: { settings: boolean }) {
+    state = useAppUpdate(true, prepare, release);
+    return settings ? <AppUpdate updater={state} /> : null;
+  }
+  root = createRoot(document.createElement("div"));
+  await act(async () => root.render(<Harness settings={false} />));
+  await act(async () => vi.advanceTimersByTimeAsync(3000));
+  await act(async () => root.render(<Harness settings />));
+  expect(check).toHaveBeenCalledTimes(2);
+  expect(state.phase).toBe("current");
+  await act(async () => root.render(<Harness settings={false} />));
+  vi.mocked(check).mockResolvedValue(update as unknown as Update);
+  await act(async () => root.render(<Harness settings />));
+  expect(check).toHaveBeenCalledTimes(3);
+  expect(state.phase).toBe("available");
+  expect(state.version).toBe(update.version);
+  await act(async () => root.render(<Harness settings />));
+  expect(check).toHaveBeenCalledTimes(3);
+});
+it("preserves an active download and downloaded update when checks are requested", async () => {
+  vi.mocked(check).mockResolvedValue(update as unknown as Update);
+  await mount();
+  await act(async () => state.checkNow());
+  let finish!: () => void;
+  update.download.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+  let pending!: Promise<void>;
+  await act(async () => { pending = state.download(); });
+  await act(async () => state.checkNow());
+  expect(state.phase).toBe("downloading");
+  await act(async () => { finish(); await pending; });
+  await act(async () => state.checkNow());
+  expect(state.phase).toBe("ready");
+  expect(check).toHaveBeenCalledTimes(1);
+  expect(update.close).not.toHaveBeenCalled();
+});
