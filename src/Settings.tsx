@@ -7,7 +7,8 @@ import LineSpacingControl, { type LineSpacing } from "./LineSpacingControl";
 import { commonExtensions } from "./fileExtensions";
 import { useEffect, useId, useRef, useState } from "react";
 import TextWidthControl, { type TextWidth } from "./TextWidthControl";
-import { Check, ExternalLink, Settings2, X } from "lucide-react";
+import { BookOpen, Check, ExternalLink, Settings2, X } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
 
 function Toggle({ title, description, checked, onChange }: {
   title: string; description: string; checked: boolean; onChange: (value: boolean) => void;
@@ -47,6 +48,15 @@ type Props = {
 export default function Settings(props: Props) {
   const [resetting, setResetting] = useState(false);
   const [resetError, setResetError] = useState("");
+  const [readmeError, setReadmeError] = useState("");
+  const [openingReadme, setOpeningReadme] = useState(false);
+  async function openReadme() {
+    setReadmeError("");
+    setOpeningReadme(true);
+    try { await invoke("open_readme"); }
+    catch { setReadmeError("Could not open the README. Check your default browser and try again."); }
+    finally { setOpeningReadme(false); }
+  }
   const resetPending = useRef(false);
   const close = () => { if (!resetPending.current) props.onClose(); };
   async function reset() {
@@ -76,9 +86,12 @@ export default function Settings(props: Props) {
     <header className="settings-header">
       <div className="settings-emblem"><Settings2 size={21} /></div>
       <div><h1 id="settings-title">Settings</h1><p>Make yourself at home.</p></div>
+      {props.updater && <button type="button" className="icon-button settings-help" aria-label="Open README on GitHub"
+        title="Open README on GitHub" disabled={openingReadme || resetting} onClick={() => void openReadme()}><BookOpen size={18} aria-hidden="true" /></button>}
       <button autoFocus className="icon-button" aria-label="Close settings" onClick={close} disabled={resetting}><X size={18} /></button>
     </header>
     <div className="settings-content" aria-busy={resetting}>
+      {readmeError && <p role="alert">{readmeError}</p>}
       <fieldset disabled={resetting} style={{border:0, padding:0, margin:0, minWidth:0}}>
       {props.updater && <AppUpdate updater={props.updater} />}
       <section aria-labelledby="settings-appearance"><h2 id="settings-appearance">Appearance</h2>

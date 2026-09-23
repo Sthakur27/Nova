@@ -1847,6 +1847,7 @@ kbd {
 .settings-header h1 { font-size: 21px; letter-spacing: -.5px; margin: 0 0 5px; font-weight: 550; }
 .settings-header p { margin: 0; color: #92909e; font-size: 12px; }
 .settings-header > button { margin-left: auto; align-self: flex-start; }
+.settings-header > .settings-help + button { margin-left: 0; }
 .settings-content { overflow-y: auto; padding: 4px 28px 12px; }
 .settings-content section { padding: 20px 0 4px; }
 .settings-content section + section { border-top: 1px solid #ffffff0a; margin-top: 10px; }

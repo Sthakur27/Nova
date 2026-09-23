@@ -3,20 +3,22 @@ import { act, type ComponentProps } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
 import Settings from "./Settings";
+import { invoke } from "@tauri-apps/api/core";
 import { confirmCloudReset } from "./confirmCloudReset";
+vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("./confirmCloudReset", () => ({confirmCloudReset:vi.fn()}));
+const noop = vi.fn();
+const props: ComponentProps<typeof Settings> = {
+  tooltips:true,onTooltips:noop,
+  onClose:noop, galaxyPerformance:"high",onGalaxyPerformance:noop,galaxy:false,onGalaxy:noop,lineHighlight:false,onLineHighlight:noop,
+  lineNumbers:false,onLineNumbers:noop,wordWrap:true,onWordWrap:noop,spellcheck:false,onSpellcheck:noop,
+  bookmarks:true,onBookmarks:noop,editorFont:"default",onEditorFont:noop,fontSize:"default",onFontSize:noop,
+  lineSpacing:"default",onLineSpacing:noop,textWidth:"default",onTextWidth:noop,defaultExtension:".txt",onDefaultExtension:noop,storageError:false,
+};
 it("shows reset last only when enabled, confirms, locks controls, and surfaces failure", async () => {
   (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
   HTMLDialogElement.prototype.showModal = vi.fn();
   HTMLDialogElement.prototype.close = vi.fn();
-  const noop = vi.fn();
-  const props: ComponentProps<typeof Settings> = {
-    tooltips:true,onTooltips:noop,
-    onClose:noop, galaxyPerformance:"high",onGalaxyPerformance:noop,galaxy:false,onGalaxy:noop,lineHighlight:false,onLineHighlight:noop,
-    lineNumbers:false,onLineNumbers:noop,wordWrap:true,onWordWrap:noop,spellcheck:false,onSpellcheck:noop,
-    bookmarks:true,onBookmarks:noop,editorFont:"default",onEditorFont:noop,fontSize:"default",onFontSize:noop,
-    lineSpacing:"default",onLineSpacing:noop,textWidth:"default",onTextWidth:noop,defaultExtension:".txt",onDefaultExtension:noop,storageError:false,
-  };
   const host = document.createElement("div"); document.body.append(host);
   const root = createRoot(host);
   let fail!: (error: Error) => void;
@@ -41,4 +43,26 @@ it("shows reset last only when enabled, confirms, locks controls, and surfaces f
     expect(host.querySelector('[role="alert"]')?.textContent).toContain("local notes kept");
     expect(button().disabled).toBe(false);
   } finally { await act(async () => root.unmount()); host.remove(); }
+});
+
+it("opens the header guide without an available update and allows retry after failure", async () => {
+  (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+  HTMLDialogElement.prototype.showModal = vi.fn();
+  HTMLDialogElement.prototype.close = vi.fn();
+  const host = document.createElement("div"), root = createRoot(host);
+  const updater = { phase: "current" as const, version: "", error: "", progress: undefined, checkNow: vi.fn(), download: vi.fn(), restart: vi.fn() };
+  vi.mocked(invoke).mockReset().mockRejectedValueOnce(new Error("No browser")).mockResolvedValue(undefined);
+  try {
+    await act(async () => root.render(<Settings {...props} updater={updater}/>));
+    const help = host.querySelector<HTMLButtonElement>('header button[aria-label="Open README on GitHub"]')!;
+    expect(help).not.toBeNull();
+    await act(async () => help.click());
+    expect(invoke).toHaveBeenCalledWith("open_readme");
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("Could not open the README");
+    expect(help.disabled).toBe(false);
+    await act(async () => help.click());
+    expect(host.querySelector('[role="alert"]')).toBeNull();
+    expect(updater.download).not.toHaveBeenCalled();
+    expect(host.querySelector("dialog")).not.toBeNull();
+  } finally { await act(async () => root.unmount()); }
 });

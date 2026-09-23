@@ -54,6 +54,8 @@ Open **Settings** from the sidebar or with Command-comma / Ctrl-comma. Preferenc
 
 **View → Reading layout** switches Read mode between **Continuous** scrolling and **Pages**. Large notes render in chunks; Pages provides previous/next controls and a page number. The layout preference is remembered.
 
+The **book icon** in the desktop Settings header opens Nova’s README on GitHub in your default browser.
+
 Settings also offers **Galaxy performance**: **High performance** animates hovered and focused glows at up to 60 FPS; **Saver** uses up to 24 FPS and settles effects when you pause. Turn off **Show tooltips** in Settings to hide hover hints.
 
 Galaxy mode also enables motion and glow around the focused workspace. Click the Nova emblem for a three-second **Supernova** effect around the window, even with Galaxy mode off. Reduced-motion preferences replace the burst animation with a steady rim that clears afterward.
@@ -77,6 +79,8 @@ In Markdown **Edit** mode, typing these shortcuts applies formatting immediately
 | `->` or `<-` | Right arrow (→) or left arrow (←), immediately without a trailing space; Backspace restores the typed characters |
 
 The trailing spaces above are part of the shortcut. Press Backspace immediately after a Space-triggered conversion to restore the typed marker. Enter continues a list; Enter on an empty item exits it. Markers inside code remain literal. Source mode keeps Markdown syntax visible; these automatic conversions apply to formatted Edit.
+
+In `.txt` files, typing `->` or `<-` also inserts → or ← immediately. Press Backspace immediately, or Undo, to restore the original characters. Existing text, pasted text, and dictation stay literal.
 
 Formatting buttons highlight the formats active at the cursor or across the selection in Source and formatted Edit. The formatting toolbar includes Undo/Redo, headings 1–6, bold, italic, strikethrough, inline code, code blocks, ordered and unordered lists, tasks, and quotes. In Markdown notes, Command/Ctrl-B and -I apply bold and italic; Command/Ctrl-Shift-X applies strikethrough. Command/Ctrl-Alt-1 through -6 apply headings, and -0 returns to normal text. Command/Ctrl-Shift-7, -8, and -9 apply numbered lists, bullets, and quotes. In formatted Edit, Tab / Shift-Tab nest or outdent list items; in Source, they indent or outdent Markdown by four spaces. Source formatting preserves existing indentation, and Read mode recognizes nested numbered lists that start above 1. Command-A / Ctrl-A selects the whole focused document, including nested lists. Source selection highlighting covers line breaks and blank lines; energy effects follow the selected passage in Source and the fallback reader.
 

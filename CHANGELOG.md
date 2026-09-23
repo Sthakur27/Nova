@@ -12,7 +12,8 @@ Entries describe source changes; availability in published installers has not be
 
 #### Added
 
-- Markdown Edit converts `->` and `<-` to → and ← as you type, outside code. Press Backspace immediately to restore the original characters.
+- A book icon in the desktop Settings header opens the README on GitHub in your default browser.
+- Markdown Edit (outside code) and `.txt` files convert `->` and `<-` to → and ← as you type. Press Backspace immediately to restore the original characters.
 - A **Code block** toolbar button and Command/Ctrl-Alt-C toggle multiline code in Markdown Edit and Source. In Edit, triple backticks followed by Enter also start a code block, optionally with a language name.
 - Markdown Edit accepts `1` + Space and `1)` + Space to start numbered lists, alongside standard Markdown typing shortcuts.
 

@@ -173,7 +173,7 @@ Recovery drafts help you return to unfinished work; for Local notes, **Save** wr
 
 ## App updates
 
-On desktop, **Settings → About Nova → Open README** opens this guide in your default browser, whether or not an update is available.
+On desktop, the **book icon** in the Settings header opens this guide on GitHub in your default browser. **Settings → About Nova → Open README** offers the same link, whether or not an update is available.
 
 Nova checks for updates shortly after launch and whenever Settings opens. A top-left update icon opens Settings when an update is available. An **Update Nova** button appears in Settings only when an update is available. Click it to download, then choose **Restart to update** when ready. Downloads do not interrupt writing.
 
