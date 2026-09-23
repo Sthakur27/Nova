@@ -196,12 +196,14 @@ export type FormatAction =
   | "italic"
   | "strike"
   | "code"
+  | "codeBlock"
   | "bullet"
   | "numbered"
   | "task"
   | "quote";
 export function formatTransaction(state: EditorState, action: FormatAction) {
   const { from, to } = state.selection.main;
+  if (action === "codeBlock") return codeBlockTransaction(state);
   const wrappers: Partial<Record<FormatAction, string>> = {
     bold: "**",
     italic: "*",
@@ -246,7 +248,7 @@ export function formatTransaction(state: EditorState, action: FormatAction) {
     bullet: "- ",
     task: "- [ ] ",
     quote: "> ",
-  }[action as Exclude<FormatAction, "bold" | "italic" | "strike" | "code">];
+  }[action as Exclude<FormatAction, "bold" | "italic" | "strike" | "code" | "codeBlock">];
   const first = state.doc.lineAt(from),
     last = state.doc.lineAt(
       to > from && state.doc.lineAt(to).from === to ? to - 1 : to,
@@ -273,6 +275,41 @@ export function formatTransaction(state: EditorState, action: FormatAction) {
   });
 }
 
+/** Toggle fences around whole source lines, keeping their text and selection. */
+function codeBlockTransaction(state: EditorState) {
+  const { from, to } = state.selection.main;
+  for (let node = syntaxTree(state).resolveInner(from, 1); node; node = node.parent!) {
+    if (node.name !== "FencedCode" || to > node.to) continue;
+    const opening = state.doc.lineAt(node.from);
+    const closing = state.doc.lineAt(node.to);
+    const closed = node.lastChild?.name === "CodeMark" && closing.number > opening.number;
+    const changes = state.changes([
+      { from: opening.from, to: Math.min(opening.to + 1, state.doc.length), insert: "" },
+      ...(closed ? [{ from: Math.max(opening.to + 1, closing.from - 1), to: closing.to, insert: "" }] : []),
+    ]);
+    return state.update({ changes, selection: state.selection.map(changes), userEvent: "input" });
+  }
+  const first = state.doc.lineAt(from);
+  const last = state.doc.lineAt(to > from && state.doc.lineAt(to).from === to ? to - 1 : to);
+  const content = state.doc.sliceString(first.from, last.to);
+  // Longer fences keep backtick runs in the selected code literal.
+  let fenceLength = 3;
+  for (const match of content.matchAll(/`+/g)) fenceLength = Math.max(fenceLength, match[0].length + 1);
+  const fence = "`".repeat(fenceLength);
+  const changes = state.changes([
+    { from: first.from, insert: fence + "\n" },
+    { from: last.to, insert: "\n" + fence },
+  ]);
+  return state.update({
+    changes,
+    selection: {
+      anchor: Math.min(state.selection.main.anchor, last.to) + fence.length + 1,
+      head: Math.min(state.selection.main.head, last.to) + fence.length + 1,
+    },
+    userEvent: "input",
+  });
+}
+
 export function indentationKeymap(enabled: () => boolean): KeyBinding[] {
   return [{
     key: "Tab",
@@ -289,6 +326,7 @@ export function paragraphStyle(state: EditorState): FormatAction {
 export const formatShortcuts: { key: string; action: FormatAction }[] = [
   { key: "Mod-b", action: "bold" },
   { key: "Mod-i", action: "italic" },
+  { key: "Mod-Alt-c", action: "codeBlock" },
   { key: "Mod-Shift-x", action: "strike" },
   { key: "Mod-Alt-0", action: "paragraph" },
   ...([1, 2, 3, 4, 5, 6] as const).map(level => ({ key: `Mod-Alt-${level}`, action: `h${level}` as FormatAction })),
@@ -310,6 +348,7 @@ export function activeFormatting(state: EditorState): FormatAction[] {
   const formats = new Set<FormatAction>();
   const names: Record<string, FormatAction> = {
     StrongEmphasis: "bold", Emphasis: "italic", Strikethrough: "strike", InlineCode: "code",
+    FencedCode: "codeBlock",
     BulletList: "bullet", OrderedList: "numbered", Task: "task", Blockquote: "quote",
   };
   for (let node = syntaxTree(state).resolveInner(from, 1); node; node = node.parent!) {

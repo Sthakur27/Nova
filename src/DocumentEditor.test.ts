@@ -416,3 +416,44 @@ it("keeps numbered start values and leaves bare numbers other than 1 literal", (
   expect(editor.editor.state.doc.firstChild?.type.name).toBe("paragraph");
   expect(editor.editor.state.doc.textContent).toBe("2026 ");
 });
+
+it.each(["```", "```ts", "~~~python"])("starts multiline code with %s then Enter", fence => {
+  const { editor } = create("");
+  typeText(editor, fence);
+  pressKey(editor, "Enter");
+  expect(editor.editor.state.doc.firstChild?.type.name).toBe("codeBlock");
+  expect(editor.activeFormatting()).toContain("codeBlock");
+  typeText(editor, "first");
+  pressKey(editor, "Enter");
+  typeText(editor, "**literal**");
+  expect(editor.editor.state.doc.firstChild?.textContent).toBe("first\n**literal**");
+  pressKey(editor, "Enter");
+  pressKey(editor, "Enter");
+  pressKey(editor, "Enter");
+  expect(editor.editor.isActive("codeBlock")).toBe(false);
+});
+
+it("toggles code blocks with the formatting action and preserves neighboring Markdown", () => {
+  const source = "*   untouched\n\nhello";
+  const { editor } = create(source);
+  editor.select(source.indexOf("hello"), undefined, false);
+  editor.format("codeBlock");
+  expect(editor.activeFormatting()).toContain("codeBlock");
+  expect(editor.source).toBe("*   untouched\n\n```\nhello\n```");
+  editor.format("codeBlock");
+  expect(editor.activeFormatting()).not.toContain("codeBlock");
+  expect(editor.source).toBe(source);
+});
+
+it("keeps unfinished inline backticks literal until closed and does not turn prose fences into blocks", () => {
+  const { editor } = create("");
+  typeText(editor, "`code");
+  expect(editor.editor.state.doc.textContent).toBe("`code");
+  typeText(editor, "`");
+  expect(editor.editor.state.doc.textContent).toBe("code");
+  expect(editor.editor.state.doc.firstChild?.firstChild?.marks[0].type.name).toBe("code");
+  editor.setSource("");
+  typeText(editor, "example ```");
+  pressKey(editor, "Enter");
+  expect(editor.editor.isActive("codeBlock")).toBe(false);
+});

@@ -1,4 +1,4 @@
-import { Bold, Italic, Strikethrough, Code, List, ListOrdered, ListTodo, Quote, Undo2, Redo2 } from "lucide-react";
+import { Bold, Italic, Strikethrough, Code, SquareCode, List, ListOrdered, ListTodo, Quote, Undo2, Redo2 } from "lucide-react";
 import { formatShortcuts, type FormatAction } from "./richMarkdown";
 const mac = typeof navigator !== "undefined" && navigator.platform.toLowerCase().includes("mac");
 function shortcut(key: string) {
@@ -9,6 +9,7 @@ const controls = [
   { action: "italic", Icon: Italic, label: "Italic" },
   { action: "strike", Icon: Strikethrough, label: "Strikethrough" },
   { action: "code", Icon: Code, label: "Inline code" },
+  { action: "codeBlock", Icon: SquareCode, label: "Code block" },
   { action: "bullet", Icon: List, label: "Bullet list" },
   { action: "numbered", Icon: ListOrdered, label: "Numbered list" },
   { action: "task", Icon: ListTodo, label: "Task list" },

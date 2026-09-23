@@ -126,7 +126,7 @@ Nova for **iPhone and iPad is in development**. The same quiet writing space is 
 
 1. **Open a folder.** Click **Open Folder** and choose where you keep your notes. Each window focuses one local folder. Opening another folder creates a new window; **Recent** reopens a folder with its saved tabs and drafts.
 2. **Start a note.** Open a file from the sidebar, or click **+** beside the tabs to create one. New installations default to Markdown (`.md`) for headings, lists, and formatting. Choose another default file extension in Settings; existing preferences are preserved.
-3. **Choose your view.** For Markdown notes, **Edit** lets you write with formatting, **Read** gives you a reading view, and **Source** shows the underlying text. In Edit, type `-` + Space for bullets or `1` + Space for numbering; [Markdown typing shortcuts](docs/user-guide.md#workspace-and-formatting) also cover headings, tasks, quotes, and inline formatting.
+3. **Choose your view.** For Markdown notes, **Edit** lets you write with formatting, **Read** gives you a reading view, and **Source** shows the underlying text. In Edit, type `-` + Space for bullets or `1` + Space for numbering; [Markdown typing shortcuts](docs/user-guide.md#workspace-and-formatting) also cover headings, tasks, quotes, and inline formatting. Use **Code block** in the toolbar for multiline code, or type three backticks and Enter.
 4. **Mark a good passage.** Select some text and use **Add bookmark** in the bookmarks panel. Give it a name so you can find it again.
 5. **Save your work.** For Local notes, press **⌘ S** on Mac or **Ctrl S** on Windows to write changes to the original file. Cloud notes autosave. Nova also keeps recovery drafts on this computer as you work.
 

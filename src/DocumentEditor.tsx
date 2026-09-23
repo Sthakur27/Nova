@@ -127,6 +127,15 @@ export class DocumentEditor {
           "Mod-Shift-z": () => { if (!owner.editor.isEditable) return false; callbacks.redo(); return true; },
           "Mod-y": () => { if (!owner.editor.isEditable) return false; callbacks.redo(); return true; },
           "Mod-Shift-b": () => { callbacks.bookmark(); return true; },
+          Enter: () => {
+            const { empty, $from } = owner.editor.state.selection;
+            if (!owner.editor.isEditable || !empty || $from.parent.type.name !== "paragraph"
+              || $from.parentOffset !== $from.parent.content.size) return false;
+            const fence = /^(`{3,}|~{3,})([\w+-]*)$/.exec($from.parent.textContent);
+            if (!fence) return false;
+            return owner.editor.chain().deleteRange({ from: $from.start(), to: $from.end() })
+              .setCodeBlock(fence[2] ? { language: fence[2] } : undefined).run();
+          },
           Tab: () => owner.editor.isEditable && (owner.editor.commands.sinkListItem("taskItem") || owner.editor.commands.sinkListItem("listItem")),
           "Shift-Tab": () => owner.editor.isEditable && (owner.editor.commands.liftListItem("taskItem") || owner.editor.commands.liftListItem("listItem")),
           ...Object.fromEntries(formatShortcuts.map(({ key, action }) => [key, () => { if (!owner.editor.isEditable) return false; owner.format(action); return true; }])),
@@ -291,7 +300,7 @@ export class DocumentEditor {
   }
   activeFormatting(): FormatAction[] {
     const formats: [FormatAction, string][] = [
-      ["bold", "bold"], ["italic", "italic"], ["strike", "strike"], ["code", "code"],
+      ["bold", "bold"], ["italic", "italic"], ["strike", "strike"], ["code", "code"], ["codeBlock", "codeBlock"],
       ["bullet", "bulletList"], ["numbered", "orderedList"], ["task", "taskList"], ["quote", "blockquote"],
     ];
     return formats.filter(([, name]) => this.editor.isActive(name)).map(([action]) => action);
@@ -374,6 +383,7 @@ export class DocumentEditor {
       case "italic": chain.toggleItalic().run(); break;
       case "strike": chain.toggleStrike().run(); break;
       case "code": chain.toggleCode().run(); break;
+      case "codeBlock": chain.toggleCodeBlock().run(); break;
       case "bullet": chain.toggleBulletList().run(); break;
       case "numbered": chain.toggleOrderedList().run(); break;
       case "task": chain.toggleTaskList().run(); break;

@@ -132,3 +132,38 @@ it("reports source formatting and clears it outside formatted text", () => {
   expect(active(doc.indexOf("italic") + 2)).toEqual(["italic"]);
   expect(active(doc.indexOf("code") + 2)).toEqual(["code"]);
 });
+
+it.each(["", "first\nsecond", "const fence = '```';"])("toggles a source code block without losing text: %j", doc => {
+  let state = EditorState.create({ doc, selection: { anchor: 0, head: doc.length }, extensions: [markdown(), history()] });
+  state = formatTransaction(state, "codeBlock").state;
+  expect(activeFormatting(state)).toContain("codeBlock");
+  expect(state.sliceDoc(state.selection.main.from, state.selection.main.to)).toBe(doc);
+  expect(syntaxTree(state).topNode.firstChild?.name).toBe("FencedCode");
+  state = formatTransaction(state, "codeBlock").state;
+  expect(state.doc.toString()).toBe(doc);
+});
+
+it("wraps complete source lines and leaves surrounding Markdown unchanged", () => {
+  const doc = "# Title\n\nfirst\nsecond\n\n*   untouched";
+  let state = EditorState.create({ doc, selection: { anchor: 18, head: 11 }, extensions: [markdown()] });
+  state = formatTransaction(state, "codeBlock").state;
+  expect(state.doc.toString()).toBe("# Title\n\n```\nfirst\nsecond\n```\n\n*   untouched");
+  expect(state.selection.main.anchor).toBeGreaterThan(state.selection.main.head);
+  state = formatTransaction(state, "codeBlock").state;
+  expect(state.doc.toString()).toBe(doc);
+  expect(state.selection.main.anchor).toBe(18);
+  expect(state.selection.main.head).toBe(11);
+});
+
+it("removes language and tilde fences when toggling source code off", () => {
+  const state = EditorState.create({ doc: "~~~ts\nlet x = 1;\n~~~", selection: { anchor: 10 }, extensions: [markdown()] });
+  expect(formatTransaction(state, "codeBlock").state.doc.toString()).toBe("let x = 1;");
+});
+
+it("keeps a line-boundary selection inside the new fences and excludes the next line", () => {
+  const state = EditorState.create({ doc: "one\ntwo", selection: { anchor: 0, head: 4 }, extensions: [markdown()] });
+  const next = formatTransaction(state, "codeBlock").state;
+  expect(next.doc.toString()).toBe("```\none\n```\ntwo");
+  expect(next.sliceDoc(next.selection.main.from, next.selection.main.to)).toBe("one");
+  expect(activeFormatting(next)).toContain("codeBlock");
+});
