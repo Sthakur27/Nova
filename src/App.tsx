@@ -520,6 +520,7 @@ export default function App() {
     refreshDirty();
     editGeneration.current++;
     setEditVersion(value => value + 1);
+    setPreview(editor.current?.text() ?? "");
     // The editor immediately supplies the updated anchors via onBookmarks.
   }, [pin, refreshDirty]);
   useEffect(() => {
@@ -1675,7 +1676,6 @@ export default function App() {
                 onCursor={(line, col) => { if (isActive) setCursor([line, col]); }}
                 onBookmark={beginBookmark}
                 onSave={() => void save()}
-                onSourceSearch={() => setMode("source")}
                 isMarkdown={isMarkdown}
                 filePath={path}
                 onRename={path === ".nova" ? undefined : name => renameFile(workspace, path, name)}
@@ -2053,7 +2053,7 @@ export default function App() {
           </button>
         </div>
         </div>
-        {data && mode === "read" && <ReadFind
+        {data && (mode === "read" || (mode === "edit" && isMarkdown && supportsDocumentView(data.text.length, editorSnapshot?.state.doc.length ?? 0, preview.length))) && <ReadFind
           key={JSON.stringify([workspace.root, path, data.revision])}
           text={preview}
           disabled={!!(syncFolder || settingsOpen || activeSettingId || palette || bookmarkDraft || renameTarget || fileAction)}

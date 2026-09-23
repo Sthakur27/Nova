@@ -36,7 +36,7 @@ import {
   GutterMarker,
 } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, undo, redo, selectAll } from "@codemirror/commands";
-import { searchKeymap, highlightSelectionMatches, openSearchPanel } from "@codemirror/search";
+import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { markdown } from "@codemirror/lang-markdown";
 import {
   syntaxHighlighting,
@@ -137,7 +137,6 @@ type Props = {
   onCursor: (line: number, col: number) => void;
   onBookmark: () => void;
   onSave: () => void;
-  onSourceSearch?: () => void;
   isMarkdown: boolean;
   filePath?: string;
   onRename?: (name: string) => Promise<void>;
@@ -491,10 +490,6 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
             if (from !== undefined) v.dispatch({ selection: { anchor: from, head: Math.min(to ?? from, from + 500) } });
             latest.current.onBookmark();
           }
-        },
-        find: () => {
-          latest.current.onSourceSearch?.();
-          requestAnimationFrame(() => { openSearchPanel(v); });
         },
       });
       if (documentPane.current) {

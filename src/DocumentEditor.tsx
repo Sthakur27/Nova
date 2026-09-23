@@ -92,7 +92,6 @@ type Callbacks = {
   redo: () => void;
   save: () => void;
   bookmark: (from?: number, to?: number, removeIds?: string[]) => void;
-  find?: () => void;
   formatting?: (active: FormatAction[]) => void;
 };
 type Part = { raw: string; gap: string };
@@ -122,7 +121,6 @@ export class DocumentEditor {
           "Ctrl-a": () => owner.editor.commands.selectAll(),
           "Mod-a": () => owner.editor.commands.selectAll(),
           "Mod-s": () => { callbacks.save(); return true; },
-          "Mod-f": () => { callbacks.find?.(); return !!callbacks.find; },
           "Mod-z": () => { if (!owner.editor.isEditable) return false; callbacks.undo(); return true; },
           "Mod-Shift-z": () => { if (!owner.editor.isEditable) return false; callbacks.redo(); return true; },
           "Mod-y": () => { if (!owner.editor.isEditable) return false; callbacks.redo(); return true; },

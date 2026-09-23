@@ -4,7 +4,7 @@ import { EditorState } from "@codemirror/state";
 import { SearchQuery } from "@codemirror/search";
 import { searchMatches } from "./editorSearch";
 
-/** Mounted only for Read mode; capture Find before the rich editor's source shortcut. */
+/** Find in formatted Edit and Read without changing the document mode. */
 export default function ReadFind({ text, disabled, onJump }: {
   text: string; disabled: boolean; onJump: (from: number, to: number) => void;
 }) {
