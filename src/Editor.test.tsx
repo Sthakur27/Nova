@@ -194,3 +194,57 @@ it("removes a saved Source bookmark from its gutter without changing Markdown", 
     vi.unstubAllGlobals();
   }
 });
+
+it.each(["notes.txt", "NOTES.TXT", "notes.md", "code.ts"])("handles typed arrows according to file type in %s", async filePath => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  const ref = createRef<EditorHandle>();
+  const converts = /\.txt$/i.test(filePath);
+  try {
+    await act(async () => root.render(<Editor ref={ref} initial="existing -> <- " filePath={filePath}
+      bookmarks={[]} onChange={() => {}} onBookmarks={() => {}}
+      onCursor={() => {}} onBookmark={() => {}} onSave={() => {}}
+      isMarkdown={filePath.endsWith(".md")} showLineNumbers={false} showLineHighlight={false}
+      wordWrap={false} spellcheck={false} />));
+    const view = EditorView.findFromDOM(container.querySelector(".cm-editor")!)!;
+    const type = (text: string) => {
+      for (const char of text) {
+        const { from, to } = view.state.selection.main;
+        const insert = () => view.state.update({ changes: { from, to, insert: char },
+          selection: { anchor: from + char.length }, userEvent: "input.type" });
+        if (!view.state.facet(EditorView.inputHandler).some(handler => handler(view, from, to, char, insert)))
+          view.dispatch(insert());
+      }
+    };
+    expect(ref.current!.text()).toBe("existing -> <- ");
+    await act(async () => {
+      view.dispatch({ selection: { anchor: view.state.doc.length } });
+      type("->");
+    });
+    expect(ref.current!.text()).toBe("existing -> <- " + (converts ? "→" : "->"));
+    if (converts) {
+      await act(async () => ref.current!.undo());
+      expect(ref.current!.text()).toBe("existing -> <- ->");
+      await act(async () => ref.current!.redo());
+      expect(ref.current!.text()).toBe("existing -> <- →");
+    }
+    await act(async () => type(" left<-"));
+    expect(ref.current!.text()).toContain(converts ? " left←" : " left<-");
+    if (converts) {
+      await act(async () => {
+        expect(runScopeHandlers(view, new KeyboardEvent("keydown", { key: "Backspace" }), "editor")).toBe(true);
+      });
+      expect(ref.current!.text()).toContain(" left<-");
+      await act(async () => type(" literal"));
+      expect(ref.current!.text()).toContain(" left<- literal");
+    }
+    await act(async () => view.dispatch(view.state.replaceSelection(" pasted -> <-"), { userEvent: "input.paste" }));
+    expect(ref.current!.text()).toContain(" pasted -> <-");
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+    vi.unstubAllGlobals();
+  }
+});

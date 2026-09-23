@@ -1,6 +1,7 @@
 import { mobile } from "./platform";
 import { startEditorWindowDrag } from "./editorWindowDrag";
 import { editorSearch } from "./editorSearch";
+import { typedArrows } from "./typedArrows";
 import { codeExtensions, codeLanguage } from "./codeLanguages";
 import { DocumentEditor } from "./DocumentEditor";
 import { supportsDocumentView } from "./documentLimits";
@@ -271,6 +272,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
     const bookmarkEntry = new BookmarkEntry(() => latest.current.onBookmark());
     const extensions = [
       history(),
+      typedArrows(() => /\.txt$/i.test(latest.current.filePath ?? "")),
       // Fill selected line breaks and blank lines without native selection gaps.
       drawSelection({ drawRangeCursor: true }),
       numbering.current.of(p.showLineNumbers ? lineNumbers() : []),
