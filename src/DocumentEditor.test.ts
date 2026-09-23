@@ -356,6 +356,41 @@ it.each([["**bold**", "bold"], ["*italic*", "italic"], ["~~strike~~", "strike"],
   expect(editor.editor.state.doc.firstChild?.firstChild?.marks[0].type.name).toBe(mark);
 });
 
+it.each([["->", "→"], ["<-", "←"]])("converts typed %s to %s and restores it with Backspace", (typed, arrow) => {
+  const { editor } = create("");
+  typeText(editor, typed);
+  expect(editor.editor.state.doc.textContent).toBe(arrow);
+  expect(editor.source).toBe(arrow);
+  pressKey(editor, "Backspace");
+  expect(editor.editor.state.doc.textContent).toBe(typed);
+  typeText(editor, " literal");
+  expect(editor.editor.state.doc.textContent).toBe(typed + " literal");
+});
+
+it("continues typing after arrows while preserving untouched source and formatting", () => {
+  const source = "*   untouched\r\n\r\n**Start**";
+  const { editor } = create(source);
+  editor.select(source.length - 2, undefined, false);
+  typeText(editor, "->next<-end");
+  expect(editor.source).toBe("*   untouched\r\n\r\n**Start→next←end**");
+});
+
+it.each(["`code`", "```\ncode\n```"])("keeps typed arrows literal in %j", source => {
+  const { editor } = create(source);
+  editor.editor.commands.setTextSelection(3);
+  typeText(editor, "-> <-");
+  expect(editor.editor.state.doc.textContent).toBe("co-> <-de");
+});
+
+it("preserves existing and programmatically inserted arrow markers", () => {
+  const source = "A -> B <- C";
+  const { editor, change } = create(source);
+  expect(editor.source).toBe(source);
+  expect(change).not.toHaveBeenCalled();
+  editor.editor.commands.insertContent("-> <- ");
+  expect(editor.editor.state.doc.textContent).toBe("-> <- " + source);
+});
+
 it("undoes a typing conversion with Backspace and continues and exits lists with Enter", () => {
   const { editor } = create("");
   typeText(editor, "- ");

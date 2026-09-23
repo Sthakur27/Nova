@@ -74,6 +74,7 @@ In Markdown **Edit** mode, typing these shortcuts applies formatting immediately
 | Three backticks or `~~~`, then Space or Enter | Code block; optionally add a language name before Enter, such as `ts` or `python` |
 | `---` at the start | Horizontal rule |
 | `**bold**`, `*italic*`, `~~strike~~`, or backticks around text | Bold, italic, strikethrough, or inline code |
+| `->` or `<-` | Right arrow (→) or left arrow (←), immediately without a trailing space; Backspace restores the typed characters |
 
 The trailing spaces above are part of the shortcut. Press Backspace immediately after a Space-triggered conversion to restore the typed marker. Enter continues a list; Enter on an empty item exits it. Markers inside code remain literal. Source mode keeps Markdown syntax visible; these automatic conversions apply to formatted Edit.
 

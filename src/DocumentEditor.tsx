@@ -1,4 +1,4 @@
-import { Editor, Extension, InputRule, Node, wrappingInputRule, type JSONContent } from "@tiptap/core";
+import { Editor, Extension, InputRule, Node, textInputRule, wrappingInputRule, type JSONContent } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown as MarkdownExtension } from "@tiptap/markdown";
 import { TaskList, TaskItem, BulletList, OrderedList } from "@tiptap/extension-list";
@@ -116,6 +116,12 @@ export class DocumentEditor {
     const owner = this;
     const shortcuts = Extension.create({
       name: "documentControls", priority: 1000,
+      addInputRules() {
+        return [
+          textInputRule({ find: /->$/, replace: "→" }),
+          textInputRule({ find: /<-$/, replace: "←" }),
+        ];
+      },
       addKeyboardShortcuts() {
         return {
           "Ctrl-a": () => owner.editor.commands.selectAll(),
