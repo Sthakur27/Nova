@@ -2890,6 +2890,11 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 .prose li.document-bookmarked::before,
 .prose li .document-bookmarked::before { left: -50px; }
 .prose pre.document-bookmark-control { padding-left: 44px; }
-.prose pre .document-bookmark-button { left: 8px; }
+.prose pre .document-bookmark-button {
+  left: 8px;
+  font: inherit;
+  /* Center the 24px control on the first code line, below the block padding. */
+  top: calc(18px + .5lh - 12px);
+}
 .prose :is(td, th) .document-bookmark-control { padding-left: 28px; }
 .prose :is(td, th) .document-bookmark-button { left: 0; }
