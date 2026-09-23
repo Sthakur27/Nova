@@ -8,6 +8,16 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 Entries describe source changes; availability in published installers has not been verified. The initial backfill covers commits through `7d47fbe`.
 
+### 2026-09-23
+
+#### Added
+
+- Markdown Edit accepts `1` + Space and `1)` + Space to start numbered lists, alongside standard Markdown typing shortcuts.
+
+#### Fixed
+
+- Typing a checkbox marker after a bullet converts that item into a task without changing neighboring items.
+
 ### 2026-09-22
 
 #### Added

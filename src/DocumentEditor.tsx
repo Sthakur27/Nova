@@ -1,4 +1,4 @@
-import { Editor, Extension, Node, type JSONContent } from "@tiptap/core";
+import { Editor, Extension, InputRule, Node, wrappingInputRule, type JSONContent } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown as MarkdownExtension } from "@tiptap/markdown";
 import { TaskList, TaskItem, BulletList, OrderedList } from "@tiptap/extension-list";
@@ -34,6 +34,25 @@ const DocumentImage = Image.extend({
   renderHTML: ({ node }) => ["span", { class: "image-placeholder", "data-image-src": node.attrs.src }, `Image: ${node.attrs.alt || "attachment"} (image preview is not enabled yet)`],
 }).configure({ inline: true, allowBase64: false });
 const DocumentTask = TaskItem.extend({
+  addInputRules() {
+    return [new InputRule({
+      find: /^\[([ xX]?)\] $/,
+      handler: ({ state, range, match, chain }) => {
+        const checked = match[1].toLowerCase() === "x";
+        const { $from } = state.selection;
+        // Convert only the current bullet/numbered item; retain its siblings.
+        if ($from.depth >= 2 && $from.node(-1).type.name === "listItem") {
+          state.tr.delete(range.from, range.to)
+            .setNodeMarkup($from.before($from.depth - 1), this.type, { checked });
+        } else if ($from.depth === 1) {
+          chain().deleteRange(range).wrapIn("taskList")
+            .updateAttributes("taskItem", { checked }).run();
+        } else {
+          return null;
+        }
+      },
+    })];
+  },
   addNodeView() {
     return ({ node, editor, getPos }) => {
       const dom = document.createElement("li");
@@ -144,7 +163,18 @@ export class DocumentEditor {
       element,
       extensions: [
         StarterKit.configure({ undoRedo: false, underline: false, trailingNode: false, bulletList: false, orderedList: false, link: { openOnClick: false, autolink: false } }),
-        BulletList.extend({ content: "(listItem | taskItem)+" }), OrderedList.extend({ content: "(listItem | taskItem)+" }),
+        BulletList.extend({ content: "(listItem | taskItem)+" }), OrderedList.extend({
+          content: "(listItem | taskItem)+",
+          addInputRules() {
+            return [wrappingInputRule({
+              find: /^(1|\d+[.)]) $/,
+              type: this.type,
+              getAttributes: match => ({ start: parseInt(match[1], 10) }),
+              joinPredicate: (match, node) => (!node.attrs.type || node.attrs.type === "1")
+                && node.attrs.start + node.childCount === parseInt(match[1], 10),
+            })];
+          },
+        }),
         TaskList, DocumentTask,
         TableKit.configure({ table: { resizable: false } }), DocumentImage, RawMarkdown.configure({ toggle: (node, relative, checked) => {
           let offset = this.prefix.length;

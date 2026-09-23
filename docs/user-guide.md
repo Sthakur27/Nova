@@ -62,6 +62,21 @@ Scroll above the first line or below the last line to make room around your note
 
 Collapse navigation, bookmarks, top bars, or the status bar with the edge controls. Drag a side-panel divider to resize it; double-click to reset. Focused dividers support arrow keys (Shift for larger steps), Home/End, and Enter to reset. Panel widths and visibility are remembered. **Command-G / Ctrl-G** toggles focus mode: entering hides all panels, and exiting expands them all, including any previously collapsed panels. The exit control does the same.
 
+In Markdown **Edit** mode, typing these shortcuts applies formatting immediately:
+
+| Type | Result |
+| --- | --- |
+| `- `, `* `, or `+ ` at the start of a paragraph | Bulleted list |
+| `1 `, `1. `, or `1) ` at the start | Numbered list; a number followed by `.` or `)` can start above 1 |
+| `[ ] ` or `[x] ` at the start, including after a bullet | Unchecked or checked task |
+| `# ` through `###### ` at the start | Heading levels 1–6 |
+| `> ` at the start | Quote |
+| Three backticks or `~~~`, then Space | Code block; optionally type a lowercase language name before Space |
+| `---` at the start | Horizontal rule |
+| `**bold**`, `*italic*`, `~~strike~~`, or backticks around text | Bold, italic, strikethrough, or inline code |
+
+The trailing spaces above are part of the shortcut. Press Backspace immediately after a conversion to restore the typed marker. Enter continues a list; Enter on an empty item exits it. Markers inside code remain literal. Source mode keeps Markdown syntax visible; these automatic conversions apply to formatted Edit.
+
 Formatting buttons highlight the formats active at the cursor or across the selection in Source and formatted Edit. The formatting toolbar includes Undo/Redo, headings 1–6, bold, italic, strikethrough, inline code, ordered and unordered lists, tasks, and quotes. In Markdown notes, Command/Ctrl-B and -I apply bold and italic; Command/Ctrl-Shift-X applies strikethrough. Command/Ctrl-Alt-1 through -6 apply headings, and -0 returns to normal text. Command/Ctrl-Shift-7, -8, and -9 apply numbered lists, bullets, and quotes. In formatted Edit, Tab / Shift-Tab nest or outdent list items; in Source, they indent or outdent Markdown by four spaces. Source formatting preserves existing indentation, and Read mode recognizes nested numbered lists that start above 1. Command-A / Ctrl-A selects the whole focused document, including nested lists. Source selection highlighting covers line breaks and blank lines; energy effects follow the selected passage in Source and the fallback reader.
 
 ## Terminal

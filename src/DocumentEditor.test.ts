@@ -315,3 +315,104 @@ it("keeps bookmark markers on the saved block in Edit and Read without highlight
   expect(editor.source).toBe(source);
   expect(change).not.toHaveBeenCalled();
 });
+
+// Exercise the same input-rule path as browser typing, one character at a time.
+function typeText(editor: DocumentEditor, text: string) {
+  const view = editor.editor.view;
+  for (const character of text) {
+    const { from, to } = view.state.selection;
+    const handled = view.someProp("handleTextInput", handler => handler(view, from, to, character, () => view.state.tr.insertText(character, from, to)));
+    if (!handled) view.dispatch(view.state.tr.insertText(character, from, to));
+  }
+}
+function pressKey(editor: DocumentEditor, key: string) {
+  const view = editor.editor.view;
+  return view.someProp("handleKeyDown", handler => handler(view, new KeyboardEvent("keydown", { key })));
+}
+
+it.each([
+  ["- ", "bulletList"], ["* ", "bulletList"], ["+ ", "bulletList"],
+  ["1 ", "orderedList"], ["1. ", "orderedList"], ["1) ", "orderedList"], ["3. ", "orderedList"],
+  ["# ", "heading"], ["###### ", "heading"], ["> ", "blockquote"],
+  ["``` ", "codeBlock"], ["```js ", "codeBlock"], ["~~~ ", "codeBlock"],
+  ["[ ] ", "taskList"], ["[x] ", "taskList"], ["- [ ] ", "taskList"],
+  ["---", "horizontalRule"],
+])("converts typed %j into %s", (text, type) => {
+  const { editor } = create("");
+  typeText(editor, text);
+  if (type === "taskList") expect(editor.editor.view.dom.querySelector('input[type="checkbox"]')).not.toBeNull();
+  else expect(editor.editor.state.doc.firstChild?.type.name).toBe(type);
+  if (type !== "horizontalRule") {
+    typeText(editor, "hello");
+    expect(editor.editor.state.doc.textContent).toBe("hello");
+    expect(parseDocument(editor.source).content.content?.[0].type).toBe(type);
+  }
+});
+
+it.each([["**bold**", "bold"], ["*italic*", "italic"], ["~~strike~~", "strike"], ["`code`", "code"]])("formats typed %s inline", (text, mark) => {
+  const { editor } = create("");
+  typeText(editor, text);
+  expect(editor.editor.state.doc.firstChild?.firstChild?.marks[0].type.name).toBe(mark);
+});
+
+it("undoes a typing conversion with Backspace and continues and exits lists with Enter", () => {
+  const { editor } = create("");
+  typeText(editor, "- ");
+  pressKey(editor, "Backspace");
+  expect(editor.editor.state.doc.firstChild?.type.name).toBe("paragraph");
+  expect(editor.editor.state.doc.textContent).toBe("- ");
+  editor.setSource("");
+  typeText(editor, "1 first");
+  pressKey(editor, "Enter");
+  typeText(editor, "second");
+  expect(editor.source).toContain("2. second");
+  pressKey(editor, "Enter");
+  pressKey(editor, "Enter");
+  expect(editor.editor.state.selection.$from.parent.type.name).toBe("paragraph");
+  expect(editor.editor.state.selection.$from.depth).toBe(1);
+});
+
+it("leaves markers in prose and code literal and preserves surrounding source", () => {
+  const source = "*   untouched\r\n\r\nEnd";
+  const { editor } = create(source);
+  editor.select(source.length, undefined, false);
+  typeText(editor, " 1 - # ");
+  expect(editor.source).toBe(source + " 1 - # ");
+  editor.setSource("```\ncode\n```");
+  editor.editor.commands.setTextSelection(1);
+  typeText(editor, "1 - # ");
+  expect(editor.editor.state.doc.firstChild?.type.name).toBe("codeBlock");
+  expect(editor.editor.state.doc.textContent).toBe("1 - # code");
+});
+
+it.each(["1 ", "1) ", "[ ] ", "- [X] "])("restores %j with immediate Backspace", text => {
+  const { editor } = create("");
+  typeText(editor, text);
+  pressKey(editor, "Backspace");
+  expect(editor.editor.state.doc.textContent).toBe(text.startsWith("- ") ? text.slice(2) : text);
+  expect(editor.editor.view.dom.querySelector('input[type="checkbox"]')).toBeNull();
+});
+
+it.each(["- ordinary\n- item", "3. ordinary\n4. item"])("converts only the current list item to a checked task: %s", source => {
+  const { editor, mount } = create(source);
+  editor.select(source.indexOf("item"), undefined, false);
+  typeText(editor, "[X] ");
+  const list = editor.editor.state.doc.firstChild!;
+  expect(list.childCount).toBe(2);
+  expect(list.child(0).type.name).toBe("listItem");
+  expect(list.child(1).type.name).toBe("taskItem");
+  expect(list.child(1).attrs.checked).toBe(true);
+  expect(mount.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked).toBe(true);
+  expect(editor.source).toContain("[x] item");
+});
+
+it("keeps numbered start values and leaves bare numbers other than 1 literal", () => {
+  const { editor } = create("");
+  typeText(editor, "3) third");
+  expect(editor.editor.state.doc.firstChild?.attrs.start).toBe(3);
+  expect(editor.source).toBe("3. third");
+  editor.setSource("");
+  typeText(editor, "2026 ");
+  expect(editor.editor.state.doc.firstChild?.type.name).toBe("paragraph");
+  expect(editor.editor.state.doc.textContent).toBe("2026 ");
+});
