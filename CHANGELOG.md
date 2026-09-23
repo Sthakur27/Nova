@@ -15,6 +15,10 @@ Entries describe source changes; availability in published installers has not be
 - A **Code block** toolbar button and Command/Ctrl-Alt-C toggle multiline code in Markdown Edit and Source. In Edit, triple backticks followed by Enter also start a code block, optionally with a language name.
 - Markdown Edit accepts `1` + Space and `1)` + Space to start numbered lists, alongside standard Markdown typing shortcuts.
 
+#### Changed
+
+- The Starred/Bookmarks switch spans the right panel, with the duplicate header add button removed. Passage-bookmark guidance, the add button, and the shortcut sit at the bottom of the panel.
+
 #### Fixed
 
 - Bookmark buttons now add and remove passage bookmarks in Markdown Edit and Read, and filled Source gutter bookmarks can be removed directly. Bookmark icons no longer cover list bullets and align with the first text line in code blocks.

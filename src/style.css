@@ -672,17 +672,13 @@ kbd {
 .bookmark-rail header {
   height: 66px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   font-size: 11px;
   flex-shrink: 0;
 }
 .bookmark-rail strong {
   font-weight: 500;
-}
-.bookmark-rail header .icon-button {
-  grid-column: 3;
-  justify-self: end;
 }
 .count {
   background: #ffffff05;
@@ -697,6 +693,7 @@ kbd {
   margin: 0 0 27px;
 }
 .bookmark-list {
+  flex: 1;
   overflow: auto;
   min-height: 0;
 }
@@ -1686,8 +1683,8 @@ kbd {
   outline-offset: 1px;
 }
 .bookmark-rail > .scope-toggle { margin-bottom: 12px; }
-.bookmark-view-toggle { grid-column: 2; }
-.bookmark-view-toggle button { display: grid; place-items: center; width: 52px; min-height: 44px; padding: 12px 16px; }
+.bookmark-view-toggle { width: 100%; }
+.bookmark-view-toggle button { display: grid; place-items: center; min-width: 0; min-height: 44px; padding: 12px 16px; }
 .bookmark-view-toggle button[aria-pressed="true"] .nova-star { fill: #b580ff30; }
 .bookmark-source {
   display: block;

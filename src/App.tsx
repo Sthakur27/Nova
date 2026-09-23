@@ -2097,14 +2097,6 @@ export default function App() {
                 <BookmarkIcon size={17} aria-hidden="true" />
               </button>
             </div>
-            {bookmarkView === "passages" && <button
-              className="icon-button"
-              onClick={beginBookmark}
-              title={`Add bookmark (${mod} Shift B)`}
-              aria-label="Add bookmark"
-            >
-              <Plus size={17} />
-            </button>}
           </header>
           {bookmarkView === "files" ? <StarredFiles folders={folders} activeRoot={workspace.root} activePath={path}
             onOpen={(folder, file, pinned) => void openNote(file, undefined, folder, undefined, pinned)} onStar={starFile} /> : <>
