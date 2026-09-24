@@ -92,16 +92,23 @@ mod tests {
         let file = root.join("note.md");
         fs::write(&file, "one").unwrap();
         let before = stamp(&root, "note.md").unwrap();
-        fs::write(&file, "two").unwrap();
+        // Metadata is an optimization, not a content revision: rapid same-size
+        // writes can retain identical timestamps (notably on Windows).
+        // Native events and focus reconciliation force a content revision read.
+        fs::write(&file, "two, changed length").unwrap();
         assert_ne!(before, stamp(&root, "note.md").unwrap());
         let before = stamp(&root, "note.md").unwrap();
         fs::write(root.join("swap"), "new").unwrap();
         fs::rename(root.join("swap"), &file).unwrap();
         assert_ne!(before, stamp(&root, "note.md").unwrap());
-        let before = stamp(&root, "").unwrap();
+        assert!(stamp(&root, "").unwrap().is_some());
         fs::remove_file(&file).unwrap();
         assert_eq!(stamp(&root, "note.md").unwrap(), None);
-        assert_ne!(before, stamp(&root, "").unwrap());
+        let child = root.join("child");
+        fs::create_dir(&child).unwrap();
+        assert!(stamp(&root, "child").unwrap().is_some());
+        fs::remove_dir(child).unwrap();
+        assert_eq!(stamp(&root, "child").unwrap(), None);
         assert!(stamp(&root, "../escape").is_err());
     }
     #[cfg(unix)]
@@ -776,9 +783,10 @@ pub(crate) mod native_watch {
                 }
             }
             assert!(saw_delete, "No native deletion event");
-            // Root's parent is watched so removing the workspace itself also invalidates the view.
-            let moved = root.with_extension("moved");
-            fs::rename(&root, &moved).unwrap();
+            // Exercise removal with the full subscription still active. Windows
+            // can deny directory renames while watcher handles are open, even
+            // with delete sharing; removal is supported by its native backend.
+            fs::remove_dir_all(&root).unwrap();
             let deadline = Instant::now() + Duration::from_secs(8);
             let mut saw_root = false;
             while Instant::now() < deadline {
@@ -789,7 +797,6 @@ pub(crate) mod native_watch {
                     }
                 }
             }
-            fs::rename(&moved, &root).unwrap();
             assert!(saw_root, "No native workspace removal event");
             drop(subscription);
             while receiver.try_recv().is_ok() {}
