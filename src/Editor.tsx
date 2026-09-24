@@ -119,6 +119,7 @@ export type EditorHandle = {
   text: () => string;
   selection: () => { from: number; to: number; quote: string };
   jump: (from: number, to?: number) => void;
+  setFindMatches: (matches: { from: number; to: number }[], active: number) => void;
   marks: () => Bookmark[];
   beginDictation: () => void;
   insertDictation: (text: string) => void;
@@ -159,6 +160,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
   const documentMount = useRef<HTMLDivElement>(null);
   const documentPane = useRef<HTMLDivElement>(null);
   const documentEditor = useRef<DocumentEditor | null>(null);
+  const findMatches = useRef<{ matches: { from: number; to: number }[]; active: number }>({ matches: [], active: 0 });
   const bridging = useRef(false);
   // Guard the editor itself as well, including restored tabs with large drafts.
   if (!supportsDocumentView(props.initial.length, props.snapshot?.state.doc.length ?? 0)) {
@@ -250,8 +252,13 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
         to = Math.min(to, from + 500);
         return { from, to, quote: state.doc.sliceString(from, to) };
       },
+      setFindMatches: (matches, active) => {
+        findMatches.current = { matches, active };
+        documentEditor.current?.setFindMatches(matches, active);
+      },
       jump: (from, to = from) => {
-        const v = view.current!;
+        const v = view.current;
+        if (!v) return;
         const clamp = (n: number) =>
           Math.max(0, Math.min(n, v.state.doc.length));
         v.dispatch({
@@ -497,6 +504,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
       if (documentPane.current) {
         documentPane.current.scrollTop = props.snapshot?.scrollTop ?? initialScrollTop(documentPane.current, mobile);
       }
+      documentEditor.current.setFindMatches(findMatches.current.matches, findMatches.current.active);
       documentEditor.current.setBookmarks(latest.current.bookmarks);
       documentEditor.current.setLineHighlight(latest.current.showLineHighlight);
     }

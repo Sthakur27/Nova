@@ -222,7 +222,10 @@ it("keeps a read-mode search selection decorated while the find input has focus"
   const input = document.createElement("input");
   document.body.append(input);
   input.focus();
-  expect(mount.querySelector(".read-search-selection")?.textContent).toBe("needle");
+  editor.setFindMatches([{ from: 4, to: 10 }], 0);
+  expect(mount.querySelector(".note-find-current")?.textContent).toBe("needle");
+  editor.setFindMatches([], 0);
+  expect(mount.querySelector(".note-find-hit")).toBeNull();
   expect(change).not.toHaveBeenCalled();
 });
 

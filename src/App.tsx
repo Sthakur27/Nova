@@ -1713,6 +1713,14 @@ export default function App() {
       const documentView = isMarkdown && !(mode === "read" && readingLayout === "pages") && supportsDocumentView(data?.text.length ?? 0, editorSnapshot?.state.doc.length ?? 0, preview.length);
       return (
         <div className="document-area" data-registry={path === ".nova"}>
+          {data && (mode === "read" || (mode === "edit" && documentView)) && <ReadFind
+            key={JSON.stringify([workspace.root, path, data.revision])}
+            text={preview}
+            surface={`${mode}:${documentView}:${readingLayout}`}
+            disabled={!isActive || !!(syncFolder || settingsOpen || activeSettingId || palette || bookmarkDraft || renameTarget || fileAction)}
+            onJump={jump}
+            onHighlight={(matches, active) => paneEditors.current.get(tabId({ root: workspace.root, path }))?.setFindMatches(matches, active)}
+          />}
           {data && path === ".nova" && <RegistryValidation root={workspace.root} text={paneEditors.current.get(tabId({root: workspace.root, path}))?.text() ?? data.text} revision={isActive ? revision.current : data.revision} />}
           {loading && <div className="loading">Opening your note…</div>}
           {data && (
@@ -2111,12 +2119,6 @@ export default function App() {
           </button>
         </div>
         </div>
-        {data && (mode === "read" || (mode === "edit" && isMarkdown && supportsDocumentView(data.text.length, editorSnapshot?.state.doc.length ?? 0, preview.length))) && <ReadFind
-          key={JSON.stringify([workspace.root, path, data.revision])}
-          text={preview}
-          disabled={!!(syncFolder || settingsOpen || activeSettingId || palette || bookmarkDraft || renameTarget || fileAction)}
-          onJump={jump}
-        />}
         <EditorPanes layout={paneLayout} active={activePane} compact={compact}
           onActivate={activatePane} renderTabs={renderPaneTabs} renderDocument={renderPaneDocument}
           onResize={(id, ratio) => updatePaneLayout(mapPane(paneLayoutRef.current, id, node => node.kind === "split" ? { ...node, ratio } : node))} />

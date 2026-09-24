@@ -26,7 +26,7 @@ it.each(["edit", "read"] as const)("finds and navigates Markdown while preservin
   };
   try {
     await act(async () => root.render(<>
-      <ReadFind text={source} disabled={false} onJump={jump} />
+      <ReadFind text={source} disabled={false} onJump={jump} onHighlight={(matches, active) => ref.current?.setFindMatches(matches, active)} />
       <Editor ref={ref} initial={source} bookmarks={[]} onChange={onChange}
         onBookmarks={() => {}} onCursor={() => {}} onBookmark={() => {}} onSave={() => {}}
         isMarkdown documentMode={mode} showLineNumbers={false} showLineHighlight={false}
@@ -41,12 +41,16 @@ it.each(["edit", "read"] as const)("finds and navigates Markdown while preservin
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
     expect(host.textContent).toContain("1 of 2");
+    expect([...rich.querySelectorAll(".note-find-hit")].map(node => node.textContent)).toEqual(["needle", "needle"]);
+    expect(rich.querySelector(".note-find-current")).toBe(rich.querySelectorAll(".note-find-hit")[0]);
     expect(ref.current!.selection().from).toBe(source.indexOf("needle"));
     await press(input, "Enter");
     expect(ref.current!.selection().from).toBe(source.lastIndexOf("needle"));
     expect(document.activeElement).toBe(input);
+    expect(rich.querySelector(".note-find-current")).toBe(rich.querySelectorAll(".note-find-hit")[1]);
     await press(input, "Escape");
     expect(host.querySelector('[role="search"]')).toBeNull();
+    expect(rich.querySelector(".note-find-hit")).toBeNull();
     expect(ref.current!.isDocumentView()).toBe(true);
     expect(host.querySelector<HTMLElement>(".source-editor-mount")!.hidden).toBe(true);
     expect(host.querySelector(".document-pane")!.getAttribute("data-mode")).toBe(mode);

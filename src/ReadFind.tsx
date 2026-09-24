@@ -2,16 +2,21 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
 import { EditorState } from "@codemirror/state";
 import { SearchQuery } from "@codemirror/search";
+import { highlightReadPreview } from "./readFindHighlights";
 import { searchMatches } from "./editorSearch";
 
 /** Find in formatted Edit and Read without changing the document mode. */
-export default function ReadFind({ text, disabled, onJump }: {
+export default function ReadFind({ text, disabled, onJump, onHighlight, surface }: {
   text: string; disabled: boolean; onJump: (from: number, to: number) => void;
+  surface?: string;
+  onHighlight?: (matches: { from: number; to: number }[], active: number) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
   const input = useRef<HTMLInputElement>(null);
+  const highlight = useRef(onHighlight);
+  highlight.current = onHighlight;
   const previousFocus = useRef<HTMLElement | null>(null);
   const state = useMemo(() => EditorState.create({ doc: text }), [text]);
   const matches = useMemo(() => searchMatches(state, new SearchQuery({ search: query, literal: true })), [state, query]);
@@ -41,6 +46,14 @@ export default function ReadFind({ text, disabled, onJump }: {
     // Navigation must leave the caret in Find so typing and Enter keep working.
     input.current?.focus({ preventScroll: true });
   }, [open, disabled, matches, active, onJump]);
+  useEffect(() => {
+    highlight.current?.(open ? matches : [], active);
+    return () => highlight.current?.([], 0);
+  }, [open, matches, active, surface]);
+  useEffect(() => {
+    const scope = input.current?.closest(".document-area")?.querySelector<HTMLElement>(".read-pane");
+    if (open && scope) return highlightReadPreview(scope, text, query, matches[active]?.from ?? 0);
+  }, [open, text, query, matches, active, surface]);
   const close = () => { setOpen(false); previousFocus.current?.focus({ preventScroll: true }); };
   const move = (delta: number) => { if (matches.length) setIndex((active + delta + matches.length) % matches.length); };
   if (!open) return null;

@@ -106,6 +106,8 @@ export class DocumentEditor {
   private positions?: ReturnType<typeof documentPositions>;
   private lastDoc?: DocumentNode;
   private bookmarks: Bookmark[] = [];
+  private findMatches: { from: number; to: number }[] = [];
+  private findActive = 0;
   private lineHighlight = false;
   private highlightFrame = 0;
   private highlightObserver?: ResizeObserver;
@@ -153,8 +155,14 @@ export class DocumentEditor {
             if (state.selection instanceof AllSelection) {
               state.doc.forEach((node, pos) => selected.push(Decoration.node(pos, pos + node.nodeSize, { class: "document-all-selected" })));
             }
-            if (owner.editor && !owner.editor.isEditable && !state.selection.empty && !(state.selection instanceof AllSelection)) {
-              selected.push(Decoration.inline(state.selection.from, state.selection.to, { class: "read-search-selection" }));
+            if (owner.findMatches.length) {
+              const mapping = documentPositions(state.doc, owner.source);
+              owner.findMatches.forEach((match, index) => {
+                const from = mapping.toDocument(match.from), to = mapping.toDocument(match.to);
+                if (from < to) selected.push(Decoration.inline(from, to, {
+                  class: index === owner.findActive ? "note-find-hit note-find-current" : "note-find-hit",
+                }));
+              });
             }
             const mapping = owner.bookmarks.length ? documentPositions(state.doc, owner.source) : undefined;
             const markedBlocks = new Map<number, Bookmark[]>();
@@ -380,6 +388,12 @@ export class DocumentEditor {
       dom.style.setProperty("--active-line-top", `${caret.top - bounds.top + dom.scrollTop}px`);
       dom.style.setProperty("--active-line-height", `${caret.bottom - caret.top}px`);
     });
+  }
+  setFindMatches(matches: { from: number; to: number }[], active: number) {
+    if (this.editor.isDestroyed) return;
+    this.findMatches = matches;
+    this.findActive = active;
+    this.editor.view.dispatch(this.editor.state.tr.setMeta("findMatches", true));
   }
   setBookmarks(bookmarks: Bookmark[]) {
     this.bookmarks = bookmarks;

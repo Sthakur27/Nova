@@ -70,3 +70,40 @@ it("captures Ctrl/Cmd-F, navigates matches without losing input focus, wraps, an
     host.remove();
   }
 });
+
+it("keeps independent queries and only handles shortcuts in the active panel", async () => {
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  const jumps = [vi.fn(), vi.fn()];
+  const render = (active: number) => act(async () => root.render(<>
+    {[0, 1].map(index => <section key={index}>
+      <ReadFind text={index === 0 ? "apple apple" : "pear"} disabled={active !== index} onJump={jumps[index]} />
+    </section>)}
+  </>));
+  const press = () => act(async () => { window.dispatchEvent(new KeyboardEvent("keydown", { key: "f", metaKey: true, bubbles: true })); });
+  try {
+    await render(0);
+    await press();
+    const input = host.querySelector("input")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "apple");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    jumps[0].mockClear();
+    await render(1);
+    await press();
+    const inputs = host.querySelectorAll("input");
+    expect(inputs).toHaveLength(2);
+    expect(inputs[0].value).toBe("apple");
+    expect(inputs[1].value).toBe("");
+    expect(document.activeElement).toBe(inputs[1]);
+    expect(jumps[0]).not.toHaveBeenCalled();
+    await press();
+    expect(host.querySelectorAll("input")).toHaveLength(1);
+    expect(host.querySelector("input")!.value).toBe("apple");
+  } finally {
+    await act(async () => root.unmount());
+    host.remove();
+  }
+});

@@ -8,6 +8,12 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 Entries describe source changes; availability in published installers has not been verified. The initial backfill covers commits through `7d47fbe`.
 
+### 2026-09-24
+
+#### Fixed
+
+- In-note Find stays inside its split editor panel, retains independent queries, and visibly highlights Markdown matches in Edit and Read with a distinct current result. Search fields use comfortable text padding and quiet focus styling without Galaxy effects.
+
 ### 2026-09-23
 
 #### Added

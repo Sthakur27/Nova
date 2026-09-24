@@ -2199,11 +2199,13 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 .nova-find { padding: 12px 18px 10px; font: 12px "DM Sans", sans-serif; }
 .nova-find-row { display: flex; align-items: center; gap: 4px; }
 .nova-find-field { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; padding: 0 10px; height: 34px; background: #ffffff04; border: 1px solid #ffffff12; border-radius: 7px; }
-.nova-find-field:focus-within { border-color: #bda0ed70; box-shadow: 0 0 0 2px #bda0ed0a; }
+.nova-find-field:focus-within { border-color: #bda0ed70; }
 .nova-find svg { display: block; width: 16px; height: 16px; }
 .nova-find-field > span:first-child { color: #91879e; }
 .nova-find input { min-width: 0; color: #e0dbe7; background: transparent; border: 0; font: inherit; }
-.nova-find-field input { flex: 1; width: 100%; height: 100%; outline: none; }
+.nova-find-field input { flex: 1; width: 100%; height: 100%; padding: 0 4px; }
+.nova-find input:focus-visible { outline: none; box-shadow: none; }
+.nova-find-field > svg { flex-shrink: 0; }
 .nova-find input::placeholder { color: #77727f; }
 .nova-find-count { flex-shrink: 0; color: #a99db8; font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .nova-find button { border: 1px solid transparent; border-radius: 6px; font: inherit; color: #a59bac; }
@@ -2361,7 +2363,6 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 .sync-row select:focus-visible { outline: 2px solid #a98bdd; outline-offset: 2px; }
 
 .read-find { flex-shrink: 0; border-bottom: 1px solid #ffffff12; }
-.app-shell:has(.read-find[data-match="true"]) .read-search-selection { background: #bda0ed55; outline: 1px solid #bda0ed80; }
 
 .global-sync-button {
   display: flex; align-items: center; gap: 10px; width: 100%; padding: 11px 12px;
@@ -2898,3 +2899,12 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 .prose :is(td, th) .document-bookmark-button { left: 0; }
 
 .app-update-indicator { color: #c6a4ef; flex-shrink: 0; }
+
+/* Find stays inside its editor group and keeps the document scrollable. */
+.document-area { display: flex; flex-direction: column; }
+.document-area > :is(.write-pane, .read-pane) { flex: 1; min-height: 0; height: auto; }
+.note-find-hit { background: #d8ac4d55; border-radius: 2px; }
+.note-find-current { background: #efbc65aa; outline: 1px solid #ffda91; color: #171419; }
+
+::highlight(note-find) { background: #d8ac4d55; }
+::highlight(note-find-current) { background: #efbc65; color: #171419; }
