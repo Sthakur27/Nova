@@ -12,6 +12,9 @@ Entries describe source changes; availability in published installers has not be
 
 #### Added
 
+- Heading outline beside Starred files and Passages, with live unsaved Markdown headings and navigation in Source, Edit, and Read.
+- **Everywhere → Replace** in search previews and applies selected saved Local-file replacements with search filters, draft and revision guards, and bookmark remapping. Cloud files are excluded; replacement text is literal.
+- Desktop detection of external changes to open Local files and expanded directories. Clean notes refresh automatically; dirty drafts and deleted open copies are retained with notices.
 - A book icon in the desktop Settings header opens the README on GitHub in your default browser.
 - Markdown Edit (outside code) and `.txt` files convert `->` and `<-` to → and ← as you type. Press Backspace immediately to restore the original characters.
 - A **Code block** toolbar button and Command/Ctrl-Alt-C toggle multiline code in Markdown Edit and Source. In Edit, triple backticks followed by Enter also start a code block, optionally with a language name.

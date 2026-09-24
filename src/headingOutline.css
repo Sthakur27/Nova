@@ -1,0 +1,7 @@
+.heading-outline { min-height: 0; overflow-y: auto; padding-bottom: 16px; }
+.heading-outline h2 { margin: 4px 0 18px; font-size: 13px; font-weight: 500; }
+.heading-outline ol { margin: 0; padding: 0; list-style: none; }
+.heading-outline button { width: 100%; display: flex; align-items: baseline; gap: 8px; border: 0; border-radius: 5px; background: transparent; color: inherit; text-align: left; padding: 9px 8px; font: inherit; font-size: 12px; overflow-wrap: anywhere; }
+.heading-outline button:hover { background: #ffffff08; }
+.heading-outline button:focus-visible { outline: 2px solid #b580ff; outline-offset: -2px; }
+.outline-level { flex: none; opacity: .5; font-size: 9px; }

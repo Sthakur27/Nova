@@ -1,3 +1,5 @@
+import { prepareLocalReload } from "./localFileReload";
+import { useLocalChanges } from "./useLocalChanges";
 import { AppUpdateIndicator } from "./AppUpdate";
 import RegistryValidation from "./RegistryValidation";
 import { documentChanged } from "./documentChanged";
@@ -37,6 +39,7 @@ import { DEFAULT_EXTENSION } from "./fileExtensions";
 import { useBackgroundBlur } from "./useBackgroundBlur";
 import ScopeToggle from "./ScopeToggle";
 import BookmarkSections from "./BookmarkSections";
+import HeadingOutline from "./HeadingOutline";
 import StarredFiles from "./StarredFiles";
 import type {SearchScope} from "./currentSearch";
 import { openTab, pinTab, reorderTab, tabId, type NoteTab } from "./tabs";
@@ -316,7 +319,7 @@ export default function App() {
   const [hoveredBottom, setHoveredBottom] = useState(false);
   const [hoveredTop, setHoveredTop] = useState(false);
   const [hoveredEdge, setHoveredEdge] = useState<"left" | "right" | null>(null);
-  const [bookmarkView, setBookmarkView] = useState<"passages" | "files">("files");
+  const [bookmarkView, setBookmarkView] = useState<"passages" | "files" | "outline">("files");
   const activeStarFolder = folders.find(folder => folder.root === workspace.root);
   const activeFileStarred = activeStarFolder?.starred?.includes(path) ?? false;
   const [bookmarkScope, setBookmarkScope] = useState<SearchScope>("current");
@@ -1179,6 +1182,59 @@ export default function App() {
       );
     }
   };
+  useLocalChanges(foldersReady, {
+    targets: () => current.current.folders.filter(folder => folder.root !== "demo" && !folder.cloudSpace).map(folder => ({
+      root: folder.root,
+      files: tabsRef.current.filter(tab => tab.root === folder.root).map(tab => tab.path),
+      directories: ["", ...(folder.expandedDirectories ?? [])],
+    })),
+    busy: () => operation.current || !!saveInFlight.current || voiceBusy.current || localResetInProgress(),
+    onError: setNotice,
+    onDirectory: async (root, directory) => {
+      const original = current.current.folders.find(folder => folder.root === root && !folder.cloudSpace);
+      if (!original) return;
+      // Retain every page already loaded; a background refresh must not collapse a long listing.
+      const loadedThrough = original.directoryPages?.[directory];
+      const oldCount = [...original.files.map(file => file.path), ...(original.directories ?? [])].filter(path => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "") === directory).length;
+      let listing = await listDirectory(root, directory);
+      while (listing.nextOffset !== null && (loadedThrough !== undefined ? listing.nextOffset < loadedThrough : listing.files.length + listing.directories.length < oldCount)) {
+        const page = await listDirectory(root, directory, listing.nextOffset);
+        listing = { files: [...listing.files, ...page.files], directories: [...listing.directories, ...page.directories], warnings: [...listing.warnings, ...page.warnings], nextOffset: page.nextOffset };
+      }
+      setFolders(old => old.map(folder => folder.root === root && !folder.cloudSpace ? mergeDirectory(folder, directory, listing) : folder));
+    },
+    onFile: async (root, path, error) => {
+      const id = tabId({ root, path });
+      const active = () => current.current.workspace.root === root && current.current.path === path && current.current.hasDocument;
+      const busy = () => operation.current || !!saveInFlight.current || voiceBusy.current || localResetInProgress();
+      const protectedNote = () => active() ? dirtyRef.current : !!paneSessions.current.get(id)?.dirty;
+      if (error) {
+        setNotice(`${path}: ${error} The open copy is retained; Save still checks the original file revision.`);
+        return;
+      }
+      const note = await prepareLocalReload({
+        read: () => readNote(root, path),
+        exists: () => tabsRef.current.some(tab => tabId(tab) === id) && current.current.folders.some(folder => folder.root === root && !folder.cloudSpace),
+        revision: () => savedDocuments.current.get(id)?.revision,
+        busy,
+        dirty: protectedNote,
+        recovered: async () => !active() && !!await loadDraft(root, path),
+      });
+      if (note === "closed" || note === "unchanged") return;
+      if (note === "protected") {
+        setNotice(`${path} changed outside Nova. Your edits are retained; Save will reject the changed disk version. Copy your edits before reopening the file to review it.`);
+        return;
+      }
+      savedDocuments.current.set(id, note);
+      snapshots.current.delete(id);
+      const session = paneSessions.current.get(id);
+      if (session) paneSessions.current.set(id, { ...session, data: note, preview: note.text, snapshot: undefined });
+      if (active()) {
+        revision.current = note.revision;
+        setEditorSnapshot(undefined); setData(note); setPreview(note.text); applyMarks(note.bookmarks);
+      } else updatePaneLayout({ ...paneLayoutRef.current });
+    },
+  });
   uploads.configure({
     focusedFile: () => {
       const note = current.current;
@@ -2098,9 +2154,13 @@ export default function App() {
               <button aria-label="Passages" title="Passages" aria-pressed={bookmarkView === "passages"} onClick={() => setBookmarkView("passages")}>
                 <BookmarkIcon size={17} aria-hidden="true" />
               </button>
+              <button aria-label="Heading outline" title="Heading outline" aria-pressed={bookmarkView === "outline"} onClick={() => setBookmarkView("outline")}>
+                <ListOrdered size={17} aria-hidden="true" />
+              </button>
             </div>
           </header>
-          {bookmarkView === "files" ? <StarredFiles folders={folders} activeRoot={workspace.root} activePath={path}
+          {bookmarkView === "outline" ? <HeadingOutline text={preview} markdown={isMarkdown} hasDocument={!!data}
+            onJump={from => { setMobileView("editor"); requestAnimationFrame(() => jump(from)); }} /> : bookmarkView === "files" ? <StarredFiles folders={folders} activeRoot={workspace.root} activePath={path}
             onOpen={(folder, file, pinned) => void openNote(file, undefined, folder, undefined, pinned)} onStar={starFile} /> : <>
           <ScopeToggle label="Bookmark scope" scope={bookmarkScope} onChange={setBookmarkScope} currentLabel="Current tab" allLabel="All bookmarks" />
           <div className="rail-intro">{bookmarkScope === "current" ? "Your way back to the good parts." : "Across all added folders."}</div>
@@ -2217,6 +2277,13 @@ export default function App() {
           onScopeChange={setSearchScope}
           activeNote={data?{root:workspace.root,path,bookmarks:marksRef.current}:null}
           getActiveText={() => editor.current?.text() ?? data?.text ?? ""}
+          getReplaceBlockedFiles={() => {
+            const busy = operation.current || !!saveInFlight.current || voiceBusy.current || localResetInProgress();
+            return tabsRef.current.filter(tab => tab.root === "demo" || busy || (
+              current.current.workspace.root === tab.root && current.current.path === tab.path
+                ? dirtyRef.current : !!paneSessions.current.get(tabId(tab))?.dirty
+            )).map(({ root, path }) => ({ root, path }));
+          }}
           onNavigateCurrent={(from,to)=>{setMobileView("editor");if(from!==undefined){setMode('source');requestAnimationFrame(()=>jump(from,to));}else editor.current?.jump(editor.current.selection().from);}}
           onClose={() => {
             setPalette(false);

@@ -6,17 +6,23 @@ ownership, recovery drafts, bookmarks, and the Local/Cloud boundary throughout.
 
 ## Current implementation batch
 
-The following three features are selected for parallel implementation and review.
+The following three features were implemented in parallel and integrated on
+September 23, 2026. Automated tests, browser checks, and an isolated macOS native
+smoke test passed. Windows has not been verified locally; installer publication
+is tracked separately.
 
-- [ ] **Automatically detect external local file changes.** Refresh clean open
+- [x] **Automatically detect external local file changes.** Refresh clean open
   notes and folder listings when files change outside Nova. Preserve unsaved
   edits and recovery drafts, surface conflicts or deletions, and retain stale-save
-  protection. Avoid scanning entire large folders repeatedly.
-- [ ] **Replace across files.** Extend workspace search with a reviewable preview,
+  protection. Uses three-second metadata polling of open tabs and expanded
+  directories while visible, plus checks on focus; no recursive scan.
+- [x] **Replace across files.** Extend workspace search with a reviewable preview,
   file selection, and explicit application of replacements. Respect search filters,
   disk revisions, open drafts, bookmarks, and Local/Cloud save behavior. Report
-  partial failures without silently overwriting changed files.
-- [ ] **Heading outline.** Provide a clickable table of contents for the active
+  partial failures without silently overwriting changed files. The initial
+  implementation covers saved Local files only; Cloud files are excluded. Preview
+  is bounded and replacement text is literal. See the [reference guide](docs/user-guide.md#replace-across-files).
+- [x] **Heading outline.** Provide a clickable table of contents for the active
   Markdown note, reflecting unsaved edits and heading hierarchy. Navigate in the
   current reading/editing mode where supported and work alongside passage bookmarks.
 

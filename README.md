@@ -62,6 +62,8 @@ Press **‚åò P** on Mac or **Ctrl P** on Windows to find a file by name. Use **‚å
 
 Search the current note, including unsaved edits, or the local folder and Cloud spaces in this window. Narrow results with case-sensitive, whole-word, or regular-expression matching. **Advanced search** lets you include `*.md` or exclude `archive/**`; Nova remembers these search options for the workspace. See the [search reference](docs/user-guide.md#search) for details.
 
+In **Everywhere** search, choose **Replace** to preview changes across saved Local files, select the files to change, and apply them. Unsaved drafts and Cloud spaces are excluded. For long Markdown notes, the **Heading outline** button in the right panel lists headings and jumps to a section without changing your editing or reading mode.
+
 ### Keep your favorites close
 
 Star a note from the bar above it, then choose the **star icon** in the Bookmarks panel to browse your favorite files. Switch to the **bookmark icon** for saved passages. Both views group Local and Cloud into sections you can collapse independently.
@@ -158,7 +160,7 @@ Your audio stays on your computer and isn't uploaded. Voice typing requires the 
 
 ## A few things to know
 
-Nova is still a prototype. Alongside plain text and Markdown notes, it offers basic code editing for Python, TypeScript/JavaScript (including JSX/TSX), Java, JSON, HTML, and CSS. Open a file with the corresponding extension to get syntax highlighting, completion suggestions, basic syntax diagnostics, bracket matching, indentation, and folding. See [code editing](docs/user-guide.md#code-editing) for shortcuts and limits. Image attachments are not available yet. If you change files in another app, refresh the folder and reopen the note to pick up the changes.
+Nova is still a prototype. Alongside plain text and Markdown notes, it offers basic code editing for Python, TypeScript/JavaScript (including JSX/TSX), Java, JSON, HTML, and CSS. Open a file with the corresponding extension to get syntax highlighting, completion suggestions, basic syntax diagnostics, bracket matching, indentation, and folding. See [code editing](docs/user-guide.md#code-editing) for shortcuts and limits. Image attachments are not available yet. On desktop, Nova checks open Local files and expanded folders for external changes every three seconds while visible and when you return to the app. Clean notes reload automatically; unsaved edits and deleted open copies are retained with a notice.
 
 Recovery drafts help you return to unfinished work; for Local notes, **Save** writes changes to your original files. Keep a separate backup of important notes. If a file changes outside Nova while you're editing, Nova stops the save so you can reconcile the two versions.
 

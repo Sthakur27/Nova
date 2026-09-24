@@ -1,4 +1,6 @@
 mod registry_editor;
+#[cfg(desktop)]
+mod workspace_replace;
 mod search_options;
 #[cfg(any(mobile, test))]
 mod mobile_storage;
@@ -9,6 +11,7 @@ mod speech;
 mod sync_policy;
 mod drive_registry;
 mod local_tree;
+mod local_changes;
 #[cfg(any(desktop, target_os = "ios"))]
 mod drive_auth;
 #[cfg(any(desktop, target_os = "ios"))]
@@ -1008,11 +1011,12 @@ pub fn run() {
             terminal::terminal_resize,
             terminal::terminal_close,
             registry_editor::read_registry_document, registry_editor::validate_registry_document, registry_editor::save_registry_document,
-            open_workspace, local_tree::list_directory, local_tree::search_files,
+            open_workspace, local_tree::list_directory, local_tree::search_files, local_changes::local_path_stamps,
             set_file_star,
             set_sync_choice,
             read_note,
             save_note,
+            workspace_replace::replace_saved_note,
             save_bookmarks,
             search_notes, cancel_search,
             load_draft,

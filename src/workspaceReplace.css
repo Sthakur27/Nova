@@ -1,0 +1,12 @@
+.workspace-replace { padding: 14px 20px; max-height: 55vh; overflow: auto; }
+.workspace-replace > label { display: grid; gap: 7px; }
+.workspace-replace input:not([type="checkbox"]) { width: 100%; padding: 9px; color: inherit; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; }
+.workspace-replace p { font-size: 12px; opacity: .8; line-height: 1.5; }
+.workspace-replace-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-block: 12px; }
+.workspace-replace-actions button { border: 1px solid var(--border); border-radius: 6px; padding: 8px; }
+.workspace-replace article { border-top: 1px solid var(--border); padding-block: 12px; font-size: 13px; }
+.workspace-replace article label { display: flex; align-items: center; gap: 8px; }
+.workspace-replace summary { cursor: pointer; padding-block: 10px; }
+.workspace-replace-comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.workspace-replace-comparison > div { min-width: 0; }
+.workspace-replace pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 280px; overflow: auto; font-size: 12px; }

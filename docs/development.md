@@ -85,6 +85,14 @@ Tests cover terminal startup, tab lifetimes, collapse and teardown, a real Unix 
 
 Architecture: React/TypeScript → Tauri IPC → Rust file operations. CodeMirror owns the Markdown text buffer, undo history, and bookmark mappings. Tiptap/ProseMirror provides the shared Edit/Read document surface and maps changes back into that buffer. Unchanged blocks retain their original Markdown; edits can normalize the changed block. Large-note pagination prepares Markdown in a background worker. Full-text search runs off the UI thread and does not retain all note bodies in memory.
 
+### Outline, external changes, and workspace replacement
+
+`HeadingOutline` parses the active source in a short-lived worker after a typing pause, only while its panel is visible. Source offsets drive the existing editor/reader navigation; rendering is paged at 200 headings.
+
+`useLocalChanges` polls `local_path_stamps` every three seconds while visible and on focus. It requests only Local open tabs and root/expanded directories. Metadata changes trigger reads; `prepareLocalReload` rechecks dirty, recovery, and operation state after asynchronous reads before applying a clean reload. Native tests exercise actual temporary-file rewrites, atomic replacement, deletion, and symlink boundaries. Verify the desktop UI by editing a temporary workspace externally with both clean and dirty tabs, deleting an open file, and adding/removing files from expanded directories.
+
+`workspaceReplace` builds bounded previews using existing search filters. `replace_saved_note` serializes writes under `Access.writes`, validates the reviewed disk revision and UTF-16 edit ranges, rejects recovery drafts and Cloud roots, and maps the latest bookmark metadata before the normal CRLF-preserving atomic save. Metadata is restored if the note save fails; these are two separate files, not a crash-atomic transaction. UI tests cover selection, preview invalidation, partial failures, and cancellation; native tests cover stale previews, drafts, Unicode bookmarks, CRLF, and scope guards.
+
 
 ## Terminal and live dictation
 
