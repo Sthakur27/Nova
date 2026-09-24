@@ -10,6 +10,10 @@ Entries describe source changes; availability in published installers has not be
 
 ### 2026-09-24
 
+#### Added
+
+- An expand arrow in formatted Markdown Find reveals Replace and Replace All. Replacements preserve the surrounding source, support empty replacement text, and can be undone as a single action. Read mode prompts you to switch to Edit.
+
 #### Fixed
 
 - In-note Find stays inside its split editor panel, retains independent queries, and visibly highlights Markdown matches in Edit and Read with a distinct current result. Search fields use comfortable text padding and quiet focus styling without Galaxy effects.

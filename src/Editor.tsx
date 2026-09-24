@@ -36,7 +36,7 @@ import {
   gutter,
   GutterMarker,
 } from "@codemirror/view";
-import { defaultKeymap, history, historyKeymap, undo, redo, selectAll } from "@codemirror/commands";
+import { defaultKeymap, history, isolateHistory, historyKeymap, undo, redo, selectAll } from "@codemirror/commands";
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { markdown } from "@codemirror/lang-markdown";
 import {
@@ -119,6 +119,7 @@ export type EditorHandle = {
   text: () => string;
   selection: () => { from: number; to: number; quote: string };
   jump: (from: number, to?: number) => void;
+  replaceMatches: (expected: string, matches: { from: number; to: number }[], replacement: string) => boolean;
   setFindMatches: (matches: { from: number; to: number }[], active: number) => void;
   marks: () => Bookmark[];
   beginDictation: () => void;
@@ -251,6 +252,21 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
         // A bounded excerpt keeps bookmark metadata small even for huge selections.
         to = Math.min(to, from + 500);
         return { from, to, quote: state.doc.sliceString(from, to) };
+      },
+      replaceMatches: (expected, matches, replacement) => {
+        const v = view.current;
+        if (!v || latest.current.documentMode === "read" || v.state.readOnly || v.state.doc.toString() !== expected || !matches.length) return false;
+        let end = 0;
+        for (const match of matches) {
+          if (match.from < end || match.to <= match.from || match.to > v.state.doc.length) return false;
+          end = match.to;
+        }
+        v.dispatch({
+          changes: matches.map(match => ({ ...match, insert: replacement })),
+          userEvent: "input.replace",
+          annotations: isolateHistory.of("full"),
+        });
+        return true;
       },
       setFindMatches: (matches, active) => {
         findMatches.current = { matches, active };

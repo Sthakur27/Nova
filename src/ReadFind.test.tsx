@@ -48,7 +48,7 @@ it("captures Ctrl/Cmd-F, navigates matches without losing input focus, wraps, an
     expect(reopenedInput.selectionEnd).toBe(4);
     await type("missing");
     expect(host.textContent).toContain("No results");
-    expect(host.querySelector("button")!.disabled).toBe(true);
+    expect(host.querySelector<HTMLButtonElement>('button[aria-label="Previous match (Shift+Enter)"]')!.disabled).toBe(true);
     await press(reopenedInput, "Escape");
     expect(host.querySelector("input")).toBeNull();
     await act(async () => root.render(<ReadFind text="Note" disabled onJump={onJump} />));

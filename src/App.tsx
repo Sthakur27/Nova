@@ -1719,6 +1719,8 @@ export default function App() {
             surface={`${mode}:${documentView}:${readingLayout}`}
             disabled={!isActive || !!(syncFolder || settingsOpen || activeSettingId || palette || bookmarkDraft || renameTarget || fileAction)}
             onJump={jump}
+            onReplace={mode === "read" ? undefined : (expected, matches, replacement) =>
+              isActive && (paneEditors.current.get(tabId({ root: workspace.root, path }))?.replaceMatches(expected, matches, replacement) ?? false)}
             onHighlight={(matches, active) => paneEditors.current.get(tabId({ root: workspace.root, path }))?.setFindMatches(matches, active)}
           />}
           {data && path === ".nova" && <RegistryValidation root={workspace.root} text={paneEditors.current.get(tabId({root: workspace.root, path}))?.text() ?? data.text} revision={isActive ? revision.current : data.revision} />}
