@@ -67,3 +67,23 @@ it("keeps failed files reviewable and reports partial success", async () => {
     expect((host.querySelectorAll("button")[1] as HTMLButtonElement).disabled).toBe(true);
   } finally { await act(async () => root.unmount()); host.remove(); }
 });
+it("stops queued writes when the sidebar switches back to Files", async () => {
+  vi.resetAllMocks();
+  (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+  const files = ["first.md", "second.md"].map(path => ({root: "/temporary", path, before: "cat", after: "dog", revision: "old", changes: [{from:0,to:3,insert:"dog"}]}));
+  vi.mocked(previewWorkspaceReplace).mockResolvedValue({files,warnings:[]});
+  let finish!: () => void;
+  vi.mocked(applyWorkspaceReplacement).mockImplementationOnce(() => new Promise<void>(resolve => {finish = resolve;}));
+  const host = document.createElement("div"), root = createRoot(host);
+  const render = (active: boolean) => root.render(<WorkspaceReplacePanel folders={[]} query="cat" options={defaultSearchOptions} blocked={() => []} active={active}/>);
+  try {
+    await act(async () => render(true));
+    await act(async () => host.querySelectorAll("button")[0].click());
+    await act(async () => host.querySelectorAll("button")[1].click());
+    await act(async () => render(false));
+    await act(async () => finish());
+    expect(applyWorkspaceReplacement).toHaveBeenCalledTimes(1);
+    await act(async () => render(true));
+    expect(host.querySelectorAll("article")).toHaveLength(0);
+  } finally { await act(async () => root.unmount()); }
+});

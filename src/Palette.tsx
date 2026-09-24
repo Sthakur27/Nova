@@ -1,5 +1,3 @@
-import WorkspaceReplace from "./WorkspaceReplacePanel";
-import type { ReplaceIdentity } from "./workspaceReplace";
 import { useSearchPreferences } from "./useSearchPreferences";
 import { searchMatcher } from "./searchOptions";
 import ScopeToggle from "./ScopeToggle";
@@ -39,9 +37,9 @@ export default function Palette({
   onNavigateCurrent,
   onClose,
   onOpen,
-  getReplaceBlockedFiles,
+  onReplaceAcrossFiles,
 }: {
-  getReplaceBlockedFiles?: () => ReplaceIdentity[];
+  onReplaceAcrossFiles?: (query: string) => void;
   folders: Workspace[];
   initialFilter?: "All" | "Files";
   commands?: { id: string; label: string; description: string; keywords?: string; run: () => void }[];
@@ -83,7 +81,6 @@ export default function Palette({
     catch { return { matcher: null, error: "Invalid regular expression. Check your search pattern." }; }
   }, [query, options]);
   const [filter, setFilter] = useState<string>(initialFilter);
-  useEffect(() => { if (currentOnly && filter === "Replace") setFilter("Text"); }, [currentOnly, filter]);
   const [hits, setHits] = useState<FolderSearchHit[]>([]);
   const [bookmarks, setBookmarks] = useState<BookmarkSearchHit[]>([]);
   const [busy, setBusy] = useState(false);
@@ -105,7 +102,7 @@ export default function Palette({
     return () => window.removeEventListener("keydown", closeOnEscape, { capture: true });
   }, [onClose]);
   const files = useMemo(() => {
-    if (filter === "Replace" || filter === "Settings" || filter === "Text" || filter === "Bookmarks") return [];
+    if (filter === "Settings" || filter === "Text" || filter === "Bookmarks") return [];
     const loaded = searchFolders.flatMap(folder => folder.files.map(file => ({
       ...file, root: folder.root, folderName: folder.name,
     })));
@@ -158,13 +155,13 @@ export default function Palette({
     [activeNote, currentOnly, query, search],
   );
   const textHits =
-    filter === "Replace" || filter === "Settings" || filter === "Files" || filter === "Bookmarks"
+    filter === "Settings" || filter === "Files" || filter === "Bookmarks"
       ? []
       : currentOnly
         ? localHits
         : hits;
   const bookmarkHits =
-    filter === "Replace" || filter === "Settings" || filter === "Files" || filter === "Text"
+    filter === "Settings" || filter === "Files" || filter === "Text"
       ? []
       : currentOnly
         ? localBookmarks
@@ -198,7 +195,7 @@ export default function Palette({
     setBookmarks([]);
     setError("");
     setIndex(0);
-    if (!search.matcher || currentOnly || !query.trim() || filter === "Files" || filter === "Settings" || filter === "Replace") {
+    if (!search.matcher || currentOnly || !query.trim() || filter === "Files" || filter === "Settings") {
       setBusy(false);
       return;
     }
@@ -340,7 +337,7 @@ export default function Palette({
             { name: "Bookmarks", Icon: BookmarkIcon },
             { name: "Text", Icon: TextSearch },
             { name: "Settings", Icon: Settings2 },
-            ...(!currentOnly ? [{ name: "Replace", Icon: Replace }] : []),
+            ...(!currentOnly && onReplaceAcrossFiles ? [{ name: "Replace", Icon: Replace }] : []),
           ].map(({ name: f, Icon }) => (
             <button
               key={f}
@@ -349,6 +346,7 @@ export default function Palette({
               aria-pressed={f === filter}
               className={f === filter ? "selected" : ""}
               onClick={() => {
+                if (f === "Replace") { onClose(); onReplaceAcrossFiles?.(query); return; }
                 setFilter(f);
                 input.current?.focus();
               }}
@@ -428,8 +426,7 @@ export default function Palette({
           </div>}
         </div>
         {search.error && filter !== "Settings" && <p id="palette-query-error" role="alert" className="search-message error">{search.error}</p>}
-        {filter === "Replace" && !currentOnly ? <WorkspaceReplace folders={folders} query={query} options={options}
-          blocked={() => [...(getReplaceBlockedFiles?.() ?? (activeNote ? [activeNote] : [])), ...(activeNote?.root === "demo" ? [activeNote] : [])]} /> : <div
+        <div
           className="search-results"
           role="listbox"
           aria-label="Search results"
@@ -547,10 +544,9 @@ export default function Palette({
             <p className="search-message">No matches. Try another word.</p>
           )}
         </div>
-        }
         <div className="palette-footer">
           <span>
-            {filter === "Replace" ? <><kbd>Tab</kbd> to navigate</> : <><kbd>↑</kbd><kbd>↓</kbd> to navigate</>}
+            <kbd>↑</kbd><kbd>↓</kbd> to navigate
           </span>
           <span>
             <kbd>↵</kbd> {filter === "Replace" ? "to activate" : "to open"}

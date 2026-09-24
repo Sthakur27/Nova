@@ -97,6 +97,8 @@ Frontend tests cover idle behavior, batching, focus/overflow reconciliation, sta
 
 Metadata tests use different file lengths rather than assuming that rapid writes advance filesystem timestamps. Same-metadata events remain covered by the frontend forced-reload test. The native root-removal test deletes the fixture while the full subscription remains active instead of renaming it: Windows can deny directory renames while watcher handles remain open. It still requires a real rescan event, and all platforms retain atomic-save, deletion, and nested-directory recreation coverage.
 
+`WorkspaceSearch` provides the persistent sidebar Search view and Command/Ctrl-Shift-F capture shortcut. It debounces saved-content searches, ignores stale responses, groups hits by file, and shares the search-preference storage format with the palette. The palette’s Replace entry hands its query to this panel. Leaving the panel invalidates replacement previews and stops queued writes; an already running save completes normally.
+
 `workspaceReplace` builds bounded previews using existing search filters. `replace_saved_note` serializes writes under `Access.writes`, validates the reviewed disk revision and UTF-16 edit ranges, rejects recovery drafts and Cloud roots, and maps the latest bookmark metadata before the normal CRLF-preserving atomic save. Metadata is restored if the note save fails; these are two separate files, not a crash-atomic transaction. UI tests cover selection, preview invalidation, partial failures, and cancellation; native tests cover stale previews, drafts, Unicode bookmarks, CRLF, and scope guards.
 
 

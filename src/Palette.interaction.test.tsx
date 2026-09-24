@@ -112,3 +112,22 @@ it.each(["{broken", JSON.stringify({ options: { caseSensitive: "false", include:
     } finally { await act(async () => root.unmount()); host.remove(); }
   },
 );
+
+it("hands the palette query to the dedicated replacement panel", async () => {
+  (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+  Element.prototype.scrollIntoView = vi.fn();
+  const host = document.createElement("div"), root = createRoot(host);
+  const close = vi.fn(), replace = vi.fn();
+  try {
+    await act(async () => root.render(<Palette folders={[]} activeNote={null} getActiveText={() => ""} scope="everywhere"
+      onScopeChange={() => {}} onNavigateCurrent={() => {}} onClose={close} onOpen={() => {}} onReplaceAcrossFiles={replace}/>));
+    await act(async () => {
+      const input = host.querySelector("input")!;
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "needle");
+      input.dispatchEvent(new Event("input", {bubbles: true}));
+    });
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Replace"]')!.click());
+    expect(close).toHaveBeenCalledOnce(); expect(replace).toHaveBeenCalledExactlyOnceWith("needle");
+    expect(host.querySelector('[aria-label="Replace across files"]')).toBeNull();
+  } finally { await act(async () => root.unmount()); }
+});

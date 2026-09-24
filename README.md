@@ -62,7 +62,7 @@ Press **‚åò P** on Mac or **Ctrl P** on Windows to find a file by name. Use **‚å
 
 Search the current note, including unsaved edits, or the local folder and Cloud spaces in this window. Narrow results with case-sensitive, whole-word, or regular-expression matching. **Advanced search** lets you include `*.md` or exclude `archive/**`; Nova remembers these search options for the workspace. See the [search reference](docs/user-guide.md#search) for details.
 
-In **Everywhere** search, choose **Replace** to preview changes across saved Local files, select the files to change, and apply them. Unsaved drafts and Cloud spaces are excluded. For long Markdown notes, the **Heading outline** button in the right panel lists headings and jumps to a section without changing your editing or reading mode.
+Open **Search** beside Files, or press **Command-Shift-F / Ctrl-Shift-F**, to search saved files with results grouped by file. Expand the arrow beside Find to preview replacements across saved Local files, select the files to change, and apply them. Unsaved drafts and Cloud spaces are excluded. For long Markdown notes, the **Heading outline** button in the right panel lists headings and jumps to a section without changing your editing or reading mode.
 
 ### Keep your favorites close
 

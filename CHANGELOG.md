@@ -12,6 +12,7 @@ Entries describe source changes; availability in published installers has not be
 
 #### Added
 
+- Dedicated sidebar Search beside Files, opened with Command/Ctrl-Shift-F, with results grouped by file, collapsible Replace controls, and Advanced path filters. The command palette’s Replace entry opens this panel.
 - An expand arrow in formatted Markdown Find reveals Replace and Replace All. Replacements preserve the surrounding source, support empty replacement text, and can be undone as a single action. Read mode prompts you to switch to Edit.
 
 #### Fixed

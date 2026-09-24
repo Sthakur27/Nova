@@ -40,6 +40,8 @@ Saves check that `.nova` still matches the version opened, including changes mad
 
 ## Search
 
+**Command-Shift-F / Ctrl-Shift-F** opens the **Search** panel beside Files in the left sidebar. It searches saved content across this window’s folders, groups results by file, and opens a result at its matching line. Use the arrow beside Find to reveal replacement controls; **Advanced** contains inclusion/exclusion patterns and hidden-file search. Escape returns to Files; reopening Search retains its query. **Command-F / Ctrl-F** remains the focused note’s Find command.
+
 **Command-P / Ctrl-P** opens filename search across this window’s local folder and Cloud spaces. **Command-K / Ctrl-K** opens the broader palette for files, bookmarks, text, and settings. **Everywhere** searches saved file content; **Current tab** includes unsaved edits in the active note.
 
 Use **Match case**, **Match whole word**, or **Use regular expression** beside the query to change matching. Invalid expressions show an error; the native search engine may reject expressions unsupported by its regex syntax. These matching controls do not apply to Settings results.
@@ -50,9 +52,9 @@ Matching options, path filters, and whether Advanced search is expanded are save
 
 ### Replace across files
 
-In Command-K / Ctrl-K, select **Everywhere → Replace**, enter the search and replacement text, and choose **Preview replacements**. Expand **Review before and after** for each file, uncheck files you want to keep, then choose **Replace in … selected files**. Each selected file is saved immediately; this is not a single editor undo operation. An empty replacement deletes matches. Replacement text is literal, including `$1` and `$&`; regex matching does not expand capture groups in the replacement.
+Open **Search** beside Files (Command-Shift-F / Ctrl-Shift-F), expand the arrow beside Find, enter the search and replacement text, and choose **Preview replacements**. Command-K / Ctrl-K’s **Everywhere → Replace** also opens this panel with the palette query. Expand **Review before and after** for each file, uncheck files you want to keep, then choose **Replace in … selected files**. Each selected file is saved immediately; this is not a single editor undo operation. An empty replacement deletes matches. Replacement text is literal, including `$1` and `$&`; regex matching does not expand capture groups in the replacement.
 
-Matching uses the case, whole-word, regex, include/exclude, and hidden-file search controls. Preview covers up to 100 candidate files and four million combined before/after characters, with at most 10,000 replacements per file; warnings explain when it stops. Narrow the include filter to cover remaining files. Changing the query, replacement, or filters requires a new preview. Closing the palette or changing its search stops any remaining queued replacements; files already saved stay changed.
+Matching uses the case, whole-word, regex, include/exclude, and hidden-file search controls. Preview covers up to 100 candidate files and four million combined before/after characters, with at most 10,000 replacements per file; warnings explain when it stops. Narrow the include filter to cover remaining files. Changing the query, replacement, or filters requires a new preview. Leaving the Search panel, collapsing Replace, or changing its search stops any remaining queued replacements; files already saved stay changed.
 
 Only saved **Local** files are eligible. Cloud spaces, dirty open notes, recovery drafts, workspace metadata, and symbolic links are excluded or rejected. A file changed on disk since preview is rejected and can be previewed again. Bookmarks follow replacements, including changed passage text; deleting a whole passage retains an unresolved bookmark. Results report successful files and individual failures. Clean open desktop notes refresh through external-change detection. Browser sample notes have no filesystem watcher; open sample tabs are excluded from replacement.
 

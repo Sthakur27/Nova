@@ -87,6 +87,8 @@ import { invoke, resetLocalState, localResetInProgress } from "./resetLocalState
 import { listen } from "@tauri-apps/api/event";
 import Editor, { type EditorHandle, type EditorSnapshot } from "./Editor";
 import Palette from "./Palette";
+import WorkspaceSearch, { type SearchRequest } from "./WorkspaceSearch";
+import { installWorkspaceSearchShortcut } from "./workspaceSearchShortcut";
 import Explorer from "./Explorer";
 import FileActionDialog from "./FileActionDialog";
 import RenameDialog from "./RenameDialog";
@@ -298,6 +300,8 @@ export default function App() {
   const [preview, setPreview] = useState("");
   const [searchScope,setSearchScope]=useState<SearchScope>("everywhere");
   const [palette, setPalette] = useState<false | "All" | "Files">(false);
+  const [navigationView, setNavigationView] = useState<"files" | "search">("files");
+  const [workspaceSearchRequest, setWorkspaceSearchRequest] = useState<SearchRequest>({id: 0, replace: false});
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalStarted, setTerminalStarted] = useState(false);
   const [terminalControls, setTerminalControls] = useState<HTMLDivElement | null>(null);
@@ -1439,6 +1443,22 @@ export default function App() {
     window.addEventListener("keydown", toggleFocus, { capture: true });
     return () => window.removeEventListener("keydown", toggleFocus, { capture: true });
   }, [focusModeActive, changeFocusMode, syncFolder, settingsOpen, activeSettingId, palette, bookmarkDraft, renameTarget, fileAction]);
+  const openWorkspaceSearch = (replace = false, query?: string) => {
+    setPalette(false); setFocusMode(false); setNavigation(true); setMobileView("notes");
+    setNavigationView("search");
+    setWorkspaceSearchRequest(previous => ({id: previous.id + 1, replace, query}));
+  };
+  const getReplaceBlockedFiles = () => {
+    const busy = operation.current || !!saveInFlight.current || voiceBusy.current || localResetInProgress();
+    return tabsRef.current.filter(tab => tab.root === "demo" || busy || (
+      current.current.workspace.root === tab.root && current.current.path === tab.path
+        ? dirtyRef.current : !!paneSessions.current.get(tabId(tab))?.dirty
+    )).map(({ root, path }) => ({ root, path }));
+  };
+  useEffect(() => installWorkspaceSearchShortcut(window, mod === "⌘", () => {
+    if (syncFolder || settingsOpen || activeSettingId || bookmarkDraft || renameTarget || fileAction || document.querySelector("dialog[open]") || (mobile && !drive.status.connected)) return;
+    openWorkspaceSearch();
+  }), [syncFolder, settingsOpen, activeSettingId, bookmarkDraft, renameTarget, fileAction, drive.status.connected]);
   useEffect(() => installFileSearchShortcut(window, mod === "⌘", () => {
     if (syncFolder || (mobile && !drive.status.connected) || settingsOpen || activeSettingId || bookmarkDraft || renameTarget || fileAction || document.querySelector("dialog[open]")) return;
     setSearchScope("everywhere");
@@ -1875,7 +1895,19 @@ export default function App() {
         </button>
         </>}
         </SidebarSection>
-        <Explorer
+        <div className="navigation-views" role="group" aria-label="Navigation view">
+          <button aria-label="Files" aria-pressed={navigationView === "files"} onClick={() => setNavigationView("files")}><FolderOpen size={16}/>Files</button>
+          <button aria-label="Search across files" aria-pressed={navigationView === "search"} title={`Search across files (${mod} ⇧ F)`} onClick={() => openWorkspaceSearch()}><Search size={16}/>Search</button>
+        </div>
+        {workspaceSearchRequest.id > 0 && <div className="workspace-search-host" hidden={navigationView !== "search"}>
+          <WorkspaceSearch folders={folders} active={navigationView === "search" && !palette} request={workspaceSearchRequest}
+            blocked={getReplaceBlockedFiles} onClose={() => setNavigationView("files")}
+            onOpen={(root, path, line) => {
+              const folder = folders.find(folder => folder.root === root);
+              if (folder) void openNote(path, line, folder);
+            }}/>
+        </div>}
+        {navigationView === "files" && <Explorer
           showHidden={showHidden} onShowHidden={setShowHidden}
           folders={folders.filter(folder => !folder.cloudSpace || (drive.status.connected && folder.cloudSpace.account === drive.status.account))}
           activeRoot={workspace.root}
@@ -1900,7 +1932,7 @@ export default function App() {
           recents={recents} onRecent={recent => void openRecent(recent)} onForgetRecents={() => updateRecents([])}
           onLoadDirectory={(root, path, more) => void loadDirectory(root, path, more)} onToggleDirectory={toggleDirectory} loadingDirectories={loadingDirectories}
           externalDrag={externalDrag}
-        />
+        />}
         <SidebarSection edge="bottom" label="navigation controls" compact={compact}
           cornerControls={galaxyMode && <>
             {!mobile && <SidebarAppearance background={backgroundMode} backgrounds={availableBackgroundModes} labels={backgroundLabels}
@@ -2276,20 +2308,14 @@ export default function App() {
           key={palette}
           initialFilter={palette}
           folders={folders}
-          commands={settingCommands.map(command => command.configuration
+          commands={[{ id: "workspace-search", label: "Search across files", description: "Find and replace in saved files", keywords: "find replace everywhere search", run: () => openWorkspaceSearch() }, ...settingCommands.map(command => command.configuration
             ? { ...command, run: () => setActiveSettingId(command.id) }
-            : command)}
+            : command)]}
           scope={searchScope}
           onScopeChange={setSearchScope}
           activeNote={data?{root:workspace.root,path,bookmarks:marksRef.current}:null}
           getActiveText={() => editor.current?.text() ?? data?.text ?? ""}
-          getReplaceBlockedFiles={() => {
-            const busy = operation.current || !!saveInFlight.current || voiceBusy.current || localResetInProgress();
-            return tabsRef.current.filter(tab => tab.root === "demo" || busy || (
-              current.current.workspace.root === tab.root && current.current.path === tab.path
-                ? dirtyRef.current : !!paneSessions.current.get(tabId(tab))?.dirty
-            )).map(({ root, path }) => ({ root, path }));
-          }}
+          onReplaceAcrossFiles={query => openWorkspaceSearch(true, query)}
           onNavigateCurrent={(from,to)=>{setMobileView("editor");if(from!==undefined){setMode('source');requestAnimationFrame(()=>jump(from,to));}else editor.current?.jump(editor.current.selection().from);}}
           onClose={() => {
             setPalette(false);

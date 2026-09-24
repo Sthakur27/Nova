@@ -17,7 +17,8 @@ is tracked separately.
   protection. Uses native nonrecursive filesystem notifications for open tabs
   and expanded directories, with burst coalescing, focus/error reconciliation,
   and single-pass directory refreshes; no recurring repo scan.
-- [x] **Replace across files.** Extend workspace search with a reviewable preview,
+- [x] **Replace across files.** Dedicated Search sidebar (Command/Ctrl-Shift-F)
+  with collapsible replacement controls, grouped file results, a reviewable preview,
   file selection, and explicit application of replacements. Respect search filters,
   disk revisions, open drafts, bookmarks, and Local/Cloud save behavior. Report
   partial failures without silently overwriting changed files. The initial

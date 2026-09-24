@@ -4,8 +4,8 @@ import type { SearchOptions } from "./searchOptions";
 import { applyWorkspaceReplacement, previewWorkspaceReplace, replacementKey, type ReplaceIdentity, type ReplacePreview } from "./workspaceReplace";
 import "./workspaceReplace.css";
 
-export default function WorkspaceReplace({folders, query, options, blocked}: {
-  folders: Workspace[]; query: string; options: SearchOptions; blocked: () => ReplaceIdentity[];
+export default function WorkspaceReplace({folders, query, options, blocked, active = true}: {
+  folders: Workspace[]; query: string; options: SearchOptions; blocked: () => ReplaceIdentity[]; active?: boolean;
 }) {
   const [replacement, setReplacement] = useState("");
   const [files, setFiles] = useState<ReplacePreview[]>([]);
@@ -13,7 +13,7 @@ export default function WorkspaceReplace({folders, query, options, blocked}: {
   const [messages, setMessages] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const generation = useRef(0);
-  const signature = JSON.stringify([query, options, replacement, folders.map(folder => folder.root)]);
+  const signature = JSON.stringify([query, options, replacement, folders.map(folder => folder.root), active]);
   useEffect(() => { generation.current++; setFiles([]); setSelected(new Set()); setMessages([]); }, [signature]);
   useEffect(() => () => { generation.current++; }, []);
   const preview = async () => {
@@ -46,7 +46,8 @@ export default function WorkspaceReplace({folders, query, options, blocked}: {
   };
   return <section className="workspace-replace" aria-label="Replace across files" aria-busy={busy}>
     <label>Replace with<input value={replacement} disabled={busy} onChange={event => setReplacement(event.target.value)} placeholder="Replacement text (empty deletes matches)" /></label>
-    <p>Local saved files only. Unsaved edits, recovery drafts, and Cloud spaces are skipped; open demo tabs are also skipped. Replacement text is literal, including $1. Review before applying; each selected file is saved immediately.</p>
+    <p>Saved Local files only. Drafts and Cloud files are skipped. Each selected file is saved immediately.</p>
+    <details><summary>Replacement options</summary><p>Replacement text is literal, including $1. Leave it empty to delete matches. Review changes before applying; saved replacements cannot be undone as one editor action.</p></details>
     <div className="workspace-replace-actions">
       <button disabled={busy || !query.trim()} onClick={() => void preview()}>{busy ? "Working…" : "Preview replacements"}</button>
       <button disabled={busy || !selected.size} onClick={() => void apply()}>Replace in {selected.size} selected {selected.size === 1 ? "file" : "files"}</button>
