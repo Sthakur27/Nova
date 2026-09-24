@@ -989,6 +989,7 @@ pub fn run() {
             }
         })
         .manage(terminal::Terminals::default())
+        .manage(local_changes::LocalWatchers::default())
         .manage(Access::default())
         .manage(speech::SpeechState::default())
         .manage(drive_auth::DriveAuth::default())
@@ -1011,7 +1012,7 @@ pub fn run() {
             terminal::terminal_resize,
             terminal::terminal_close,
             registry_editor::read_registry_document, registry_editor::validate_registry_document, registry_editor::save_registry_document,
-            open_workspace, local_tree::list_directory, local_tree::search_files, local_changes::local_path_stamps,
+            open_workspace, local_tree::list_directory, local_tree::refresh_directory, local_tree::search_files, local_changes::local_path_stamps, local_changes::native_watch::watch_local_changes, local_changes::native_watch::unwatch_local_changes,
             set_file_star,
             set_sync_choice,
             read_note,
@@ -1045,6 +1046,7 @@ pub fn run() {
         .run(|app, event| {
             if let tauri::RunEvent::WindowEvent { label, event: tauri::WindowEvent::Destroyed, .. } = &event {
                 app.state::<terminal::Terminals>().close_window(label);
+                app.state::<local_changes::LocalWatchers>().close_window(label);
             }
             if let tauri::RunEvent::ExitRequested { api, .. } = event {
                 if !app.state::<Access>().quitting.load(Ordering::Relaxed)

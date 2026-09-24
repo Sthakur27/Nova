@@ -55,8 +55,14 @@ export async function openWorkspace(root: string, expandedDirectories: string[] 
   }
   return folder;
 }
-export type DirectoryListing = { files: Workspace["files"]; directories: string[]; nextOffset: number | null; warnings: string[] };
+export type DirectoryListing = { files: Workspace["files"]; directories: string[]; nextOffset: number | null; warnings: string[]; scanned?: number };
 export const listDirectory = (root: string, path: string, offset = 0) => invoke<DirectoryListing>("list_directory", { root, path, offset });
+export const refreshDirectory = (root: string, path: string, loaded: number) => invoke<DirectoryListing>("refresh_directory", { root, path, loaded });
+export function loadedDirectoryEntries(folder: Workspace, path: string): number {
+  return folder.directoryScanned?.[path] ?? folder.directoryPages?.[path] ??
+    [...folder.files.map(file => file.path), ...(folder.directories ?? [])]
+      .filter(entry => (entry.includes("/") ? entry.slice(0, entry.lastIndexOf("/")) : "") === path).length;
+}
 export function mergeDirectory(folder: Workspace, path: string, listing: DirectoryListing, append = false): Workspace {
   const parent = (path: string) => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
   const pages = { ...folder.directoryPages };
@@ -67,6 +73,7 @@ export function mergeDirectory(folder: Workspace, path: string, listing: Directo
     files: [...new Map(files.map(file => [file.path, file])).values()],
     directories: [...new Set([...(folder.directories ?? []).filter(dir => append || parent(dir) !== path), ...(path ? [path] : []), ...listing.directories])],
     directoryPages: pages, directoryErrors: errors,
+    directoryScanned: { ...folder.directoryScanned, [path]: listing.scanned ?? listing.nextOffset ?? files.filter(file => parent(file.path) === path).length + listing.directories.length },
     warnings: [...new Set([...(folder.warnings ?? []), ...listing.warnings])].slice(0, 20),
   };
 }

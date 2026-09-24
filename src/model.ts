@@ -24,6 +24,7 @@ export type Workspace = {
   directories?: string[];
   expandedDirectories?: string[];
   directoryPages?: Record<string, number>;
+  directoryScanned?: Record<string, number>;
   directoryErrors?: Record<string, string>;
   warnings?: string[];
   error?: string;

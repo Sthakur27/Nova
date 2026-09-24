@@ -20,9 +20,14 @@ pub(crate) struct Listing {
     pub directories: Vec<String>,
     pub next_offset: Option<usize>,
     pub warnings: Vec<String>,
+    pub scanned: usize,
 }
 
 pub(crate) fn list(root: &Path, relative: &str, offset: usize) -> Result<Listing, String> {
+    list_range(root, relative, offset, PAGE_SIZE)
+}
+
+fn list_range(root: &Path, relative: &str, offset: usize, limit: usize) -> Result<Listing, String> {
     let relative = Path::new(relative);
     if relative.is_absolute()
         || relative
@@ -41,12 +46,14 @@ pub(crate) fn list(root: &Path, relative: &str, offset: usize) -> Result<Listing
         directories: vec![],
         next_offset: None,
         warnings: vec![],
+        scanned: offset,
     };
     // Bound work by entries inspected, not just the number of supported files.
-    for _ in 0..PAGE_SIZE {
+    for _ in 0..limit {
         let Some(entry) = entries.next() else {
             return Ok(result);
         };
+        result.scanned += 1;
         let entry = match entry {
             Ok(e) => e,
             Err(e) => {
@@ -81,9 +88,24 @@ pub(crate) fn list(root: &Path, relative: &str, offset: usize) -> Result<Listing
         }
     }
     if entries.next().is_some() {
-        result.next_offset = Some(offset + PAGE_SIZE);
+        result.next_offset = Some(offset + limit);
     }
     Ok(result)
+}
+
+/// Rebuild the already loaded prefix with one read_dir pass, rather than
+/// restarting and skipping earlier entries for each page after a Git checkout.
+#[tauri::command]
+pub(crate) async fn refresh_directory(
+    root: String,
+    path: String,
+    loaded: usize,
+    access: State<'_, Access>,
+) -> Result<Listing, String> {
+    if loaded > 1_000_000 { return Err("Too many loaded directory entries to refresh.".into()); }
+    let root = root_path(&access, &root)?;
+    tauri::async_runtime::spawn_blocking(move || list_range(&root, &path, 0, loaded.max(PAGE_SIZE)))
+        .await.map_err(err)?
 }
 
 #[tauri::command]
@@ -204,6 +226,23 @@ pub(crate) async fn search_files(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn refreshes_five_thousand_entries_in_one_bounded_prefix() {
+        let dir = tempfile::tempdir().unwrap();
+        for i in 0..5_000 { fs::write(dir.path().join(format!("note-{i}.md")), "note").unwrap(); }
+        let root = dir.path().canonicalize().unwrap();
+        let first = list_range(&root, "", 0, 600).unwrap();
+        assert_eq!(first.scanned, 600);
+        assert_eq!(first.files.len(), 600);
+        assert_eq!(first.next_offset, Some(600));
+        let started = std::time::Instant::now();
+        let all = list_range(&root, "", 0, 5_000).unwrap();
+        assert_eq!(all.scanned, 5_000);
+        assert_eq!(all.files.len(), 5_000);
+        assert_eq!(all.next_offset, None);
+        eprintln!("5,000-file loaded-prefix refresh: {:?}", started.elapsed());
+        assert!(list_range(&root, "../outside", 0, 600).is_err());
+    }
     #[test]
     fn hidden_filename_search_is_opt_in_and_reaches_hidden_directories() {
         let dir = tempfile::tempdir().unwrap();

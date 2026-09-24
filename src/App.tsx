@@ -1,4 +1,4 @@
-import { prepareLocalReload } from "./localFileReload";
+import { LocalChangeRetry, prepareLocalReload } from "./localFileReload";
 import { useLocalChanges } from "./useLocalChanges";
 import { AppUpdateIndicator } from "./AppUpdate";
 import RegistryValidation from "./RegistryValidation";
@@ -108,7 +108,7 @@ import { RICH_DOCUMENT_LIMIT, supportsDocumentView } from "./documentLimits";
 import PlasmaEffects from "./PlasmaEffects";
 import { DEFAULT_GALAXY_PERFORMANCE, galaxyPerformanceModes, galaxyPerformanceLabels, type GalaxyPerformance } from "./galaxyPerformance";
 import {
-  chooseWorkspaces, openFolderWindow, listDirectory, mergeDirectory,
+  chooseWorkspaces, openFolderWindow, listDirectory, refreshDirectory, loadedDirectoryEntries, mergeDirectory,
   createNote,
   renameNote,
   moveNote,
@@ -1186,7 +1186,8 @@ export default function App() {
     targets: () => current.current.folders.filter(folder => folder.root !== "demo" && !folder.cloudSpace).map(folder => ({
       root: folder.root,
       files: tabsRef.current.filter(tab => tab.root === folder.root).map(tab => tab.path),
-      directories: ["", ...(folder.expandedDirectories ?? [])],
+      directories: ["", ...(folder.collapsed ? [] : (folder.expandedDirectories ?? []).filter(directory =>
+        directory.split("/").slice(0, -1).every((_, index, parts) => (folder.expandedDirectories ?? []).includes(parts.slice(0, index + 1).join("/")))))],
     })),
     busy: () => operation.current || !!saveInFlight.current || voiceBusy.current || localResetInProgress(),
     onError: setNotice,
@@ -1194,14 +1195,15 @@ export default function App() {
       const original = current.current.folders.find(folder => folder.root === root && !folder.cloudSpace);
       if (!original) return;
       // Retain every page already loaded; a background refresh must not collapse a long listing.
-      const loadedThrough = original.directoryPages?.[directory];
-      const oldCount = [...original.files.map(file => file.path), ...(original.directories ?? [])].filter(path => (path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "") === directory).length;
-      let listing = await listDirectory(root, directory);
-      while (listing.nextOffset !== null && (loadedThrough !== undefined ? listing.nextOffset < loadedThrough : listing.files.length + listing.directories.length < oldCount)) {
-        const page = await listDirectory(root, directory, listing.nextOffset);
-        listing = { files: [...listing.files, ...page.files], directories: [...listing.directories, ...page.directories], warnings: [...listing.warnings, ...page.warnings], nextOffset: page.nextOffset };
-      }
-      setFolders(old => old.map(folder => folder.root === root && !folder.cloudSpace ? mergeDirectory(folder, directory, listing) : folder));
+      const loaded = loadedDirectoryEntries(original, directory);
+      const listing = await refreshDirectory(root, directory, loaded);
+      // A manual Load more or folder switch may finish during this read.
+      const latestFolder = current.current.folders.find(folder => folder.root === root && !folder.cloudSpace);
+      if (!latestFolder) return;
+      if (loadedDirectoryEntries(latestFolder, directory) > loaded) throw new LocalChangeRetry("More directory entries were loaded; retry the changed listing.");
+      setFolders(old => old.map(folder => folder.root === root && !folder.cloudSpace &&
+        loadedDirectoryEntries(folder, directory) <= loaded
+        ? mergeDirectory(folder, directory, listing) : folder));
     },
     onFile: async (root, path, error) => {
       const id = tabId({ root, path });

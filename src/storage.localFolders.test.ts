@@ -3,7 +3,7 @@ const { invoke, open } = vi.hoisted(() => ({ invoke: vi.fn(), open: vi.fn() }));
 vi.mock("./resetLocalState", () => ({ invoke, localResetInProgress: () => false }));
 vi.mock("./platform", () => ({ desktop: true, native: true, mobile: false }));
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open }));
-import { chooseWorkspaces, openFolderWindow, mergeDirectory, openWorkspace } from "./storage";
+import { chooseWorkspaces, openFolderWindow, mergeDirectory, openWorkspace, loadedDirectoryEntries, refreshDirectory } from "./storage";
 const root = { root: "/large", name: "Large", files: [{ path: "top.md", name: "top.md" }], directories: ["nested", "denied"], directoryPages: { "": 300 } };
 afterEach(() => vi.resetAllMocks());
 it("opens only the root and explicitly expanded branches, keeping directory errors local", async () => {
@@ -39,4 +39,13 @@ it("opens a folder in a new native window without rewriting the current session"
   invoke.mockResolvedValue(undefined);
   await openFolderWindow("/large");
   expect(invoke.mock.calls).toEqual([["new_window", { root: "/large" }]]);
+});
+it("refreshes the full loaded prefix once, including entries hidden by text-file filtering", async () => {
+  const first = mergeDirectory(root, "", { files: [], directories: [], warnings: [], nextOffset: 300, scanned: 300 });
+  const loaded = mergeDirectory(first, "", { files: [{path: "last.md", name: "last.md"}], directories: [], warnings: [], nextOffset: null, scanned: 520 }, true);
+  expect(loadedDirectoryEntries(loaded, "")).toBe(520);
+  expect(loaded.directoryPages).toEqual({});
+  invoke.mockResolvedValue({files: [], directories: [], warnings: [], nextOffset: null, scanned: 519});
+  await refreshDirectory(loaded.root, "", loadedDirectoryEntries(loaded, ""));
+  expect(invoke.mock.calls).toEqual([["refresh_directory", {root: "/large", path: "", loaded: 520}]]);
 });

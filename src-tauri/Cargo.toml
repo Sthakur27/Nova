@@ -26,6 +26,7 @@ reqwest = { version = "0.12", default-features = false, features = ["blocking", 
 base64 = "0.22"
 rand = "0.8"
 [target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
+notify = "8.2"
 tauri-plugin-updater = "2"
 window-vibrancy = "0.6"
 whisper-rs = "0.16"

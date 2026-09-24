@@ -22,6 +22,7 @@ Entries describe source changes; availability in published installers has not be
 
 #### Changed
 
+- External Local-file detection now uses native filesystem notifications with burst coalescing and focus reconciliation instead of three-second polling. Only affected notes and directory listings refresh; loaded directory prefixes refresh in one pass, preserving draft protection.
 - The Starred/Bookmarks switch spans the right panel, with the duplicate header add button removed. Passage-bookmark guidance, the add button, and the shortcut sit at the bottom of the panel.
 
 #### Fixed
