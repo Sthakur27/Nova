@@ -62,6 +62,7 @@ import {
 import {
   Cloud,
   CloudOff,
+  Command,
   Bookmark as BookmarkIcon,
   BookOpen,
   ChevronRight,
@@ -1923,17 +1924,17 @@ export default function App() {
             <GalaxyMark className="galaxy-symbol" />
           </button>
         </div>
-        <button className="search-trigger" onClick={() => setPalette("All")}>
-          <Search size={16} />
-          <span>Find anything</span>
+        <button className="search-trigger" title={`Quick find: files, bookmarks, text, and commands (${mod} K)`} onClick={() => setPalette("All")}>
+          <Command size={16} aria-hidden="true" />
+          <span>Quick find</span>
           <kbd>{mod} K</kbd>
         </button>
         </>}
         </SidebarSection>
         {compact && <button className="mobile-create-note" onClick={() => void newTab()}><Plus size={19} />New note</button>}
         <div className="navigation-views" role="group" aria-label="Navigation view">
-          <button aria-label="Files" aria-pressed={navigationView === "files"} onClick={() => setNavigationView("files")}><FolderOpen size={16}/>Files</button>
-          <button aria-label="Search across files" aria-pressed={navigationView === "search"} title={`Search across files (${mod} ⇧ F)`} onClick={() => openWorkspaceSearch()}><Search size={16}/>Search</button>
+          <button aria-label="Files" title="Files" aria-pressed={navigationView === "files"} onClick={() => setNavigationView("files")}><FolderOpen size={18} aria-hidden="true"/></button>
+          <button aria-label="Search across files" aria-pressed={navigationView === "search"} title={`Search across files (${mod} ⇧ F)`} onClick={() => openWorkspaceSearch()}><Search size={18} aria-hidden="true"/></button>
         </div>
         {workspaceSearchRequest.id > 0 && <div className="workspace-search-host" hidden={navigationView !== "search"}>
           <WorkspaceSearch folders={folders} active={navigationView === "search" && !palette} request={workspaceSearchRequest}

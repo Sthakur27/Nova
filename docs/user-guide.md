@@ -40,6 +40,8 @@ Saves check that `.nova` still matches the version opened, including changes mad
 
 ## Search
 
+The navigation header’s **Quick find** button uses a command icon and opens the Command-K / Ctrl-K palette for files, bookmarks, text, and commands. Below it, the folder icon opens **Files** and the magnifying glass opens **Search across files**. Both icon buttons have hover labels and highlight the active view.
+
 **Command-Shift-F / Ctrl-Shift-F** opens the **Search** panel beside Files in the left sidebar. It searches saved content across this window’s folders, groups results by file, and opens a result at its matching line. Use the arrow beside Find to reveal replacement controls; **Advanced** contains inclusion/exclusion patterns and hidden-file search. Escape returns to Files; reopening Search retains its query. **Command-F / Ctrl-F** remains the focused note’s Find command.
 
 **Command-P / Ctrl-P** opens filename search across this window’s local folder and Cloud spaces. **Command-K / Ctrl-K** opens the broader palette for files, bookmarks, text, and settings. **Everywhere** searches saved file content; **Current tab** includes unsaved edits in the active note.

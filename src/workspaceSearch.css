@@ -1,5 +1,5 @@
 .navigation-views { display: flex; gap: 4px; padding: 8px 12px; border-bottom: 1px solid var(--border, #ffffff20); }
-.navigation-views button { display: flex; align-items: center; justify-content: center; gap: 7px; flex: 1; padding: 7px; border-radius: 5px; font-size: 12px; }
+.navigation-views button { display: flex; align-items: center; justify-content: center; flex: 0 0 36px; width: 36px; height: 36px; padding: 0; border-radius: 5px; }
 .navigation-views button[aria-pressed="true"], .workspace-search button[aria-pressed="true"] { background: var(--hover, #ffffff0c); box-shadow: inset 0 -2px currentColor; }
 .workspace-search-host { flex: 1; min-height: 0; overflow: auto; }
 .workspace-search-host[hidden] { display: none; }

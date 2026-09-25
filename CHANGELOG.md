@@ -18,6 +18,8 @@ Entries describe source changes; availability in published installers has not be
 
 #### Changed
 
+- The navigation header uses compact icon-only Files and Search buttons. The Command-K / Ctrl-K launcher is labeled Quick find with a command icon, distinct from the magnifying glass for search across files.
+
 - Mobile editing uses a fixed New note action, an Open files sheet, and full-panel left/right swipes anywhere on the editor. Outgoing and incoming notes follow the finger together, short swipes snap back, and switching cycles between the first and last open file. Renaming has explicit Rename/Cancel controls, and the formatting bar prioritizes common actions with a persistent keyboard-dismiss button; tapping blank note padding also dismisses the keyboard.
 
 - Read mode is now optional on desktop and mobile: **Settings → Show Read mode** defaults off, including for existing installations. Saved reading tabs fall back to editing, while large Markdown notes retain their reader. The mode switch is hidden for plain-text files when Read is off, since only editing is available.

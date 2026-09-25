@@ -117,6 +117,8 @@ kbd {
   width: 100%;
   font-size: 12px;
 }
+.search-trigger svg, .search-trigger kbd { flex-shrink: 0; }
+.search-trigger span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .search-trigger kbd {
   margin-left: auto;
 }
