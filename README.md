@@ -96,6 +96,8 @@ In Settings, choose **High performance** for smoother Galaxy animation or **Save
 
 ### Comfortable controls, close at hand
 
+On mobile, the expand icon beside **Open files** enters **focus mode**, leaving just your note. Keep typing or swipe between notes, and tap the small top-right icon to exit. The **Galaxy mode** button beside it switches Galaxy styling on or off, including while focused.
+
 Give a long paragraph more breathing room with **Line spacing**, or choose a comfortable reading width with **Text width**. Find these controls, along with **Font** and **Text size**, in the **View** menu above your note. In Read mode, choose **Continuous** scrolling or **Pages** with **Reading layout**. Drag the side-panel dividers to resize them, and use the arrows around the edges to tuck panels away.
 
 ![Nova's writing view with the line-spacing menu open, formatting toolbar, and panel controls](docs/screenshots/ergonomic-controls.jpg)
@@ -108,7 +110,7 @@ Open **Settings** using the gear in the lower-left corner to adjust text size, s
 
 ### Just you and the page
 
-Enter **focus mode** to hide the folders, bookmarks, and toolbars. Choose your preferred text width first, then settle into the page. Press **⌘ G** on Mac or **Ctrl G** on Windows to bring all the panels back.
+Enter **focus mode** to hide the folders, bookmarks, and toolbars. Choose your preferred text width first, then settle into the page. Press **⌘ G** on Mac or **Ctrl G** on Windows to restore your panels.
 
 ![Nova on Mac in focus mode with two notes side by side, toolbars hidden, and a warm desktop backdrop showing through the window](docs/screenshots/desktop-focus-view.png)
 

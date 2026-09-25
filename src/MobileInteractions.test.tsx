@@ -3,6 +3,7 @@ import { act, type PointerEvent as ReactPointerEvent } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import MobileFileBar from "./MobileFileBar";
+import MobileViewControls from "./MobileViewControls";
 import RenameDialog from "./RenameDialog";
 import FileTitle from "./FileTitle";
 import { dismissKeyboardOutsideEditor } from "./mobileGestures";
@@ -66,4 +67,30 @@ it("dismisses for blank note padding while preserving caret taps and formatting 
   tap(editable.firstElementChild!); expect(document.activeElement).toBe(editable);
   tap(container.querySelector("button")!); expect(document.activeElement).toBe(editable);
   tap(editable); expect(document.activeElement).not.toBe(editable); expect(preventDefault).toHaveBeenCalledOnce();
+});
+
+it("enters focus from the file bar without changing the note or opening the file sheet", async () => {
+  const onFocus = vi.fn(), onSelect = vi.fn(), onNew = vi.fn();
+  await act(async () => root.render(<MobileFileBar tabs={tabs} selected={tabId(tabs[1])}
+    onSelect={onSelect} onNew={onNew} viewControls={<MobileViewControls focused={false} galaxy onFocus={onFocus} onGalaxy={vi.fn()} />} onCloseTab={vi.fn()} />));
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Enter focus mode"]')!.click());
+  expect(onFocus).toHaveBeenCalledOnce();
+  expect(onSelect).not.toHaveBeenCalled();
+  expect(onNew).not.toHaveBeenCalled();
+  expect(container.querySelector("dialog")).toBeNull();
+  expect(container.querySelector(".mobile-file-picker")?.getAttribute("aria-label")).toBe("Open files: Two.md");
+});
+
+it("keeps Galaxy toggling independent of focus and exposes an exit action", async () => {
+  const onGalaxy = vi.fn(), onFocus = vi.fn();
+  await act(async () => root.render(<MobileViewControls focused galaxy onFocus={onFocus} onGalaxy={onGalaxy} />));
+  const galaxy = container.querySelector<HTMLButtonElement>('[aria-label="Galaxy mode"]')!;
+  expect(galaxy.getAttribute("aria-pressed")).toBe("true");
+  await act(async () => galaxy.click());
+  expect(onGalaxy).toHaveBeenCalledOnce();
+  expect(onFocus).not.toHaveBeenCalled();
+  await act(async () => root.render(<MobileViewControls focused galaxy={false} onFocus={onFocus} onGalaxy={onGalaxy} />));
+  expect(galaxy.getAttribute("aria-pressed")).toBe("false");
+  await act(async () => container.querySelector<HTMLButtonElement>('[aria-label="Exit focus mode"]')!.click());
+  expect(onFocus).toHaveBeenCalledWith(false);
 });

@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, FileText, Pencil, Plus, X } from "lucide-react";
 import { tabId, type NoteTab } from "./tabs";
 
-export default function MobileFileBar({ tabs, selected, onSelect, onNew, onRename, onCloseTab }: {
+export default function MobileFileBar({ tabs, selected, onSelect, onNew, viewControls, onRename, onCloseTab }: {
   tabs: NoteTab[]; selected: string | null; onSelect: (tab: NoteTab) => void;
-  onNew: () => void; onRename?: () => void; onCloseTab: (tab: NoteTab) => void;
+  viewControls?: ReactNode; onNew: () => void; onRename?: () => void; onCloseTab: (tab: NoteTab) => void;
 }) {
   const [open, setOpen] = useState(false);
   const current = tabs.find(tab => tabId(tab) === selected);
@@ -15,6 +15,7 @@ export default function MobileFileBar({ tabs, selected, onSelect, onNew, onRenam
       <FileText size={17} /><span>{current?.path.split("/").at(-1) ?? "Open files"}</span>
       <span className="mobile-file-count">{tabs.length}</span><ChevronDown size={16} />
     </button>
+    {viewControls}
     {onRename && <button className="icon-button" aria-label="Rename current file" onClick={onRename}><Pencil size={17} /></button>}
     <button className="mobile-new-note" aria-label="New note" onClick={onNew}><Plus size={19} /><span>New</span></button>
     {open && <OpenFiles tabs={tabs} selected={selected} onSelect={tab => { setOpen(false); onSelect(tab); }}

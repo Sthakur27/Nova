@@ -126,3 +126,31 @@ html[data-mobile-keyboard="true"] .app-shell[data-compact="true"] .toast { botto
 .note-preview .mobile-file-bar .icon-button { display: flex; align-items: center; justify-content: center; }
 .note-preview-placeholder { padding: 32px 22px; color: #b5aebf; }
 .mobile-note-carousel[data-enabled="false"] > .note-carousel-current { transform: none; }
+
+/* Focus changes only chrome: the mounted editor and swipe carousel stay interactive. */
+.app-shell[data-compact="true"][data-focus-mode="true"] {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.app-shell[data-compact="true"][data-focus-mode="true"] :is(.mobile-navigation, .mobile-file-bar, .top-bars-container, .status-bar-container) {
+  display: none;
+}
+.mobile-view-controls { display: flex; align-items: center; flex-shrink: 0; }
+.mobile-view-controls .icon-button { display: flex; align-items: center; justify-content: center; }
+.mobile-view-controls [aria-pressed="true"] { color: #dfc7ff; }
+.mobile-view-controls svg { width: 17px; height: 17px; }
+.mobile-focus-controls {
+  position: absolute;
+  z-index: 35;
+  top: calc(env(safe-area-inset-top) + 4px);
+  right: calc(env(safe-area-inset-right) + 4px);
+}
+.mobile-focus-controls .icon-button {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #26252dcc;
+  color: #c4bdcf;
+  opacity: .7;
+}
+.mobile-focus-controls .icon-button:hover, .mobile-focus-controls .icon-button:focus-visible { opacity: 1; }
+.app-shell[data-compact="true"][data-focus-mode="true"] .toast { bottom: calc(env(safe-area-inset-bottom) + 12px); }

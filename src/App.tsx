@@ -18,6 +18,7 @@ import ReadFind from "./ReadFind";
 import { installFileSearchShortcut } from "./fileSearchShortcut";
 import FileTitle from "./FileTitle";
 import MobileFileBar from "./MobileFileBar";
+import MobileViewControls from "./MobileViewControls";
 import { dismissKeyboardOutsideEditor, dismissNoteKeyboard } from "./mobileGestures";
 import MobileNoteCarousel from "./MobileNoteCarousel";
 import MobileNotePreview, { type MobilePreview } from "./MobileNotePreview";
@@ -335,7 +336,7 @@ export default function App() {
   }, [setStatusBar]);
   const toggleTerminal = () => changeTerminalOpen(!(terminalOpen && statusBar));
   const [focusMode, setFocusMode, focusModeError] = usePreference<boolean>("focus-mode", false);
-  const focusModeActive = focusMode || (!navigation && !rail && !topBars && !statusBar);
+  const focusModeActive = focusMode || (!compact && !navigation && !rail && !topBars && !statusBar);
   const [hoveredBottom, setHoveredBottom] = useState(false);
   const [hoveredTop, setHoveredTop] = useState(false);
   const [hoveredEdge, setHoveredEdge] = useState<"left" | "right" | null>(null);
@@ -1430,15 +1431,16 @@ export default function App() {
   };
   const transitionFocus = useFocusTransition(galaxyMode && !compact);
   const changeFocusMode = useCallback((focused: boolean) => transitionFocus(focused, () => {
+    if (compact) setMobileView("editor");
     // Restore panels only when exiting the all-panels-collapsed state; explicit focus mode preserves their settings.
-    if (!focused && !focusMode) {
+    if (!compact && !focused && !focusMode) {
       setNavigation(true);
       setRail(true);
       setTopBars(true);
       setStatusBar(true);
     }
     setFocusMode(focused);
-  }), [transitionFocus, focusMode, setFocusMode, setNavigation, setRail, setTopBars, setStatusBar]);
+  }), [compact, transitionFocus, focusMode, setFocusMode, setNavigation, setRail, setTopBars, setStatusBar]);
   useEffect(() => {
     if (compact || syncFolder || settingsOpen || activeSettingId || palette || bookmarkDraft || renameTarget || fileAction) return;
     return installPanelShortcuts(window, mod === "⌘", panel => {
@@ -1670,6 +1672,7 @@ export default function App() {
   function renderPaneTabs(pane: Pane) {
     if (compact) return <MobileFileBar tabs={tabs} selected={pane.selected}
       onSelect={tab => { const folder = folders.find(f => f.root === tab.root); if (folder) void openNote(tab.path, undefined, folder); }}
+      viewControls={<MobileViewControls focused={false} galaxy={galaxyMode} onFocus={changeFocusMode} onGalaxy={toggleGalaxy} />}
       onNew={() => { if (activatePane(pane.id)) void newTab(); }}
       onRename={data && path !== ".nova" ? () => setRenameTarget({ folder: workspace, path }) : undefined}
       onCloseTab={tab => void closeTab(tab)} />;
@@ -1874,12 +1877,12 @@ export default function App() {
       toggleSetting("navigation-panel", "Navigation panel", navigation, setNavigation, "sidebar files"),
       toggleSetting("top-bars", "Top bars", topBars, setTopBars, "toolbar tabs"),
       toggleSetting("status-bar", "Status bar", statusBar, setStatusBar),
-      toggleSetting("focus-mode", "Focus mode", focusMode, setFocusMode),
+      toggleSetting("focus-mode", "Focus mode", focusMode, changeFocusMode),
     ] : []),
   ];
   const activeSetting = settingCommands.find(command => command.id === activeSettingId)?.configuration;
   return (
-    <div className="app-shell" data-compact={compact} data-mobile={mobile} data-mobile-view={mobileView} data-top-bars={compact || topBars} data-focus-mode={!compact && focusMode} data-window-focused={windowFocused} data-galaxy={galaxyMode} data-background={supportsTranslucency ? backgroundMode : "off"} data-frosted-panes={supportsFrosted && frostedPanes} data-editor-size={fontSize} data-editor-font={editorFont} data-text-width={textWidth} data-line-spacing={lineSpacing}
+    <div className="app-shell" data-compact={compact} data-mobile={mobile} data-mobile-view={mobileView} data-top-bars={compact || topBars} data-focus-mode={focusMode} data-window-focused={windowFocused} data-galaxy={galaxyMode} data-background={supportsTranslucency ? backgroundMode : "off"} data-frosted-panes={supportsFrosted && frostedPanes} data-editor-size={fontSize} data-editor-font={editorFont} data-text-width={textWidth} data-line-spacing={lineSpacing}
       onClickCapture={compact ? dismissKeyboardOutsideEditor : undefined}
       onPointerMove={(event) => {
         if (event.pointerType === "touch") return;
@@ -1901,6 +1904,9 @@ export default function App() {
           </span>
         </button>
       )}
+      {compact && focusMode && <div className="mobile-focus-controls">
+        <MobileViewControls focused galaxy={galaxyMode} onFocus={changeFocusMode} onGalaxy={toggleGalaxy} />
+      </div>}
       {galaxyMode && <PlasmaEffects performanceMode={galaxyPerformance} active={!compact && windowFocused} dirty={dirty} lineHighlight={showLineHighlight} />}
       {compact && <nav className="mobile-navigation" aria-label="Main navigation">
         <button aria-label="Your notes" aria-pressed={mobileView === "notes"} onClick={() => setMobileView("notes")}><FolderOpen size={20} /><span>Notes</span></button>
@@ -2009,7 +2015,7 @@ export default function App() {
         </div>
         </SidebarSection>
       </aside>
-      <main ref={tabStripRef} className="main-panel" hidden={compact && mobileView !== "editor"}
+      <main ref={tabStripRef} className="main-panel" hidden={compact && mobileView !== "editor" && !focusMode}
         onPointerMove={(event) => {
           if (event.pointerType === "touch") return;
           const bounds = event.currentTarget.getBoundingClientRect();
@@ -2080,7 +2086,7 @@ export default function App() {
             </span>
           </button>
           </ViewOptions>
-          {galaxyMode && <button
+          {!compact && galaxyMode && <button
             className="icon-button toolbar-icon focus-toggle transparency-control"
             aria-label={`Background: ${backgroundLabels[backgroundMode]}. Switch to ${backgroundLabels[nextBackgroundMode]}`}
             aria-describedby="translucency-tooltip"
@@ -2092,7 +2098,7 @@ export default function App() {
               Click for {backgroundLabels[nextBackgroundMode].toLowerCase()}
             </span>
           </button>}
-          {galaxyMode && supportsFrosted && <button
+          {!compact && galaxyMode && supportsFrosted && <button
             className="icon-button toolbar-icon focus-toggle transparency-control"
             aria-label="Frosted panels"
             aria-pressed={frostedPanes}
@@ -2190,7 +2196,7 @@ export default function App() {
           </button>
         </div>
         </div>
-        <MobileNoteCarousel enabled={compact && mobileView === "editor" && !palette && !settingsOpen && !activeSettingId && !renameTarget && !fileAction && !syncFolder && !bookmarkDraft}
+        <MobileNoteCarousel enabled={compact && (mobileView === "editor" || focusMode) && !palette && !settingsOpen && !activeSettingId && !renameTarget && !fileAction && !syncFolder && !bookmarkDraft}
           ids={tabs.map(tabId)} selected={tabId({ root: workspace.root, path })}
           onSelect={async id => {
             const tab = tabsRef.current.find(tab => tabId(tab) === id);

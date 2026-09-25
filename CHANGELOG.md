@@ -12,6 +12,8 @@ Entries describe source changes; availability in published installers has not be
 
 #### Added
 
+- Mobile focus mode hides navigation, file controls, toolbars, and status chrome while preserving editing and swipes between notes. Enter from the expand icon beside Open files; exit with the small top-right icon. A Galaxy toggle sits beside Focus and stays available while focused, replacing ineffective mobile translucency controls.
+
 - `./runios.sh --standalone` opens Xcode for an iPhone build with a bundled interface, avoiding dependence on a reachable development server after installation. iOS also declares development-server local-network access, and the mobile guide covers blank-screen network troubleshooting.
 
 - Drag files directly from the Explorer or Starred files into desktop editor panes, tab strips, or split edges without opening a tab first.
