@@ -20,3 +20,6 @@ export function usePreference<T extends string | boolean>(key: string, fallback:
   };
   return [value, update, error] as const;
 }
+
+/** Shared by desktop and mobile; existing installations also opt in explicitly. */
+export const useReadModePreference = () => usePreference<boolean>("show-read-mode", false);

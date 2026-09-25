@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { usePreference } from "./preferences";
+import { usePreference, useReadModePreference } from "./preferences";
 import { DEFAULT_EXTENSION } from "./fileExtensions";
 import { DEFAULT_GALAXY_PERFORMANCE, galaxyPerformanceModes, type GalaxyPerformance } from "./galaxyPerformance";
 
@@ -29,4 +29,24 @@ it("defaults Galaxy performance to high and restores valid saved modes", () => {
   expect(renderToStaticMarkup(<GalaxyPreference />)).toBe("<span>saver</span>");
   values.set("nova:galaxy-performance:v1", "invalid");
   expect(renderToStaticMarkup(<GalaxyPreference />)).toBe("<span>high</span>");
+});
+
+function ReadModePreference() {
+  const [enabled] = useReadModePreference();
+  return <span>{String(enabled)}</span>;
+}
+it("keeps Read off for new and legacy installs, and restores explicit opt-in", () => {
+  const values = new Map<string, string>();
+  vi.stubGlobal("localStorage", { getItem: (key: string) => values.get(key) ?? null });
+  expect(renderToStaticMarkup(<ReadModePreference />)).toBe("<span>false</span>");
+  values.set("nova:file-mode:.md:v1", "read");
+  expect(renderToStaticMarkup(<ReadModePreference />)).toBe("<span>false</span>");
+  values.set("nova:show-read-mode:v1", "on");
+  expect(renderToStaticMarkup(<ReadModePreference />)).toBe("<span>true</span>");
+  values.set("nova:show-read-mode:v1", "off");
+  expect(renderToStaticMarkup(<ReadModePreference />)).toBe("<span>false</span>");
+});
+it("keeps Read off when preference storage is unavailable", () => {
+  vi.stubGlobal("localStorage", { getItem: () => { throw new Error("unavailable"); } });
+  expect(renderToStaticMarkup(<ReadModePreference />)).toBe("<span>false</span>");
 });

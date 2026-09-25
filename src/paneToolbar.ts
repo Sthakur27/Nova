@@ -2,6 +2,11 @@ import type { EditorMode } from "./folders";
 import { supportsDocumentView } from "./documentLimits";
 export const isMarkdownFile = (path: string) => /\.(md|markdown|mdx)$/i.test(path);
 export const paneMode = (mode: EditorMode, path: string): EditorMode => mode === "edit" && !isMarkdownFile(path) ? "source" : mode;
+/** Large Markdown notes retain the chunked reader when rich editing is unavailable. */
+export const readModeAvailable = (showReadMode: boolean, path: string, length: number) =>
+  showReadMode || (isMarkdownFile(path) && !supportsDocumentView(length));
+export const availablePaneMode = (mode: EditorMode, path: string, length: number, showReadMode: boolean): EditorMode =>
+  paneMode(mode === "read" && !readModeAvailable(showReadMode, path, length) ? "edit" : mode, path);
 export type PaneView = { path: string; mode: EditorMode; length: number };
 
 /** Plain text has one editing view; it is compatible with both Markdown editing modes. */

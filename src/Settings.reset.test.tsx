@@ -9,6 +9,7 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("./confirmCloudReset", () => ({confirmCloudReset:vi.fn()}));
 const noop = vi.fn();
 const props: ComponentProps<typeof Settings> = {
+  showReadMode:false,onShowReadMode:noop,
   tooltips:true,onTooltips:noop,
   onClose:noop, galaxyPerformance:"high",onGalaxyPerformance:noop,galaxy:false,onGalaxy:noop,lineHighlight:false,onLineHighlight:noop,
   lineNumbers:false,onLineNumbers:noop,wordWrap:true,onWordWrap:noop,spellcheck:false,onSpellcheck:noop,
@@ -64,5 +65,27 @@ it("opens the header guide without an available update and allows retry after fa
     expect(host.querySelector('[role="alert"]')).toBeNull();
     expect(updater.download).not.toHaveBeenCalled();
     expect(host.querySelector("dialog")).not.toBeNull();
+  } finally { await act(async () => root.unmount()); }
+});
+
+it("offers the Read opt-in in both desktop and mobile settings", async () => {
+  (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+  HTMLDialogElement.prototype.showModal = vi.fn();
+  HTMLDialogElement.prototype.close = vi.fn();
+  const host = document.createElement("div"), root = createRoot(host);
+  const onShowReadMode = vi.fn();
+  try {
+    for (const mobile of [false, true]) {
+      await act(async () => root.render(<Settings {...props} onShowReadMode={onShowReadMode} onResetLocal={mobile ? async () => {} : undefined} />));
+      const label = [...host.querySelectorAll("label")].find(label => label.textContent === "Show Read mode")!;
+      const toggle = host.querySelector<HTMLButtonElement>(`[aria-labelledby="${label.id}"]`)!;
+      expect(toggle.getAttribute("aria-checked")).toBe("false");
+      await act(async () => toggle.click());
+      expect(onShowReadMode).toHaveBeenLastCalledWith(true);
+      await act(async () => root.render(<Settings {...props} showReadMode onShowReadMode={onShowReadMode} />));
+      expect(toggle.getAttribute("aria-checked")).toBe("true");
+      await act(async () => toggle.click());
+      expect(onShowReadMode).toHaveBeenLastCalledWith(false);
+    }
   } finally { await act(async () => root.unmount()); }
 });

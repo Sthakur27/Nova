@@ -33,7 +33,7 @@ import TerminalPanel from "./TerminalPanel";
 import { installPanelShortcuts } from "./panelShortcuts";
 import SidePanelControls from "./SidePanelControls";
 import TextWidthControl, { textWidths, type TextWidth } from "./TextWidthControl";
-import { usePreference } from "./preferences";
+import { usePreference, useReadModePreference } from "./preferences";
 import { useTooltips } from "./useTooltips";
 import { DEFAULT_EXTENSION } from "./fileExtensions";
 import { useBackgroundBlur } from "./useBackgroundBlur";
@@ -45,7 +45,7 @@ import type {SearchScope} from "./currentSearch";
 import { openTab, pinTab, reorderTab, tabId, type NoteTab } from "./tabs";
 import { useTabReorder, type PaneDrop, type NavigationFile } from "./useTabReorder";
 import EditorPanes from "./EditorPanes";
-import { paneMode, paneToolbar, type PaneView } from "./paneToolbar";
+import { availablePaneMode, readModeAvailable, paneMode, paneToolbar, type PaneView } from "./paneToolbar";
 import { initialPane, paneLeaves, reconcilePanes, selectPaneTab, movePaneTab, mapPane, parsePaneLayout, type Pane, type PaneNode } from "./paneLayout";
 import {
   lazy,
@@ -175,6 +175,7 @@ export default function App() {
     setSyncFolder(folders.find(item => item.root === folder.root) ?? folders[0] ?? folder);
   }
   const [renameTarget, setRenameTarget] = useState<{ folder: Workspace; path: string } | null>(null);
+  const [showReadMode, setShowReadMode, readModeError] = useReadModePreference();
   const [readingLayout, setReadingLayout] = usePreference<"continuous" | "pages">("reading-layout", "continuous", ["continuous", "pages"]);
   const [readControls, setReadControls] = useState<HTMLDivElement | null>(null);
   const [galaxyPerformance, setGalaxyPerformance, galaxyPerformanceError] = usePreference<GalaxyPerformance>("galaxy-performance", DEFAULT_GALAXY_PERFORMANCE, galaxyPerformanceModes);
@@ -296,9 +297,18 @@ export default function App() {
   const [draftStatus, setDraftStatus] = useState<"saving" | "saved" | "error">("saved");
   const draftWrite = useRef(0);
   const draftFailed = useRef(false);
-  const [mode, setMode] = useState<EditorMode>("edit");
+  const [requestedMode, setMode] = useState<EditorMode>("edit");
   const sharedViewMode = useRef<EditorMode | null>(null);
   const [preview, setPreview] = useState("");
+  const mode = availablePaneMode(requestedMode, path, Math.max(data?.text.length ?? 0, preview.length), showReadMode);
+  const sessionMode = (session: PaneSession) => availablePaneMode(session.mode, session.path,
+    Math.max(session.data.text.length, session.preview.length), showReadMode);
+  useEffect(() => {
+    // Normalize restored and hidden tabs too, so enabling Read later cannot revive a stale mode.
+    if (requestedMode !== mode) setMode(mode);
+    if (!showReadMode && sharedViewMode.current === "read") sharedViewMode.current = null;
+    for (const session of paneSessions.current.values()) session.mode = sessionMode(session);
+  });
   const [searchScope,setSearchScope]=useState<SearchScope>("everywhere");
   const [palette, setPalette] = useState<false | "All" | "Files">(false);
   const [navigationView, setNavigationView] = useState<"files" | "search">("files");
@@ -462,12 +472,12 @@ export default function App() {
     focusPane(id);
     const handle = paneEditors.current.get(pane!.selected!);
     editor.current = handle ?? null;
-    current.current = { ...current.current, workspace: session.workspace, path: session.path, mode: session.mode, hasDocument: true };
+    current.current = { ...current.current, workspace: session.workspace, path: session.path, mode: sessionMode(session), hasDocument: true };
     revision.current = session.data.revision;
     dirtyRef.current = session.dirty;
     applyMarks(session.data.bookmarks);
     setWorkspace(session.workspace); setPath(session.path); setData(session.data);
-    setMode(session.mode); setDirty(session.dirty); setPreview(session.preview);
+    setMode(sessionMode(session)); setDirty(session.dirty); setPreview(session.preview);
     setEditorSnapshot(session.snapshot); setCursor(session.cursor); setActiveMark(null);
     setActiveFormats(session.formats ?? []); setParagraphStyle(session.paragraph ?? "paragraph");
     return true;
@@ -1602,7 +1612,7 @@ export default function App() {
     for (const pane of visiblePanes) {
       const session = pane.selected ? paneSessions.current.get(pane.selected) : undefined;
       if (!session) continue;
-      session.mode = paneMode(next, session.path);
+      session.mode = availablePaneMode(next, session.path, Math.max(session.data.text.length, session.preview.length), showReadMode);
       session.preview = paneEditors.current.get(pane.selected!)?.text() ?? session.data.text;
       try { saveFileMode(session.path, next); } catch { storageFailed = true; }
     }
@@ -1614,9 +1624,10 @@ export default function App() {
   const visibleViews: PaneView[] = paneLeaves(paneLayout).filter(pane => !compact || pane.id === activePane).flatMap(pane => {
     if (pane.id === activePane) return data ? [{ path, mode, length: Math.max(data.text.length, editor.current?.text().length ?? 0) }] : [];
     const session = pane.selected ? paneSessions.current.get(pane.selected) : undefined;
-    return session ? [{ path: session.path, mode: session.mode, length: session.data.text.length }] : [];
+    return session ? [{ path: session.path, mode: sessionMode(session), length: Math.max(session.data.text.length, session.preview.length) }] : [];
   });
   const toolbar = paneToolbar(visibleViews);
+  const readAvailable = showReadMode || visibleViews.some(view => readModeAvailable(false, view.path, view.length));
   const isMarkdown = /\.(md|markdown|mdx)$/i.test(path);
   const toggleReadTask = (offset: number, checked: boolean) => {
     editor.current?.toggleTask(offset, checked);
@@ -1721,7 +1732,7 @@ export default function App() {
     const workspace = isActive ? current.current.workspace : session?.workspace ?? current.current.workspace;
     const path = isActive ? current.current.path : session?.path ?? "";
     const paneData = isActive ? data : session?.data ?? null;
-    const paneMode = isActive ? mode : session?.mode ?? "source";
+    const paneMode = isActive ? mode : session ? sessionMode(session) : "source";
     const panePreview = isActive ? preview : session?.preview ?? "";
     const paneSnapshot = isActive ? editorSnapshot : session?.snapshot;
     const paneLoading = isActive && loading;
@@ -1829,7 +1840,8 @@ export default function App() {
     ...settingChoices("text-size", "Text size", fontSize, textSizes, setFontSize, undefined, "font size typography"),
     ...settingChoices("text-width", "Text width", textWidth, textWidths, setTextWidth, { full: "Full width" }, "editor width"),
     ...settingChoices("line-spacing", "Line spacing", lineSpacing, lineSpacings, setLineSpacing, undefined, "line height typography"),
-    ...settingChoices("reading-layout", "Reading layout", readingLayout, ["continuous", "pages"] as const, setReadingLayout),
+    toggleSetting("show-read-mode", "Show Read mode", showReadMode, setShowReadMode, "editor reading"),
+    ...(readAvailable ? settingChoices("reading-layout", "Reading layout", readingLayout, ["continuous", "pages"] as const, setReadingLayout) : []),
     toggleSetting("line-numbers", "Line numbers", showLineNumbers, setShowLineNumbers, "numbering gutter"),
     toggleSetting("line-highlight", "Line highlight", showLineHighlight, setShowLineHighlight, "current line"),
     toggleSetting("word-wrap", "Word wrap", wordWrap, setWordWrap, "long lines"),
@@ -2001,9 +2013,9 @@ export default function App() {
             </button>
           </div>
           <ViewOptions>
-            <label className="view-option-row"><span>Reading layout</span><select aria-label="Reading layout" value={readingLayout} onChange={event => setReadingLayout(event.target.value as "continuous" | "pages")}>
+            {readAvailable && <label className="view-option-row"><span>Reading layout</span><select aria-label="Reading layout" value={readingLayout} onChange={event => setReadingLayout(event.target.value as "continuous" | "pages")}>
               <option value="continuous">Continuous</option><option value="pages">Pages</option>
-            </select></label>
+            </select></label>}
           <label className="view-option-row"><span>Font</span><FontControl value={editorFont} onChange={setEditorFont} /></label>
           <label className="view-option-row"><span>Text size</span><TextSizeControl value={fontSize} onChange={setFontSize} /></label>
           <label className="view-option-row"><span>Text width</span><TextWidthControl value={textWidth} onChange={setTextWidth} /></label>
@@ -2114,15 +2126,15 @@ export default function App() {
             >
               <Pencil size={13} />
             </button>
-            <button
+            {readAvailable && <button
               onClick={() => switchMode("read")}
               className={toolbar.read ? "selected" : ""}
               aria-label="Read"
               aria-pressed={toolbar.read}
-              title="Read all panes"
+              title={showReadMode ? "Read all panes" : "Read large Markdown notes"}
             >
               <BookOpen size={14} />
-            </button>
+            </button>}
           </div>
           <button
             hidden={!!workspace.cloudSpace && path !== ".nova"}
@@ -2364,9 +2376,10 @@ export default function App() {
       {activeSetting && <SettingDialog configuration={activeSetting}
         onClose={() => setActiveSettingId(null)}
         onOpenSettings={() => { setActiveSettingId(null); setSettingsOpen(true); }}
-        storageError={showHiddenError || editorFontError || spacingError || widthError || galaxyError || galaxyPerformanceError || translucencyError || frostedPanesError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
+        storageError={readModeError || showHiddenError || editorFontError || spacingError || widthError || galaxyError || galaxyPerformanceError || translucencyError || frostedPanesError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
       {settingsOpen && <Settings onResetLocal={mobile ? resetLocalState : undefined} resetDisabled={!drive.status.connected || drive.busy || !!uploads.activeRoot || cloud.loading || saving} updater={desktop ? appUpdate : undefined} syncConnected={drive.status.connected} onSyncSetup={() => { setSettingsOpen(false); showSync(workspace); }} onClose={() => setSettingsOpen(false)}
         onOpenDrive={() => void uploads.openFolder(workspace.root)} openDriveDisabled={!!uploads.activeRoot || workspace.root === "demo"}
+        showReadMode={showReadMode} onShowReadMode={setShowReadMode}
         showHidden={showHidden} onShowHidden={setShowHidden}
         galaxy={galaxyMode} onGalaxy={setGalaxyMode}
         tooltips={showTooltips} onTooltips={setShowTooltips}
@@ -2379,7 +2392,7 @@ export default function App() {
         editorFont={editorFont} onEditorFont={setEditorFont}
         textWidth={textWidth} onTextWidth={setTextWidth}
         lineSpacing={lineSpacing} onLineSpacing={setLineSpacing}
-        storageError={showHiddenError || tooltipsError || editorFontError || extensionError || spacingError || widthError || galaxyError || galaxyPerformanceError || translucencyError || frostedPanesError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
+        storageError={readModeError || showHiddenError || tooltipsError || editorFontError || extensionError || spacingError || widthError || galaxyError || galaxyPerformanceError || translucencyError || frostedPanesError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
       {bookmarkDraft && (
         <div
           className="overlay"

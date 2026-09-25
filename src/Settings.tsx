@@ -24,6 +24,7 @@ function Toggle({ title, description, checked, onChange }: {
 }
 
 type Props = {
+  showReadMode: boolean; onShowReadMode: (value: boolean) => void;
   showHidden?: boolean; onShowHidden?: (value: boolean) => void;
   onResetLocal?: () => Promise<void>; resetDisabled?: boolean;
   updater?: ReturnType<typeof useAppUpdate>;
@@ -107,6 +108,7 @@ export default function Settings(props: Props) {
         </div>
       </section>
       <section aria-labelledby="settings-editor"><h2 id="settings-editor">Editor</h2>
+        <Toggle title="Show Read mode" description="Add Read to the view switch. Large Markdown notes always keep a reading view." checked={props.showReadMode} onChange={props.onShowReadMode} />
         <div className="settings-row"><div><label htmlFor="settings-font">Font</label><p>Choose the text font. Default keeps the original typography.</p></div>
           <FontControl id="settings-font" value={props.editorFont} onChange={props.onEditorFont} />
         </div>

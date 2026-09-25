@@ -6,6 +6,7 @@ Nova now builds and runs as an installed iPhone/iPad app: a Tauri native shell w
 
 - Native mobile entry point and iOS window configuration.
 - A Cloud-only setup gate and automatically discovered Google Drive spaces, with offline copies in private app storage.
+- **Show Read mode** in Settings defaults off, just as on desktop. Enable it to add Read to the view switch; large Markdown notes retain the reading fallback.
 - Editing, reading, search, stars, bookmarks, rename, device-only deletion, Cloud autosave, and native recovery drafts using the existing note engine.
 - Touch navigation, safe-area spacing, horizontally scrolling formatting controls, and keyboard-aware viewport sizing. iPad uses the same touch layout. The mode switch uses larger icon controls; bottom navigation hides while editing, and the scroll canvas stays stable as the keyboard resizes.
 - Stable `mobile-sync/<hash>` workspace identity and relative bookmark identities, so an iOS container path change does not invalidate saved tabs, drafts, or bookmarks.

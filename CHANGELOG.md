@@ -16,6 +16,8 @@ Entries describe source changes; availability in published installers has not be
 
 #### Changed
 
+- Read mode is now optional on desktop and mobile: **Settings → Show Read mode** defaults off, including for existing installations. Saved reading tabs fall back to editing, while large Markdown notes retain their reader.
+
 - The bottom-left navigation + now creates a note in the active folder, and the redundant Explorer-header folder-opening action is removed. Cloud and Local section labels both show chevrons and remember their independent collapsed state.
 - Local folder rows expose a new-note + button on hover or keyboard focus (always visible on touch devices). Folder-opening controls now use a folder-open icon to distinguish them from note creation.
 
