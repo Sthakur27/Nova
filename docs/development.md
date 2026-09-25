@@ -35,6 +35,8 @@ Run `npm run desktop` and leave it running while making changes. This opens the 
 
 On macOS, `./run.sh` starts desktop development and `./runios.sh` starts iOS development with Xcode and network hosting enabled. Both first stop existing development sessions belonging to this checkout, including their child servers and builds, so switching targets frees ports and development locks. Use `./runios.sh --standalone` to open Xcode for a debug build with the interface bundled into the installed iPhone app, so launches no longer depend on the Mac’s development server. Use the npm commands directly when you want to keep another session running.
 
+Running `./runios.sh` and then clicking Build in Xcode still uses live development and requires the iPhone to reach the Mac’s server. For a standalone install, run `./runios.sh --standalone`, keep the terminal running, select your iPhone and signing team, and click **Run (▶)** in Xcode to install it. The terminal can close after installation. See [standalone iPhone installation and blank-screen troubleshooting](mobile.md#install-an-app-that-works-without-the-development-server).
+
 Quit the installed Nova before starting development: both use the same saved folders and bookmarks. Unsaved edits are retained as local recovery drafts across reloads and native restarts. Development does not update `/Applications/Nova.app`; the Dock copy stays at its last installed version. No DMG or drag-to-Applications step is needed to try changes. Use `npm run package` when you need an installer to share.
 
 ## Verify / build

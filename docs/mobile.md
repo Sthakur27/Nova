@@ -68,11 +68,20 @@ For an everyday test install on your iPhone, run:
 ./runios.sh --standalone
 ```
 
-This builds the frontend and opens Xcode in Tauri build mode, using a debug native build with bundled assets. Keep the command running while building in Xcode, select your iPhone and signing team, and click Run. Once installed, Nova can launch without the terminal, Mac, or a network connection to the development server. Google Drive sync still needs internet access; existing downloaded notes remain available offline. This uses your existing personal-team development signing, not TestFlight distribution.
+This builds the frontend and opens Xcode in Tauri build mode, using a debug native build with bundled assets.
+
+1. Keep the terminal command running while Xcode builds.
+2. Select your iPhone as the run destination and choose your signing team.
+3. Click **Run (▶)** to build, install, and launch Nova on the phone. **Build** alone does not install the updated app.
+4. After installation finishes, you can close the terminal. Nova can launch without the Mac or a connection to its development server.
+
+Google Drive sync still needs internet access; existing downloaded notes remain available offline. This uses your existing personal-team development signing, not TestFlight distribution.
 
 The equivalent command is `npm run ios:build -- --debug --open`. The shortcut stops an earlier live-development session first so Xcode uses the intended build mode. Simply changing Xcode’s Debug/Release selection does not replace the Tauri launcher’s development/build configuration.
 
 ### Blank screen in a live development build
+
+**Running `./runios.sh` and then clicking Build or Run in Xcode still produces a live-development app.** Xcode does not automatically switch it to a standalone install. To remove the server dependency, rerun the launcher with `--standalone` and install that build using **Run (▶)**.
 
 Live development (`./runios.sh`) loads its interface from the Mac on every launch. Killing and restarting Nova does not turn that install into a bundled app. If the page request cannot finish, the native window can stay blank even though the app process is running.
 
