@@ -197,3 +197,34 @@ it("hides dot paths by default, reveals them on request, and protects the metada
     expect(host.textContent).not.toContain(".nova");
   } finally { await act(async () => root.unmount()); host.remove(); localStorage.clear(); vi.unstubAllGlobals(); }
 });
+
+it("creates in the collapsed local folder while Cloud is active without toggling the folder", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  localStorage.clear();
+  const host = document.createElement("div"), root = createRoot(host);
+  document.body.append(host);
+  const local: Workspace = { root: "/local", name: "Local folder", files: [], collapsed: true };
+  const cloud: Workspace = { root: "/cloud", name: "Cloud", files: [], cloudSpace: { id: "cloud", name: "Cloud", account: "account" } };
+  const onNew = vi.fn(), onChange = vi.fn(), onAdd = vi.fn(), noop = () => {};
+  const render = (folder: Workspace) => <Explorer folders={[folder, cloud]} activeRoot={cloud.root} activePath="" onNew={onNew}
+    onOpen={noop} onRename={noop} onFileAction={noop} onChange={onChange} onRemove={noop} onRefresh={noop} onAdd={onAdd} externalDrag={false} />;
+  try {
+    await act(async () => root.render(render(local)));
+    const create = host.querySelector<HTMLButtonElement>('[aria-label="New note in Local folder"]')!;
+    create.focus();
+    expect(document.activeElement).toBe(create);
+    await act(async () => create.click());
+    expect(onNew).toHaveBeenCalledExactlyOnceWith(local);
+    expect(onChange).not.toHaveBeenCalled();
+    expect(onAdd).not.toHaveBeenCalled();
+    expect(host.querySelector('[aria-label="Local folder folder"]')?.getAttribute("aria-expanded")).toBe("false");
+    expect(host.querySelector('#explorer-cloud .root-new-note')).toBeNull();
+    await act(async () => host.querySelector<HTMLButtonElement>('.explorer-open-local')!.click());
+    expect(onAdd).toHaveBeenCalledOnce();
+    expect(onNew).toHaveBeenCalledOnce();
+    await act(async () => root.render(render({ ...local, error: "Folder unavailable" })));
+    expect(create.disabled).toBe(true);
+    await act(async () => create.click());
+    expect(onNew).toHaveBeenCalledOnce();
+  } finally { await act(async () => root.unmount()); host.remove(); localStorage.clear(); vi.unstubAllGlobals(); }
+});

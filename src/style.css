@@ -1283,6 +1283,7 @@ kbd {
 .root-menu {
   position: relative;
 }
+.root-new-note,
 .root-menu summary {
   cursor: pointer;
   list-style: none;
@@ -1294,6 +1295,7 @@ kbd {
 .root-menu summary::-webkit-details-marker {
   display: none;
 }
+.root-header:is(:hover, :focus-within) .root-new-note,
 .root-header:hover .root-menu > summary,
 .root-menu > summary:focus-visible,
 .root-menu[open] > summary {
@@ -1305,11 +1307,13 @@ kbd {
   background: #ffffff09;
   color: #c8b3e6;
 }
+.root-new-note:focus-visible,
 .root-menu > summary:focus-visible {
   outline: 1px solid #cfacff;
   outline-offset: 2px;
 }
 @media (hover: none) {
+  .root-new-note,
   .root-menu > summary {
     opacity: 1;
     pointer-events: auto;

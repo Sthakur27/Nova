@@ -8,6 +8,12 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 Entries describe source changes; availability in published installers has not been verified. The initial backfill covers commits through `7d47fbe`.
 
+### 2026-09-25
+
+#### Changed
+
+- Local folder rows expose a new-note + button on hover or keyboard focus (always visible on touch devices). Folder-opening controls now use a folder-open icon to distinguish them from note creation.
+
 ### 2026-09-24
 
 #### Added

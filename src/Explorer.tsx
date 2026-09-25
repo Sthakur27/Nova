@@ -270,7 +270,7 @@ export default function Explorer({
           title="Open Folder in New Window…"
           aria-label="Open Folder"
         >
-          <Plus size={16} />
+          <FolderOpen size={16} />
         </button>
         </div>
       </div>
@@ -296,7 +296,7 @@ export default function Explorer({
               {!isCloud && <div className="explorer-section-actions">
                 {onShowHidden && <button className="icon-button hidden-files-toggle" aria-label={showHidden ? "Hide hidden files and folders" : "Show hidden files and folders"} title={showHidden ? "Hide hidden files and folders" : "Show hidden files and folders"} aria-pressed={showHidden} onClick={() => onShowHidden(!showHidden)}>{showHidden ? <Eye size={15}/> : <EyeOff size={15}/>}</button>}
                 <RecentFolders folders={recents.filter(recent => !ordered.some(folder => folder.root === recent.root))} onOpen={onRecent} onClear={onForgetRecents}/>
-                <button className="icon-button explorer-open-local" aria-label="Open local folder in new window" title="Open Folder in New Window…" onClick={onAdd}><Plus size={15}/></button>
+                <button className="icon-button explorer-open-local" aria-label="Open local folder in new window" title="Open Folder in New Window…" onClick={onAdd}><FolderOpen size={15}/></button>
               </div>}
               {isCloud && onNew && <div className="explorer-section-actions"><button className="icon-button explorer-new-cloud" aria-label="New Cloud note" title={`New Cloud note${createTarget ? ` in ${createTarget.name}` : ""}`} disabled={!createTarget} onClick={() => { setCloudCollapsed(false); if (createTarget) onNew(createTarget); }}><Plus size={15}/></button></div>}
             </div>
@@ -341,6 +341,13 @@ export default function Explorer({
                 <FolderOpen size={15} />
                 <strong>{folder.name}</strong>
               </button>
+              {!folder.cloudSpace && onNew && <button
+                className="icon-button root-new-note"
+                aria-label={`New note in ${folder.name}`}
+                title={`New note in ${folder.name}`}
+                disabled={!!folder.error}
+                onClick={() => onNew(folder)}
+              ><Plus size={15} aria-hidden="true" /></button>}
               <details className="root-menu">
                 <summary
                   className="icon-button"
@@ -405,7 +412,7 @@ export default function Explorer({
             )}
           </section>
         );})}
-              {!ordered.length && <button className="explorer-add-local" onClick={onAdd}><Plus size={14}/>Open Folder…</button>}
+              {!ordered.length && <button className="explorer-add-local" onClick={onAdd}><FolderOpen size={14}/>Open Folder…</button>}
             </div>
           </section>;
         })}
