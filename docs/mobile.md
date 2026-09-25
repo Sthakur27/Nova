@@ -1,6 +1,6 @@
 # Nova for iPhone and iPad
 
-Nova now builds and runs as an installed iPhone/iPad app: a Tauri native shell with the shared React/WebKit editor and Rust file engine. It bundles its interface locally and stores notes on the device; no hosted website or development server is needed for the built app. The unsigned debug simulator build has been verified with Xcode 27.0 and iOS/iPadOS 27.0 on Apple Silicon. Physical-device signing and release distribution have not been performed.
+Nova now builds and runs as an installed iPhone/iPad app: a Tauri native shell with the shared React/WebKit editor and Rust file engine. It bundles its interface locally and stores notes on the device; no hosted website or development server is needed for the built app. The unsigned debug simulator build has been verified with Xcode 27.0 and iOS/iPadOS 27.0 on Apple Silicon. A personal-team debug build has also been installed and launched on a physical iPhone 16 Pro Max, with bundled assets and the development server stopped. TestFlight/App Store distribution has not been performed.
 
 ## Included
 
@@ -59,6 +59,27 @@ npm run ios:dev -- --open --host
 
 Choose your personal/development team under **Signing & Capabilities**, select your iPhone as the run destination, and click Run. Keep the phone and Mac on the same network for live updates. The checked-in Xcode build phase uses `scripts/ios-xcode.sh` to find Rust and Node even when Xcode was launched outside a terminal; it supports standard Cargo, Homebrew, and nvm installations. If `ios:init` regenerates the Xcode project, restore that build-phase wrapper if the generator replaces it.
 
+### Install an app that works without the development server
+
+For an everyday test install on your iPhone, run:
+
+```sh
+./runios.sh --standalone
+```
+
+This builds the frontend and opens Xcode in Tauri build mode, using a debug native build with bundled assets. Keep the command running while building in Xcode, select your iPhone and signing team, and click Run. Once installed, Nova can launch without the terminal, Mac, or a network connection to the development server. Google Drive sync still needs internet access; existing downloaded notes remain available offline. This uses your existing personal-team development signing, not TestFlight distribution.
+
+The equivalent command is `npm run ios:build -- --debug --open`. The shortcut stops an earlier live-development session first so Xcode uses the intended build mode. Simply changing Xcode’s Debug/Release selection does not replace the Tauri launcher’s development/build configuration.
+
+### Blank screen in a live development build
+
+Live development (`./runios.sh`) loads its interface from the Mac on every launch. Killing and restarting Nova does not turn that install into a bundled app. If the page request cannot finish, the native window can stay blank even though the app process is running.
+
+- Keep the development command running and both devices on a network that allows device-to-device traffic. Some shared Wi-Fi networks isolate clients despite having the same network name.
+- Open the exact server URL printed by Vite in Safari on the phone. If it cannot connect, resolve the network route, firewall, or VPN issue, or use the standalone build above.
+- Allow Nova’s **Local Network** access in iPhone Settings. The iOS plist declares its development-server use and a local-network transport exception; it does not enable unrestricted HTTP loads.
+- If Safari can load the server but Nova remains blank, inspect the device’s Nova/WebKit logs or Safari’s remote Web Inspector. A successful Xcode build alone does not confirm that the web interface loaded.
+
 A simulator archive can be built on an Apple Silicon Mac with:
 
 ```sh
@@ -78,7 +99,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 Verified on September 25, 2026 for the mobile controls update:
 
 - 472 frontend tests pass, including rename confirmation/cancellation, file selection/closing, keyboard focus protection, and swipe eligibility.
-- Production frontend build and debug iOS simulator archive succeed. The archive launches and renders the updated interface on the iPhone 18 Pro simulator.
+- Production frontend build and debug iOS simulator archive succeed. The archive launches and renders the updated interface on the iPhone 18 Pro simulator. A bundled debug device archive also builds, installs, and displays existing notes on a physical iPhone 16 Pro Max with the development server stopped.
 - Browser checks cover note creation, rename dialog, Open files selection, synthetic horizontal swipe switching, and phone/tablet/desktop layouts. Real iOS swipe and software-keyboard interactions remain unverified for this update.
 
 Earlier verification on September 19, 2026:
@@ -88,7 +109,7 @@ Earlier verification on September 19, 2026:
 - iPad Pro 11-inch (M5) simulator: create/edit/save, inspect the saved native file, terminate/relaunch, and landscape layout.
 - Browser checks at phone/tablet/desktop widths passed in the earlier layout checks.
 
-The archive still emits a linker warning for the BLAKE3 assembly object's SDK deployment version. iOS 27 is the only native runtime tested; older OS compatibility, physical hardware, release archives, VoiceOver, and the full software-keyboard matrix remain unverified.
+The archive still emits a linker warning for the BLAKE3 assembly object's SDK deployment version. Simulator verification used iOS 27; broader OS compatibility, the full editing/sync workflow on physical hardware, release archives, VoiceOver, and the full software-keyboard matrix remain unverified.
 
 A narrow browser window previews the touch layout with sample notes. It does not validate native file storage, iOS permissions, WebKit keyboard behavior, or signing.
 
