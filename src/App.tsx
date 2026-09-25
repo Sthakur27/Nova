@@ -2129,7 +2129,7 @@ export default function App() {
             }}
             onError={(error) => setNotice(error)}
           />}
-          <div className="view-switch">
+          {(toolbar.hasMarkdown || readAvailable) && <div className="view-switch">
             {toolbar.hasMarkdown && (
               <button
                 onClick={() => switchMode("source")}
@@ -2159,7 +2159,7 @@ export default function App() {
             >
               <BookOpen size={14} />
             </button>}
-          </div>
+          </div>}
           <button
             hidden={!!workspace.cloudSpace && path !== ".nova"}
             className="icon-button"
