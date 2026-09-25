@@ -1947,9 +1947,9 @@ export default function App() {
           </div>}
           {mobile && <p>Cloud notes save and sync automatically.</p>}
           <div className="sidebar-actions">
-            <button className="sidebar-action" hidden={mobile} aria-label="Open Folder" aria-describedby="add-folders-tip" onClick={openFolder}>
-              <FolderOpen size={17} aria-hidden="true" />
-              <span className="focus-tooltip" id="add-folders-tip" role="tooltip">Open Folder in New Window…</span>
+            <button className="sidebar-action" hidden={mobile} aria-label="New note" aria-describedby="new-note-tip" onClick={() => void newTab()}>
+              <Plus size={17} aria-hidden="true" />
+              <span className="focus-tooltip" id="new-note-tip" role="tooltip">New note</span>
             </button>
             <button className="sidebar-action" aria-label="Settings" aria-describedby="settings-button-tip"
               aria-haspopup="dialog" onClick={() => setSettingsOpen(true)}>

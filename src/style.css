@@ -2664,7 +2664,7 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 .explorer-section-header { display: flex; align-items: center; gap: 4px; padding: 8px 6px 4px; }
 .explorer-section-header h2 { flex: 1; min-width: 0; margin: 0; font-size: inherit; }
 .explorer-section-label { display: block; margin: 0; padding: 6px 2px; border: 0; background: transparent; color: var(--muted, #a49cb0); text-align: left; font-size: 11px; font-weight: 600; line-height: 16px; letter-spacing: .06em; text-transform: uppercase; }
-.explorer-section-toggle { width: 100%; cursor: pointer; }
+.explorer-section-toggle { display: flex; align-items: center; gap: 4px; width: 100%; cursor: pointer; }
 .explorer-section-toggle:hover { background: transparent; color: var(--muted, #a49cb0); }
 .explorer-section-toggle:focus-visible { outline: 1px solid #cfacff; outline-offset: 1px; }
 .explorer-section + .explorer-section { margin-top: 8px; }

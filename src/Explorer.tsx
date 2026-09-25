@@ -223,6 +223,7 @@ export default function Explorer({
     return () => { window.removeEventListener("pointerdown", outside); window.removeEventListener("resize", close); window.removeEventListener("blur", close); window.removeEventListener("scroll", close, true); };
   }, [menu]);
   const [cloudCollapsed, setCloudCollapsed] = usePreference<boolean>("explorer-cloud-collapsed", false);
+  const [localCollapsed, setLocalCollapsed] = usePreference<boolean>("explorer-local-collapsed", false);
   const [syncOnly, setSyncOnly] = useState(false);
   const revealed = useRef("");
   const pendingScroll = useRef(false);
@@ -236,20 +237,21 @@ export default function Explorer({
     pendingScroll.current = true;
     setSyncOnly(false);
     if (folder.cloudSpace) setCloudCollapsed(false);
+    else setLocalCollapsed(false);
     onChange(folders.map(item => item.root === activeRoot ? revealFile(item, activePath) : item));
     if (folder.directories) {
       for (const directory of fileAncestors(activePath)) {
         if (!folder.expandedDirectories?.includes(directory)) onLoadDirectory?.(activeRoot, directory);
       }
     }
-  }, [activeRoot, activePath, folders, onChange, onLoadDirectory, setCloudCollapsed]);
+  }, [activeRoot, activePath, folders, onChange, onLoadDirectory, setCloudCollapsed, setLocalCollapsed]);
   useEffect(() => {
     if (!pendingScroll.current) return;
     const row = treeRef.current?.querySelector<HTMLElement>(".file-row.active");
     if (!row || row.closest("[hidden]")) return;
     row.scrollIntoView?.({ block: "nearest", inline: "nearest" });
     pendingScroll.current = false;
-  }, [activeRoot, activePath, folders, cloudCollapsed, syncOnly]);
+  }, [activeRoot, activePath, folders, cloudCollapsed, localCollapsed, syncOnly]);
 
   return (
     <>
@@ -268,15 +270,6 @@ export default function Explorer({
         >
           <Cloud size={17} />
         </button>
-        <button
-          className="icon-button"
-          hidden={mobile}
-          onClick={onAdd}
-          title="Open Folder in New Window…"
-          aria-label="Open Folder"
-        >
-          <FolderOpen size={16} />
-        </button>
         </div>
       </div>
       <nav
@@ -290,14 +283,16 @@ export default function Explorer({
           const isCloud = kind === "Cloud";
           const ordered = folders.filter(folder => !!folder.cloudSpace === isCloud);
           if ((isCloud && !ordered.length) || (!isCloud && mobile)) return null;
-          const collapsed = isCloud && cloudCollapsed;
+          const collapsed = isCloud ? cloudCollapsed : localCollapsed;
+          const setCollapsed = isCloud ? setCloudCollapsed : setLocalCollapsed;
           const createTarget = ordered.find(folder => folder.root === activeRoot && !folder.error)
             ?? ordered.find(folder => !folder.error);
           return <section className="explorer-section" key={kind} aria-label={`${kind} notes`}>
             <div className="explorer-section-header">
-              <h2>{isCloud ? <button className="explorer-section-label explorer-section-toggle" aria-expanded={!collapsed} aria-controls="explorer-cloud" onClick={() => setCloudCollapsed(!collapsed)}>
-                Cloud
-              </button> : <span className="explorer-section-label">Local</span>}</h2>
+              <h2><button className="explorer-section-label explorer-section-toggle" aria-expanded={!collapsed} aria-controls={`explorer-${kind.toLowerCase()}`} onClick={() => setCollapsed(!collapsed)}>
+                {collapsed ? <ChevronRight size={13} aria-hidden="true" /> : <ChevronDown size={13} aria-hidden="true" />}
+                {kind}
+              </button></h2>
               {!isCloud && <div className="explorer-section-actions">
                 {onShowHidden && <button className="icon-button hidden-files-toggle" aria-label={showHidden ? "Hide hidden files and folders" : "Show hidden files and folders"} title={showHidden ? "Hide hidden files and folders" : "Show hidden files and folders"} aria-pressed={showHidden} onClick={() => onShowHidden(!showHidden)}>{showHidden ? <Eye size={15}/> : <EyeOff size={15}/>}</button>}
                 <RecentFolders folders={recents.filter(recent => !ordered.some(folder => folder.root === recent.root))} onOpen={onRecent} onClear={onForgetRecents}/>

@@ -40,7 +40,7 @@ it("opens on the first click, promotes on double-click, and preserves keyboard a
   }
 });
 
-it("keeps Local visible despite old collapsed preferences and only collapses Cloud", async () => {
+it("toggles Local and Cloud independently from their labels and remembers both sections", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   localStorage.clear();
   const host = document.createElement("div"), root = createRoot(host);
@@ -49,25 +49,43 @@ it("keeps Local visible despite old collapsed preferences and only collapses Clo
   const cloud: Workspace = {root:"/cloud",name:"Notes",files:[],collapsed:false,cloudSpace:{id:"drive-id",name:"Notes",account:"account"}};
   localStorage.setItem("nova:explorer-local-collapsed:v1", "on");
   const onNew=vi.fn(), onAdd=vi.fn(), noop=()=>{};
-  const render = () => <Explorer folders={[local, cloud]} activeRoot={local.root} activePath="" onNew={onNew}
+  const render = (key = "initial") => <Explorer key={key} folders={[local, cloud]} activeRoot={local.root} activePath="" onNew={onNew}
     onOpen={noop} onRename={noop} onFileAction={noop} onChange={noop} onRemove={noop} onRefresh={noop} onAdd={onAdd} externalDrag={false}/>;
+  const toggle = (kind: string) => host.querySelector<HTMLButtonElement>(`h2 button[aria-controls="explorer-${kind}"]`)!;
+  const section = (kind: string) => host.querySelector<HTMLElement>(`#explorer-${kind}`)!;
   try {
     await act(async()=>root.render(render()));
     expect([...host.querySelectorAll('.explorer-section')].map(node=>node.getAttribute('aria-label'))).toEqual(['Cloud notes','Local notes']);
-    const toggles=host.querySelectorAll<HTMLButtonElement>('.explorer-section-toggle');
-    await act(async()=>toggles[0].click());
-    expect(host.querySelector<HTMLElement>('#explorer-cloud')!.hidden).toBe(true);
-    expect(host.querySelector<HTMLElement>('#explorer-local')!.hidden).toBe(false);
+    expect(host.querySelectorAll('.explorer-section-toggle')).toHaveLength(2);
+    expect(toggle("local").textContent).toBe("Local");
+    expect(toggle("cloud").textContent).toBe("Cloud");
+    expect(toggle("local").getAttribute("aria-expanded")).toBe("false");
+    expect(toggle("local").querySelector('.lucide-chevron-right')).not.toBeNull();
+    expect(section("local").hidden).toBe(true);
+    expect(section("cloud").hidden).toBe(false);
+    await act(async()=>toggle("local").click());
+    expect(section("local").hidden).toBe(false);
+    expect(toggle("local").getAttribute("aria-expanded")).toBe("true");
+    expect(toggle("local").querySelector('.lucide-chevron-down')).not.toBeNull();
+    await act(async()=>toggle("cloud").click());
+    expect(section("cloud").hidden).toBe(true);
+    expect(section("local").hidden).toBe(false);
+    expect(localStorage.getItem("nova:explorer-cloud-collapsed:v1")).toBe("on");
+    expect(localStorage.getItem("nova:explorer-local-collapsed:v1")).toBe("off");
+    await act(async()=>root.render(render("remounted")));
+    expect(section("cloud").hidden).toBe(true);
+    expect(section("local").hidden).toBe(false);
+    await act(async()=>toggle("local").click());
+    expect(section("local").hidden).toBe(true);
+    expect(localStorage.getItem("nova:explorer-local-collapsed:v1")).toBe("on");
     await act(async()=>host.querySelector<HTMLButtonElement>('[aria-label="New Cloud note"]')!.click());
     expect(onNew).toHaveBeenCalledExactlyOnceWith(cloud);
-    expect(host.querySelector<HTMLElement>('#explorer-cloud')!.hidden).toBe(false);
-    expect(toggles).toHaveLength(1);
-    expect(host.querySelector('#explorer-local')?.previousElementSibling?.querySelector('h2 button')).toBeNull();
+    expect(section("cloud").hidden).toBe(false);
+    expect(section("local").hidden).toBe(true);
+    expect(host.querySelector('.workspace-label [aria-label="Open Folder"]')).toBeNull();
     expect(host.querySelector('[aria-label="Open Recent"]')).toBeNull();
     await act(async()=>host.querySelector<HTMLButtonElement>('[aria-label="Open local folder in new window"]')!.click());
     expect(onAdd).toHaveBeenCalledOnce();
-    expect(host.querySelector<HTMLElement>('#explorer-local')!.hidden).toBe(false);
-    expect(host.querySelector<HTMLElement>('#explorer-cloud')!.hidden).toBe(false);
   } finally { await act(async()=>root.unmount());host.remove();localStorage.clear();vi.unstubAllGlobals(); }
 });
 
@@ -128,17 +146,19 @@ it("browses unloaded directories, paginates, shows actionable errors and exposes
 });
 
 
-it("reveals a switched tab in a collapsed Cloud folder without loading the entire tree", async () => {
+it.each(["Cloud", "Local"])("reveals a switched tab in a collapsed %s section and folder without loading the entire tree", async kind => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   localStorage.clear();
-  localStorage.setItem("nova:explorer-cloud-collapsed:v1", "on");
+  const targetRoot = kind === "Cloud" ? "/cloud" : "/local";
+  const sourceRoot = kind === "Cloud" ? "/local" : "/cloud";
+  localStorage.setItem(`nova:explorer-${kind.toLowerCase()}-collapsed:v1`, "on");
   const scroll = vi.fn();
   const oldScroll = HTMLElement.prototype.scrollIntoView;
   HTMLElement.prototype.scrollIntoView = scroll;
   const host = document.createElement("div"), root = createRoot(host);
   const onLoadDirectory = vi.fn(), noop = () => {};
   const initial: Workspace[] = [
-    { root: "/local", name: "Local", files: [{ path: "one.md", name: "one.md" }], collapsed: false },
+    { root: "/local", name: "Local", files: [], directories: [], expandedDirectories: [], collapsed: true },
     { root: "/cloud", name: "Cloud", files: [], directories: [], expandedDirectories: [], collapsed: true,
       cloudSpace: { id: "cloud", name: "Cloud", account: "account" } },
   ];
@@ -149,18 +169,24 @@ it("reveals a switched tab in a collapsed Cloud folder without loading the entir
       externalDrag={false} onLoadDirectory={onLoadDirectory} />;
   }
   try {
-    await act(async () => root.render(<Harness activeRoot="/local" activePath="one.md" />));
+    await act(async () => root.render(<Harness activeRoot={sourceRoot} activePath="one.md" />));
     scroll.mockClear();
-    await act(async () => root.render(<Harness activeRoot="/cloud" activePath="deep/nested/note.md" />));
-    expect(host.querySelector<HTMLElement>("#explorer-cloud")!.hidden).toBe(false);
+    await act(async () => root.render(<Harness activeRoot={targetRoot} activePath="deep/nested/note.md" />));
+    expect(host.querySelector<HTMLElement>(`#explorer-${kind.toLowerCase()}`)!.hidden).toBe(false);
     expect(host.querySelector(".file-row.active .file-open")?.getAttribute("title")).toBe("deep/nested/note.md");
-    expect(onLoadDirectory.mock.calls).toEqual([["/cloud", "deep"], ["/cloud", "deep/nested"]]);
+    expect(onLoadDirectory.mock.calls).toEqual([[targetRoot, "deep"], [targetRoot, "deep/nested"]]);
     expect(scroll).toHaveBeenCalledExactlyOnceWith({ block: "nearest", inline: "nearest" });
     expect(host.querySelector(".nova-star, .file-star, .stars-toggle")).toBeNull();
     // A subsequent manual collapse stays collapsed until another tab is selected.
-    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Cloud folder"]')!.click());
-    expect(host.querySelector('[aria-label="Cloud folder"]')?.getAttribute("aria-expanded")).toBe("false");
+    await act(async () => host.querySelector<HTMLButtonElement>(`[aria-label="${kind} folder"]`)!.click());
+    expect(host.querySelector(`[aria-label="${kind} folder"]`)?.getAttribute("aria-expanded")).toBe("false");
     expect(onLoadDirectory).toHaveBeenCalledTimes(2);
+    const sectionToggle = host.querySelector<HTMLButtonElement>(`[aria-controls="explorer-${kind.toLowerCase()}"]`)!;
+    await act(async () => sectionToggle.click());
+    expect(sectionToggle.getAttribute("aria-expanded")).toBe("false");
+    await act(async () => root.render(<Harness activeRoot={targetRoot} activePath="deep/nested/other.md" />));
+    expect(sectionToggle.getAttribute("aria-expanded")).toBe("true");
+    expect(host.querySelector(`[aria-label="${kind} folder"]`)?.getAttribute("aria-expanded")).toBe("true");
   } finally {
     await act(async () => root.unmount());
     HTMLElement.prototype.scrollIntoView = oldScroll;

@@ -16,6 +16,7 @@ Entries describe source changes; availability in published installers has not be
 
 #### Changed
 
+- The bottom-left navigation + now creates a note in the active folder, and the redundant Explorer-header folder-opening action is removed. Cloud and Local section labels both show chevrons and remember their independent collapsed state.
 - Local folder rows expose a new-note + button on hover or keyboard focus (always visible on touch devices). Folder-opening controls now use a folder-open icon to distinguish them from note creation.
 
 ### 2026-09-24
