@@ -1956,8 +1956,8 @@ kbd {
   height: 36px;
 }
 
-/* Focus mode hides all workspace panels; exiting expands them all. */
-.app-shell[data-focus-mode="true"] :is(.sidebar, .bookmark-rail, .top-bars, .editor-group .note-tabs, .status-bar, .panel-toggle-zone) {
+/* Focus mode hides workspace panels; tabs remain available at each pane’s top edge. */
+.app-shell[data-focus-mode="true"] :is(.sidebar, .bookmark-rail, .top-bars, .status-bar, .panel-toggle-zone) {
   display: none;
 }
 .focus-mode-exit {
@@ -2921,3 +2921,25 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 
 /* Keep the desktop toolbar layout while giving touch controls their own scroll area. */
 .format-scroll { display: contents; }
+
+/* A small hover target reveals tabs over the document without moving its content. */
+.focus-tabs { display: contents; }
+.focus-tabs[data-enabled="true"] {
+  display: block;
+  position: absolute;
+  inset: 0 0 auto;
+  height: 12px;
+  z-index: 25;
+}
+.focus-tabs[data-enabled="true"][data-open="true"] { height: 40px; }
+.app-shell .editor-group .focus-tabs[data-enabled="true"] .note-tabs {
+  display: flex;
+  visibility: hidden;
+  pointer-events: none;
+}
+.app-shell .editor-group .focus-tabs[data-enabled="true"][data-open="true"] .note-tabs {
+  visibility: visible;
+  pointer-events: auto;
+  background: #1a1b1f;
+  box-shadow: 0 4px 12px #0006;
+}

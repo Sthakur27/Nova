@@ -20,6 +20,8 @@ Entries describe source changes; availability in published installers has not be
 
 #### Changed
 
+- Desktop focus mode reveals each editor pane’s tabs on top-edge hover or keyboard focus, allowing navigation without leaving focus mode or shifting the document.
+
 - The navigation header uses compact icon-only Files and Search buttons. The Command-K / Ctrl-K launcher is labeled Quick find with a command icon, distinct from the magnifying glass for search across files.
 
 - Mobile editing uses a fixed New note action, an Open files sheet, and full-panel left/right swipes anywhere on the editor. Outgoing and incoming notes follow the finger together, short swipes snap back, and switching cycles between the first and last open file. Renaming has explicit Rename/Cancel controls, and the formatting bar prioritizes common actions with a persistent keyboard-dismiss button; tapping blank note padding also dismisses the keyboard.

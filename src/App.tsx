@@ -8,6 +8,7 @@ import { settingChoices, toggleSetting } from "./settingCommands";
 import ViewOptions from "./ViewOptions";
 import { startEditorWindowDrag } from "./editorWindowDrag";
 import TabButton from "./TabButton";
+import FocusTabs from "./FocusTabs";
 import { openAfterTabClose } from "./closeTabNavigation";
 import CloudSetup from "./CloudSetup";
 import { confirmCloudMove } from "./confirmCloudMove";
@@ -1677,7 +1678,8 @@ export default function App() {
       onRename={data && path !== ".nova" ? () => setRenameTarget({ folder: workspace, path }) : undefined}
       onCloseTab={tab => void closeTab(tab)} />;
     return (
-          <div className="note-tabs" hidden={!compact && (!topBars || focusMode)} role="tablist" aria-label="Open notes" onPointerDownCapture={startEditorWindowDrag}>
+          <FocusTabs enabled={focusModeActive}>
+          <div className="note-tabs" hidden={!topBars && !focusModeActive} role="tablist" aria-label="Open notes" onPointerDownCapture={startEditorWindowDrag}>
             {(compact ? tabs.map(tabId) : pane.tabs).map(id => tabs.find(tab => tabId(tab) === id)).filter((tab): tab is NoteTab => !!tab).map((tab) => {
               const active =
                 pane.selected === tabId(tab);
@@ -1749,6 +1751,7 @@ export default function App() {
             <button className="icon-button new-tab-button" onClick={() => { if (activatePane(pane.id)) void newTab(); }}
               aria-label="New tab" title="New tab (Ctrl T)" aria-keyshortcuts="Control+t"><Plus size={16} /></button>
           </div>
+          </FocusTabs>
   ); }
   function renderPaneDocument(pane: Pane) {
     const isActive = pane.id === activePane;

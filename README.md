@@ -110,7 +110,7 @@ Open **Settings** using the gear in the lower-left corner to adjust text size, s
 
 ### Just you and the page
 
-Enter **focus mode** to hide the folders, bookmarks, and toolbars. Choose your preferred text width first, then settle into the page. Press **⌘ G** on Mac or **Ctrl G** on Windows to restore your panels.
+Enter **focus mode** to hide the folders, bookmarks, and toolbars. Hover at the top edge of a desktop editor pane to reveal its tabs and switch notes without leaving focus mode. Choose your preferred text width first, then settle into the page. Press **⌘ G** on Mac or **Ctrl G** on Windows to restore your panels.
 
 ![Nova on Mac in focus mode with two notes side by side, toolbars hidden, and a warm desktop backdrop showing through the window](docs/screenshots/desktop-focus-view.png)
 
