@@ -17,6 +17,8 @@ import { installTabCloseShortcut } from "./tabShortcuts";
 import ReadFind from "./ReadFind";
 import { installFileSearchShortcut } from "./fileSearchShortcut";
 import FileTitle from "./FileTitle";
+import MobileFileBar from "./MobileFileBar";
+import { canStartFileSwipe, dismissKeyboardOutsideEditor, dismissNoteKeyboard, fileSwipeDirection } from "./mobileGestures";
 import { mobile, supportsFrosted } from "./platform";
 import { useCompactLayout } from "./useCompactLayout";
 import { useFocusTransition } from "./useFocusTransition";
@@ -159,6 +161,7 @@ type PaneSession = { workspace: Workspace; path: string; data: DocumentData; mod
 export default function App() {
   const [launchMessage] = useState(() => launchMessages[Math.floor(Math.random() * launchMessages.length)]);
   const compact = useCompactLayout();
+  const noteSwipe = useRef<{ x: number; y: number } | null>(null);
   const [mobileView, setMobileView] = useState<"notes" | "editor" | "bookmarks">("editor");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeSettingId, setActiveSettingId] = useState<string | null>(null);
@@ -1652,7 +1655,13 @@ export default function App() {
   if (mobile && (!drive.status.connected || (!cloud.loaded && !folders.some(folder => folder.cloudSpace?.account === drive.status.account && !!drive.status.account)))) {
     return <CloudSetup drive={drive} loading={cloud.loading} error={cloud.error} retry={()=>void cloud.refresh()}/>;
   }
-  function renderPaneTabs(pane: Pane) { return (
+  function renderPaneTabs(pane: Pane) {
+    if (compact) return <MobileFileBar tabs={tabs} selected={pane.selected}
+      onSelect={tab => { const folder = folders.find(f => f.root === tab.root); if (folder) void openNote(tab.path, undefined, folder); }}
+      onNew={() => { if (activatePane(pane.id)) void newTab(); }}
+      onRename={data && path !== ".nova" ? () => setRenameTarget({ folder: workspace, path }) : undefined}
+      onCloseTab={tab => void closeTab(tab)} />;
+    return (
           <div className="note-tabs" hidden={!compact && (!topBars || focusMode)} role="tablist" aria-label="Open notes" onPointerDownCapture={startEditorWindowDrag}>
             {(compact ? tabs.map(tabId) : pane.tabs).map(id => tabs.find(tab => tabId(tab) === id)).filter((tab): tab is NoteTab => !!tab).map((tab) => {
               const active =
@@ -1744,7 +1753,19 @@ export default function App() {
       const isMarkdown = /\.(md|markdown|mdx)$/i.test(path);
       const documentView = isMarkdown && !(mode === "read" && readingLayout === "pages") && supportsDocumentView(data?.text.length ?? 0, editorSnapshot?.state.doc.length ?? 0, preview.length);
       return (
-        <div className="document-area" data-registry={path === ".nova"}>
+        <div className="document-area" data-registry={path === ".nova"}
+          onTouchStart={event => { noteSwipe.current = compact && canStartFileSwipe(event) ? { x: event.touches[0].clientX, y: event.touches[0].clientY } : null; }}
+          onTouchMove={event => { if (event.touches.length !== 1 || (noteSwipe.current && Math.abs(event.touches[0].clientY - noteSwipe.current.y) > 24)) noteSwipe.current = null; }}
+          onTouchCancel={() => { noteSwipe.current = null; }}
+          onTouchEnd={event => {
+            const start = noteSwipe.current; noteSwipe.current = null;
+            if (!compact || !start || !event.changedTouches.length || !window.getSelection()?.isCollapsed) return;
+            const direction = fileSwipeDirection(event.changedTouches[0].clientX - start.x, event.changedTouches[0].clientY - start.y);
+            const index = tabs.findIndex(tab => tabId(tab) === pane.selected);
+            const next = direction && index >= 0 ? tabs[index + direction] : undefined;
+            const folder = next && folders.find(folder => folder.root === next.root);
+            if (next && folder) { dismissNoteKeyboard(); void openNote(next.path, undefined, folder); }
+          }}>
           {data && (mode === "read" || (mode === "edit" && documentView)) && <ReadFind
             key={JSON.stringify([workspace.root, path, data.revision])}
             text={preview}
@@ -1778,6 +1799,7 @@ export default function App() {
                 onSave={() => void save()}
                 isMarkdown={isMarkdown}
                 filePath={path}
+                onRequestRename={compact && path !== ".nova" ? () => setRenameTarget({ folder: workspace, path }) : undefined}
                 onRename={path === ".nova" ? undefined : name => renameFile(workspace, path, name)}
                 documentMode={documentView && mode !== "source" ? mode : undefined}
                 showLineNumbers={showLineNumbers}
@@ -1794,7 +1816,7 @@ export default function App() {
                 <div className="document-eyebrow">
                   {isMarkdown ? "A NOTE IN YOUR SPACE" : "PLAIN & SIMPLE"}
                 </div>
-                <FileTitle key={path} path={path} onRename={path === ".nova" ? undefined : name => renameFile(workspace, path, name)} />
+                <FileTitle key={path} path={path} onRequestRename={compact && path !== ".nova" ? () => setRenameTarget({ folder: workspace, path }) : undefined} onRename={path === ".nova" ? undefined : name => renameFile(workspace, path, name)} />
                 <Suspense fallback={<p>Rendering your note…</p>}>
                   {readingLayout === "pages" || preview.length > RICH_DOCUMENT_LIMIT ? (
                     <LargeRead bookmarks={bookmarks} layout={readingLayout} ref={isActive ? largeRead : undefined} text={preview} markdown={isMarkdown} controlsContainer={isActive ? readControls : null} onToggleTask={toggleReadTask} />
@@ -1858,6 +1880,7 @@ export default function App() {
   const activeSetting = settingCommands.find(command => command.id === activeSettingId)?.configuration;
   return (
     <div className="app-shell" data-compact={compact} data-mobile={mobile} data-mobile-view={mobileView} data-top-bars={compact || topBars} data-focus-mode={!compact && focusMode} data-window-focused={windowFocused} data-galaxy={galaxyMode} data-background={supportsTranslucency ? backgroundMode : "off"} data-frosted-panes={supportsFrosted && frostedPanes} data-editor-size={fontSize} data-editor-font={editorFont} data-text-width={textWidth} data-line-spacing={lineSpacing}
+      onClickCapture={compact ? dismissKeyboardOutsideEditor : undefined}
       onPointerMove={(event) => {
         if (event.pointerType === "touch") return;
         const bounds = event.currentTarget.getBoundingClientRect();
@@ -1908,6 +1931,7 @@ export default function App() {
         </button>
         </>}
         </SidebarSection>
+        {compact && <button className="mobile-create-note" onClick={() => void newTab()}><Plus size={19} />New note</button>}
         <div className="navigation-views" role="group" aria-label="Navigation view">
           <button aria-label="Files" aria-pressed={navigationView === "files"} onClick={() => setNavigationView("files")}><FolderOpen size={16}/>Files</button>
           <button aria-label="Search across files" aria-pressed={navigationView === "search"} title={`Search across files (${mod} ⇧ F)`} onClick={() => openWorkspaceSearch()}><Search size={16}/>Search</button>
@@ -2148,8 +2172,8 @@ export default function App() {
           </button>
         </div>
         <div className="read-controls" ref={setReadControls} />
-        {toolbar.hasFormatting && (
-          <FormatToolbar formattingDisabled={!data || !isMarkdown || mode === "read"} disabled={!data || mode === "read"}
+        {(toolbar.hasFormatting || (compact && !!data && mode !== "read")) && (
+          <FormatToolbar onDismissKeyboard={compact ? dismissNoteKeyboard : undefined} formattingDisabled={!data || !isMarkdown || mode === "read"} disabled={!data || mode === "read"}
             active={isMarkdown ? activeFormats : []} style={isMarkdown ? paragraphStyle : "paragraph"} onFormat={(style) => editor.current?.format(style)}
             onUndo={() => editor.current?.undo()} onRedo={() => editor.current?.redo()} />
         )}
@@ -2367,6 +2391,7 @@ export default function App() {
         onSaved={policy => { setFolders(old => old.map(folder => folder.root === syncFolder.root ? { ...folder, syncPolicy: policy, syncError: undefined } : folder)); setWorkspace(old => old.root === syncFolder.root ? { ...old, syncPolicy: policy } : old); uploads.schedule(syncFolder.root); }} />}
       {renameTarget && (
         <RenameDialog
+          compact={compact}
           path={renameTarget.path}
           root={renameTarget.folder.root === "demo" ? renameTarget.folder.name : renameTarget.folder.root}
           onRename={name => renameFile(renameTarget.folder, renameTarget.path, name)}

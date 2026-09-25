@@ -1,0 +1,65 @@
+import { useEffect, useRef, useState } from "react";
+import { ChevronDown, FileText, Pencil, Plus, X } from "lucide-react";
+import { tabId, type NoteTab } from "./tabs";
+
+export default function MobileFileBar({ tabs, selected, onSelect, onNew, onRename, onCloseTab }: {
+  tabs: NoteTab[]; selected: string | null; onSelect: (tab: NoteTab) => void;
+  onNew: () => void; onRename?: () => void; onCloseTab: (tab: NoteTab) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const gesture = useRef<{ x: number; y: number } | null>(null);
+  const swiped = useRef(false);
+  const current = tabs.find(tab => tabId(tab) === selected);
+  return <div className="mobile-file-bar">
+    <button className="mobile-file-picker" aria-label={`Open files${current ? `: ${current.path.split("/").at(-1)}` : ""}`}
+      aria-haspopup="dialog" aria-expanded={open}
+      onTouchStart={event => {
+        swiped.current = false;
+        gesture.current = event.touches.length === 1 ? { x: event.touches[0].clientX, y: event.touches[0].clientY } : null;
+      }}
+      onTouchMove={event => { if (event.touches.length !== 1) gesture.current = null; }}
+      onTouchCancel={() => { gesture.current = null; }}
+      onTouchEnd={event => {
+        const start = gesture.current; gesture.current = null;
+        if (!start || !event.changedTouches.length) return;
+        const dx = event.changedTouches[0].clientX - start.x;
+        const dy = event.changedTouches[0].clientY - start.y;
+        if (Math.abs(dx) < 50 || Math.abs(dy) > 24) return;
+        swiped.current = true;
+        const index = tabs.findIndex(tab => tabId(tab) === selected);
+        const next = index < 0 ? undefined : tabs[index + (dx < 0 ? 1 : -1)];
+        if (next) onSelect(next);
+      }}
+      onClick={event => { if (swiped.current && event.detail !== 0) { swiped.current = false; return; } setOpen(true); }}>
+      <FileText size={17} /><span>{current?.path.split("/").at(-1) ?? "Open files"}</span>
+      <span className="mobile-file-count">{tabs.length}</span><ChevronDown size={16} />
+    </button>
+    {onRename && <button className="icon-button" aria-label="Rename current file" onClick={onRename}><Pencil size={17} /></button>}
+    <button className="mobile-new-note" aria-label="New note" onClick={onNew}><Plus size={19} /><span>New</span></button>
+    {open && <OpenFiles tabs={tabs} selected={selected} onSelect={tab => { setOpen(false); onSelect(tab); }}
+      onCloseTab={tab => { setOpen(false); onCloseTab(tab); }} onClose={() => setOpen(false)} />}
+  </div>;
+}
+
+function OpenFiles({ tabs, selected, onSelect, onCloseTab, onClose }: {
+  tabs: NoteTab[]; selected: string | null; onSelect: (tab: NoteTab) => void;
+  onCloseTab: (tab: NoteTab) => void; onClose: () => void;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    const element = dialog.current!;
+    element.showModal();
+    return () => { element.close(); if (previous?.isConnected) previous.focus(); };
+  }, []);
+  return <dialog ref={dialog} className="mobile-files-dialog" aria-labelledby="open-files-title"
+    onCancel={event => { event.preventDefault(); onClose(); }} onKeyDown={event => event.stopPropagation()}>
+    <header><h2 id="open-files-title">Open files</h2><button className="icon-button" aria-label="Done" onClick={onClose}><X size={20} /></button></header>
+    {tabs.length ? <ul>{tabs.map(tab => <li key={tabId(tab)}>
+      <button className="mobile-file-choice" aria-current={selected === tabId(tab) ? "page" : undefined} onClick={() => onSelect(tab)}>
+        <FileText size={18} /><span>{tab.path}</span>
+      </button>
+      <button className="icon-button" aria-label={`Close ${tab.path}`} onClick={() => onCloseTab(tab)}><X size={17} /></button>
+    </li>)}</ul> : <p>No open files.</p>}
+  </dialog>;
+}

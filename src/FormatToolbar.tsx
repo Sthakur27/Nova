@@ -1,4 +1,4 @@
-import { Bold, Italic, Strikethrough, Code, SquareCode, List, ListOrdered, ListTodo, Quote, Undo2, Redo2 } from "lucide-react";
+import { Bold, Italic, Strikethrough, Code, SquareCode, List, ListOrdered, ListTodo, Quote, Undo2, Redo2, Keyboard } from "lucide-react";
 import { formatShortcuts, type FormatAction } from "./richMarkdown";
 const mac = typeof navigator !== "undefined" && navigator.platform.toLowerCase().includes("mac");
 function shortcut(key: string) {
@@ -15,7 +15,8 @@ const controls = [
   { action: "task", Icon: ListTodo, label: "Task list" },
   { action: "quote", Icon: Quote, label: "Quote" },
 ] as const;
-export default function FormatToolbar({ onFormat, style, onUndo, onRedo, active = [], formattingDisabled = false, disabled = false }: {
+export default function FormatToolbar({ onFormat, style, onUndo, onRedo, active = [], formattingDisabled = false, disabled = false, onDismissKeyboard }: {
+  onDismissKeyboard?: () => void;
   formattingDisabled?: boolean;
   disabled?: boolean;
   active?: FormatAction[];
@@ -26,6 +27,7 @@ export default function FormatToolbar({ onFormat, style, onUndo, onRedo, active 
 }) {
   return (
     <div className="format-toolbar" role="toolbar" aria-label="Markdown formatting">
+      <div className="format-scroll">
       <button type="button" disabled={disabled} aria-label="Undo" title={`Undo (${shortcut("Mod-z")})`}
         onMouseDown={e => e.preventDefault()} onClick={onUndo}><Undo2 size={15} /></button>
       <button type="button" disabled={disabled} aria-label="Redo" title={`Redo (${shortcut("Mod-Shift-z")})`}
@@ -44,6 +46,8 @@ export default function FormatToolbar({ onFormat, style, onUndo, onRedo, active 
           <Icon size={15} />
         </button>;
       })}
+      </div>
+      {onDismissKeyboard && <button type="button" className="dismiss-keyboard" aria-label="Dismiss keyboard" onClick={onDismissKeyboard}><Keyboard size={19} /><span>Done</span></button>}
     </div>
   );
 }

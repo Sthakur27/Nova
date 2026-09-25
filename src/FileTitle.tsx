@@ -7,7 +7,7 @@ export function fileTitle(path = "") {
   return extension > 0 ? name.slice(0, extension) : name;
 }
 
-export default function FileTitle({ path, onRename }: { path: string; onRename?: (name: string) => Promise<void> }) {
+export default function FileTitle({ path, onRename, onRequestRename }: { path: string; onRename?: (name: string) => Promise<void>; onRequestRename?: () => void }) {
   const name = fileTitle(path);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(name);
@@ -32,6 +32,7 @@ export default function FileTitle({ path, onRename }: { path: string; onRename?:
   }, [editing, draft]);
 
   function beginEditing(element?: HTMLElement, x?: number, y?: number) {
+    if (onRequestRename) { onRequestRename(); return; }
     initialCaret.current = name.length;
     if (element && x !== undefined && y !== undefined) {
       // Hit-test the rendered heading before replacing it with the text field.

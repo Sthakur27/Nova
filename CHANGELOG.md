@@ -16,6 +16,8 @@ Entries describe source changes; availability in published installers has not be
 
 #### Changed
 
+- Mobile editing uses a fixed New note action, an Open files sheet, and left/right swipes between open notes. Renaming has explicit Rename/Cancel controls, and the formatting bar prioritizes common actions with a persistent keyboard-dismiss button; tapping blank note padding also dismisses the keyboard.
+
 - Read mode is now optional on desktop and mobile: **Settings → Show Read mode** defaults off, including for existing installations. Saved reading tabs fall back to editing, while large Markdown notes retain their reader.
 
 - The bottom-left navigation + now creates a note in the active folder, and the redundant Explorer-header folder-opening action is removed. Cloud and Local section labels both show chevrons and remember their independent collapsed state.

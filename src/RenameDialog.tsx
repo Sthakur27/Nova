@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { FileText } from "lucide-react";
 
-export default function RenameDialog({ root, path, onRename, onClose }: {
+export default function RenameDialog({ root, path, onRename, onClose, compact = false }: {
+  compact?: boolean;
   root: string;
   path: string;
   onRename: (name: string) => Promise<void>;
@@ -26,7 +27,7 @@ export default function RenameDialog({ root, path, onRename, onClose }: {
     element.showModal();
     input.current?.focus();
     input.current?.select();
-    return () => { element.close(); previous?.focus(); };
+    return () => { element.close(); if (!compact || !previous?.matches('input, textarea, [contenteditable="true"]')) previous?.focus(); };
   }, []);
 
   async function submit() {
@@ -47,7 +48,7 @@ export default function RenameDialog({ root, path, onRename, onClose }: {
     }
   }
 
-  return <dialog ref={dialog} className="rename-dialog" aria-labelledby="rename-title"
+  return <dialog ref={dialog} className="rename-dialog" data-compact={compact} aria-labelledby="rename-title"
     onCancel={event => { event.preventDefault(); if (!pending.current) onClose(); }}
     onKeyDown={event => event.stopPropagation()}>
     <form onSubmit={event => { event.preventDefault(); void submit(); }} aria-busy={busy}>
@@ -58,12 +59,12 @@ export default function RenameDialog({ root, path, onRename, onClose }: {
           <input ref={input} value={name} readOnly={busy} autoComplete="off" spellCheck={false}
             onChange={event => { setName(event.target.value); setError(""); }} />
         </label>
-        <label>Extension
+        {!compact && <label>Extension
           <input value={extension} readOnly={busy} autoComplete="off" spellCheck={false}
             onChange={event => { setExtension(event.target.value); setError(""); }} />
-        </label>
+        </label>}
       </div>
-      <div className="rename-path"><span>Path</span><p>{destination}</p></div>
+      {compact ? <p className="rename-path">{extension ? `File type stays ${extension}` : "File has no extension"}</p> : <div className="rename-path"><span>Path</span><p>{destination}</p></div>}
       {error && <p className="rename-error" role="alert">{error}</p>}
       <div className="dialog-buttons">
         <button type="button" disabled={busy} onClick={onClose}>Cancel</button>

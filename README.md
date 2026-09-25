@@ -122,7 +122,7 @@ Nova for **iPhone and iPad is in development**. The same quiet writing space is 
   <img src="docs/screenshots/mobile-preview.jpg" alt="Nova's iPhone development preview with a Work note, Cloud sync status, and touch navigation" width="320" />
 </p>
 
-*An early look at Nova on iPhone. Mobile is a development preview; a public release is still ahead. Follow the [mobile development guide](docs/mobile.md) for progress and setup.*
+*An earlier native preview, before the current file picker and formatting controls. Mobile is a development preview; a public release is still ahead. Follow the [mobile development guide](docs/mobile.md) for progress and setup.*
 
 ## Your first few minutes
 

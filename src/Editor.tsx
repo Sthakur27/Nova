@@ -143,6 +143,7 @@ type Props = {
   isMarkdown: boolean;
   filePath?: string;
   onRename?: (name: string) => Promise<void>;
+  onRequestRename?: () => void;
   documentMode?: "edit" | "read";
   showLineNumbers: boolean;
   showLineHighlight: boolean;
@@ -563,13 +564,13 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
     })) });
   }, [props.spellcheck, props.filePath]);
   return <div className="editor-mount" onPointerDownCapture={startEditorWindowDrag}>
-    {sourceTitleContainer && createPortal(<FileTitle key={props.filePath} path={props.filePath ?? ""} onRename={props.onRename} />, sourceTitleContainer)}
+    {sourceTitleContainer && createPortal(<FileTitle key={props.filePath} path={props.filePath ?? ""} onRename={props.onRename} onRequestRename={props.onRequestRename} />, sourceTitleContainer)}
     <div className="source-editor-mount" ref={mount} hidden={!!props.documentMode} />
     <div className="document-pane" ref={documentPane} hidden={!props.documentMode} data-mode={props.documentMode}>
       <div className="start-mark" aria-hidden="true"><GalaxyMark circled /></div>
       <article className="prose document-prose">
         <div className="document-eyebrow">A NOTE IN YOUR SPACE</div>
-        <FileTitle key={props.filePath} path={props.filePath ?? ""} onRename={props.onRename} />
+        <FileTitle key={props.filePath} path={props.filePath ?? ""} onRename={props.onRename} onRequestRename={props.onRequestRename} />
         <div ref={documentMount} />
         <div className="end-mark"><GalaxyMark circled /></div>
       </article>

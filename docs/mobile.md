@@ -14,6 +14,22 @@ Nova now builds and runs as an installed iPhone/iPad app: a Tauri native shell w
 
 Desktop terminal, desktop voice engine, new windows, folder pickers, and file-location actions are excluded from the mobile interface. Use the system keyboard for dictation. External Files/iCloud folder integration and general import/export are not implemented. Google Drive foreground sync is implemented for iOS; see [sync.md](sync.md) for setup and live verification results. Uninstalling the app removes its private notes. This is a development preview, not a production release.
 
+## Touch editing and open files
+
+- Tap **New** beside the current file, or **New note** at the top of Notes, to create a note in the active space.
+- Tap the file bar to open the **Open files** sheet. Choose a file to switch to it, or use its close button. Swipe left across the note or file bar for the next open file, and right for the previous one. Switching stops at either end; it does not wrap. Vertical scrolling, text selections, and horizontally scrolling code/table regions do not trigger note swipes.
+- Tap the note title or the pencil beside the file picker to rename. The name is selected for replacement; **Rename** confirms and **Cancel** leaves it unchanged. Mobile renaming preserves the extension and does not commit merely because focus moves away.
+- Tap blank note padding or outside the editor to dismiss the keyboard. Tapping text still positions the caret. **Done** beside the formatting controls also dismisses it.
+- Undo, redo, bold, italic, and task lists come first in the horizontally scrolling toolbar. Scroll it for headings, code, lists, and quotes; **Done** stays visible. Formatting is disabled for non-Markdown files.
+
+These controls also appear in the narrow browser preview. Browser checks do not verify iOS keyboard or touch behavior; repeat the native checklist below on an iPhone/iPad.
+
+## Updating the installed iOS app
+
+The current Xcode-installed development app does not update itself. Install a new native build from Xcode; live frontend changes are available only while the development server is running and reachable. The desktop updater does not support iOS ([Tauri supported platforms](https://v2.tauri.app/plugin/updater/)).
+
+For automatic beta updates, distribute signed builds through TestFlight and enable automatic updates in TestFlight ([Apple’s instructions](https://beta.itunes.apple.com/)). This requires Apple Developer Program membership, an App Store Connect app, signing/provisioning, and uploaded builds. Nova does not yet have a configured TestFlight release workflow. A free personal Xcode account cannot provide this distribution path.
+
 ## First native run
 
 Install full **Xcode** from the Mac App Store, open it to finish setup, and install an iOS Simulator runtime. Command Line Tools alone do not include the iOS SDK.
@@ -59,7 +75,13 @@ npm run build
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-Verified on September 19, 2026:
+Verified on September 25, 2026 for the mobile controls update:
+
+- 472 frontend tests pass, including rename confirmation/cancellation, file selection/closing, keyboard focus protection, and swipe eligibility.
+- Production frontend build and debug iOS simulator archive succeed. The archive launches and renders the updated interface on the iPhone 18 Pro simulator.
+- Browser checks cover note creation, rename dialog, Open files selection, synthetic horizontal swipe switching, and phone/tablet/desktop layouts. Real iOS swipe and software-keyboard interactions remain unverified for this update.
+
+Earlier verification on September 19, 2026:
 
 - 160 frontend tests and 20 native desktop tests pass; the optional speech-model download test is skipped. Production frontend build and native simulator archive succeed.
 - iPhone 18 Pro simulator: create/edit/save, inspect the saved native file, terminate/relaunch with saved content intact, recover unsaved content after termination, and search saved text.

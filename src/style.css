@@ -2916,3 +2916,6 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 .formatted-find-replace { margin-left: 34px; }
 .formatted-find-replace input { min-width: 80px; }
 .find-replace-hint { flex-basis: 100%; color: #a99db8; font-size: 11px; }
+
+/* Keep the desktop toolbar layout while giving touch controls their own scroll area. */
+.format-scroll { display: contents; }
