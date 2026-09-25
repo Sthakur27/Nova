@@ -1,19 +1,22 @@
 import { useEffect, useRef } from "react";
+import { tabId } from "./tabs";
 import type { PaneEdge } from "./paneLayout";
+export type NavigationFile = { root: string; path: string };
 export type PaneDrop = { pane: string; edge?: PaneEdge; before: string | null };
 
 /** Pointer dragging also works in desktop webviews that intercept native file drops. */
-export function useTabReorder(onReorder: (id: string, beforeId: string | null) => void, onDrop?: (id: string, target: PaneDrop) => void) {
+export function useTabReorder(onReorder: (id: string, beforeId: string | null) => void, onDrop?: (id: string, target: PaneDrop) => void, onFileDrop?: (file: NavigationFile, target: PaneDrop) => void) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const strip = ref.current;
     if (!strip) return;
-    let drag: { id: string; pointer: number; button: HTMLElement; startX: number; startY: number; x: number; y: number; moving: boolean } | null = null;
+    let drag: { id: string; pointer: number; button: HTMLElement; file?: NavigationFile; startX: number; startY: number; x: number; y: number; moving: boolean } | null = null;
     let beforeId: string | null = null;
     let paneDrop: PaneDrop | null = null;
     let dropStrip: HTMLElement | null = null;
     let valid = false;
     let suppressClick = false;
+    let clickSource: HTMLElement | null = null;
     let frame = 0;
     const tabs = () => Array.from(strip.querySelectorAll<HTMLElement>("[data-tab-id]"));
     function clearMarkers() {
@@ -31,7 +34,7 @@ export function useTabReorder(onReorder: (id: string, beforeId: string | null) =
       const bounds = dropStrip?.getBoundingClientRect();
       valid = !!bounds && drag.y >= bounds.top && drag.y <= bounds.bottom && drag.x >= bounds.left - 24 && drag.x <= bounds.right + 24;
       if (!valid) {
-        if (!pane || !onDrop) return;
+        if (!pane || !(drag.file ? onFileDrop : onDrop)) return;
         const rect = pane.getBoundingClientRect();
         const x = (drag.x - rect.left) / rect.width, y = (drag.y - rect.top) / rect.height;
         const distances: [PaneEdge, number][] = [["left", x], ["right", 1 - x], ["top", y], ["bottom", 1 - y]];
@@ -48,7 +51,7 @@ export function useTabReorder(onReorder: (id: string, beforeId: string | null) =
         return drag!.x < rect.left + rect.width / 2;
       });
       beforeId = before?.dataset.tabId ?? null;
-      if (pane && onDrop) paneDrop = { pane: pane.dataset.editorPane!, before: beforeId };
+      if (pane && (drag.file ? onFileDrop : onDrop)) paneDrop = { pane: pane.dataset.editorPane!, before: beforeId };
       const marker = before ?? others.at(-1);
       if (marker) marker.dataset.dropSide = before ? "before" : "after";
     }
@@ -64,10 +67,13 @@ export function useTabReorder(onReorder: (id: string, beforeId: string | null) =
     function down(event: PointerEvent) {
       suppressClick = false;
       if (drag || event.button !== 0 || !event.isPrimary || event.pointerType === "touch") return;
-      const button = event.target instanceof Element ? event.target.closest<HTMLElement>('[role="tab"]') : null;
-      const id = button?.closest<HTMLElement>("[data-tab-id]")?.dataset.tabId;
-      if (!button || !id || !strip!.contains(button)) return;
-      drag = { id, pointer: event.pointerId, button, startX: event.clientX, startY: event.clientY, x: event.clientX, y: event.clientY, moving: false };
+      const button = event.target instanceof Element ? event.target.closest<HTMLElement>('[role="tab"], [data-file-drag-path]') : null;
+      if (!button) return;
+      const file = onFileDrop && button.dataset.fileDragRoot && button.dataset.fileDragPath
+        ? { root: button.dataset.fileDragRoot, path: button.dataset.fileDragPath } : undefined;
+      const id = file ? tabId(file) : button.closest<HTMLElement>("[data-tab-id]")?.dataset.tabId;
+      if (!id || (!file && !strip!.contains(button))) return;
+      drag = { id, file, pointer: event.pointerId, button, startX: event.clientX, startY: event.clientY, x: event.clientX, y: event.clientY, moving: false };
     }
     function move(event: PointerEvent) {
       if (!drag || event.pointerId !== drag.pointer) return;
@@ -77,9 +83,10 @@ export function useTabReorder(onReorder: (id: string, beforeId: string | null) =
       if (!drag.moving) {
         drag.moving = true;
         suppressClick = true;
+        clickSource = drag.button;
         drag.button.setPointerCapture?.(drag.pointer);
         strip!.dataset.reordering = "true";
-        drag.button.closest<HTMLElement>("[data-tab-id]")!.dataset.dragging = "true";
+        (drag.button.closest<HTMLElement>("[data-tab-id]") ?? drag.button).dataset.dragging = "true";
         frame = requestAnimationFrame(scroll);
       }
       locate();
@@ -91,10 +98,12 @@ export function useTabReorder(onReorder: (id: string, beforeId: string | null) =
       cancelAnimationFrame(frame);
       clearMarkers();
       delete strip!.dataset.reordering;
+      delete active.button.dataset.dragging;
       for (const tab of tabs()) delete tab.dataset.dragging;
       if (active.button.hasPointerCapture?.(active.pointer)) active.button.releasePointerCapture(active.pointer);
       if (commit && active.moving && valid) {
-        if (paneDrop && onDrop) onDrop(active.id, paneDrop);
+        if (active.file) { if (paneDrop) onFileDrop?.(active.file, paneDrop); }
+        else if (paneDrop && onDrop) onDrop(active.id, paneDrop);
         else onReorder(active.id, beforeId);
       }
     }
@@ -108,7 +117,7 @@ export function useTabReorder(onReorder: (id: string, beforeId: string | null) =
     function key(event: KeyboardEvent) { if (event.key === "Escape") finish(false); }
     function blur() { finish(false); }
     function click(event: MouseEvent) {
-      if (suppressClick && event.detail > 0) { event.preventDefault(); event.stopPropagation(); }
+      if (suppressClick && event.detail > 0 && event.target instanceof Node && (clickSource?.contains(event.target) || strip!.contains(event.target))) { event.preventDefault(); event.stopPropagation(); }
     }
     window.addEventListener("pointerdown", down);
     window.addEventListener("pointermove", move, { passive: false });
@@ -116,8 +125,8 @@ export function useTabReorder(onReorder: (id: string, beforeId: string | null) =
     window.addEventListener("pointercancel", cancel);
     window.addEventListener("keydown", key);
     window.addEventListener("blur", blur);
-    strip.addEventListener("click", click, true);
-    strip.addEventListener("dblclick", click, true);
+    window.addEventListener("click", click, true);
+    window.addEventListener("dblclick", click, true);
     return () => {
       finish(false);
       window.removeEventListener("pointerdown", down);
@@ -126,9 +135,9 @@ export function useTabReorder(onReorder: (id: string, beforeId: string | null) =
       window.removeEventListener("pointercancel", cancel);
       window.removeEventListener("keydown", key);
       window.removeEventListener("blur", blur);
-      strip.removeEventListener("click", click, true);
-      strip.removeEventListener("dblclick", click, true);
+      window.removeEventListener("click", click, true);
+      window.removeEventListener("dblclick", click, true);
     };
-  }, [onReorder, onDrop]);
+  }, [onReorder, onDrop, onFileDrop]);
   return ref;
 }

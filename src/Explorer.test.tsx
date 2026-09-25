@@ -20,6 +20,8 @@ it("opens on the first click, promotes on double-click, and preserves keyboard a
       onOpen={onOpen} onRename={noop} onFileAction={noop}
       onChange={noop} onRemove={noop} onRefresh={noop} onAdd={noop} externalDrag={false} />));
     const file = container.querySelector<HTMLButtonElement>(".file-open")!;
+    expect(file.dataset.fileDragRoot).toBe(folder.root);
+    expect(file.dataset.fileDragPath).toBe("a.md");
     await act(async () => { file.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 })); });
     expect(onOpen).toHaveBeenCalledExactlyOnceWith(folder, "a.md", undefined);
     await act(async () => {
@@ -82,6 +84,8 @@ it("offers a direct Drive action only for Cloud files and restores focus after s
       onOpen={noop} onRename={noop} onFileAction={onFileAction}
       onChange={noop} onRemove={noop} onRefresh={noop} onAdd={noop} externalDrag={false} />));
     const cloudFile = host.querySelector<HTMLButtonElement>('[data-folder-root="/cloud"] .file-open')!;
+    expect(cloudFile.dataset.fileDragRoot).toBe(cloud.root);
+    expect(cloudFile.dataset.fileDragPath).toBe("nested/cloud.md");
     await act(async () => cloudFile.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true })));
     const action = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(button => button.textContent === "Open in Google Drive")!;
     expect(action).toBeDefined();

@@ -17,6 +17,9 @@ it("navigates stars in unopened directories and distinguishes the same path acro
       activePath="deep/note.md" onOpen={onOpen} onStar={onStar} />));
     const buttons = host.querySelectorAll<HTMLButtonElement>(".starred-file-open");
     expect(buttons).toHaveLength(2);
+    expect([...buttons].map(button => [button.dataset.fileDragRoot, button.dataset.fileDragPath])).toEqual([
+      [cloud.root, "deep/note.md"], [local.root, "deep/note.md"],
+    ]);
     expect(buttons[1].hasAttribute("aria-current")).toBe(false);
     expect(buttons[0].getAttribute("aria-current")).toBe("page");
     await act(async () => buttons[1].click());

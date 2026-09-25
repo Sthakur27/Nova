@@ -43,7 +43,7 @@ import HeadingOutline from "./HeadingOutline";
 import StarredFiles from "./StarredFiles";
 import type {SearchScope} from "./currentSearch";
 import { openTab, pinTab, reorderTab, tabId, type NoteTab } from "./tabs";
-import { useTabReorder, type PaneDrop } from "./useTabReorder";
+import { useTabReorder, type PaneDrop, type NavigationFile } from "./useTabReorder";
 import EditorPanes from "./EditorPanes";
 import { paneMode, paneToolbar, type PaneView } from "./paneToolbar";
 import { initialPane, paneLeaves, reconcilePanes, selectPaneTab, movePaneTab, mapPane, parsePaneLayout, type Pane, type PaneNode } from "./paneLayout";
@@ -215,7 +215,7 @@ export default function App() {
   const activePaneRef = useRef("main");
   const paneSessions = useRef(new Map<string, PaneSession>());
   const paneEditors = useRef(new Map<string, EditorHandle>());
-  const paneActions = useRef<{ capture: () => void; activate: (id: string) => boolean; drop: (id: string, target: PaneDrop) => void } | null>(null);
+  const paneActions = useRef<{ capture: () => void; activate: (id: string) => boolean; drop: (id: string, target: PaneDrop, file?: NavigationFile) => void } | null>(null);
   const updatePaneLayout = useCallback((next: PaneNode) => {
     paneLayoutRef.current = next;
     setPaneLayout(next);
@@ -240,7 +240,8 @@ export default function App() {
     updateTabs(reorderTab(tabsRef.current, id, beforeId));
   }, [updateTabs]);
   const dropTab = useCallback((id: string, target: PaneDrop) => paneActions.current?.drop(id, target), []);
-  const tabStripRef = useTabReorder(reorderTabs, dropTab);
+  const dropFile = useCallback((file: NavigationFile, target: PaneDrop) => paneActions.current?.drop(tabId(file), target, file), []);
+  const tabStripRef = useTabReorder(reorderTabs, dropTab, compact ? undefined : dropFile);
   const pin = useCallback(
     (root: string, path: string) => {
       const id = tabId({ root, path });
@@ -471,18 +472,18 @@ export default function App() {
     setActiveFormats(session.formats ?? []); setParagraphStyle(session.paragraph ?? "paragraph");
     return true;
   };
-  paneActions.current = { capture: capturePane, activate: activatePane, drop: (id, target) => {
+  paneActions.current = { capture: capturePane, activate: activatePane, drop: (id, target, file) => {
     if (compact || operation.current || saveInFlight.current || voiceBusy.current) return;
     capturePane();
     const next = movePaneTab(paneLayoutRef.current, id, target.pane, target.edge, target.before);
-    if (next === paneLayoutRef.current) return;
-    const tab = tabsRef.current.find(t => tabId(t) === id);
+    if (!file && next === paneLayoutRef.current) return;
+    const tab = tabsRef.current.find(t => tabId(t) === id) ?? file;
     if (!tab) return;
     pin(tab.root, tab.path);
     // Load unseen tabs through the usual recovery path before moving them.
     const folder = current.current.folders.find(f => f.root === tab.root);
     if (!folder) return;
-    void openNote(tab.path, undefined, folder).then(opened => {
+    void openNote(tab.path, undefined, folder, undefined, true).then(opened => {
       if (!opened) return;
       requestAnimationFrame(() => {
         if (tabId({ root: current.current.workspace.root, path: current.current.path }) !== id) return;

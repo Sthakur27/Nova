@@ -1579,7 +1579,7 @@ kbd {
 .note-tab > [role="tab"] { cursor: grab; }
 .note-tabs[data-reordering="true"],
 .note-tabs[data-reordering="true"] button { cursor: grabbing; }
-.note-tab[data-dragging="true"] { opacity: 0.45; }
+.note-tab[data-dragging="true"], [data-file-drag-path][data-dragging="true"] { opacity: 0.45; }
 .note-tab[data-drop-side]::after {
   content: "";
   position: absolute;

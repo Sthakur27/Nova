@@ -10,6 +10,10 @@ Entries describe source changes; availability in published installers has not be
 
 ### 2026-09-25
 
+#### Added
+
+- Drag files directly from the Explorer or Starred files into desktop editor panes, tab strips, or split edges without opening a tab first.
+
 #### Changed
 
 - Local folder rows expose a new-note + button on hover or keyboard focus (always visible on touch devices). Folder-opening controls now use a folder-open icon to distinguish them from note creation.

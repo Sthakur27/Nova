@@ -26,6 +26,7 @@ import { revealFile, fileAncestors } from "./revealFile";
 import { closedDirectories } from "./folders";
 function FileTree({
   paths,
+  root,
   directories = [], directoryPages = {}, directoryErrors = {}, loadingDirectories = [], onLoadDirectory,
   active,
   onOpen,
@@ -37,6 +38,7 @@ function FileTree({
   onToggle,
 }: {
   paths: string[];
+  root: string;
   directories?: string[];
   directoryPages?: Record<string, number>;
   directoryErrors?: Record<string, string>;
@@ -97,6 +99,7 @@ function FileTree({
                   closed={closed}
                   onToggle={onToggle}
                   paths={children}
+                  root={root}
                   directories={directories} directoryPages={directoryPages} directoryErrors={directoryErrors} loadingDirectories={loadingDirectories} onLoadDirectory={onLoadDirectory}
                   active={active}
                   onOpen={onOpen}
@@ -113,6 +116,8 @@ function FileTree({
         <div key={path} onContextMenu={event => { if (path === ".nova") event.preventDefault(); else onContextMenu(event, path); }} className={"tree-row file-row " + (path === active ? "active" : "")}>
           <button
             className="file-open"
+            data-file-drag-root={root}
+            data-file-drag-path={path}
             title={path}
             onClick={event => { if (event.detail <= 1) onOpen(path); }}
             onDoubleClick={() => onOpen(path, true)}
@@ -394,6 +399,7 @@ export default function Explorer({
                         ? closed.filter(p => p !== path)
                         : [...closed, path],
                     }))}
+                    root={folder.root}
                     paths={files.map((f) => f.path)}
                     active={folder.root === activeRoot ? activePath : ""}
                     onOpen={(path, pinned) => onOpen(folder, path, pinned)}

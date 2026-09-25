@@ -21,7 +21,7 @@ export default function StarredFiles({ folders, activeRoot, activePath, onOpen, 
         {[...folder.starred].sort((a, b) => a.localeCompare(b)).map(path => {
           const active = folder.root === activeRoot && path === activePath;
           return <div className={`starred-file-row${active ? " current" : ""}`} key={path}>
-            <button className="starred-file-open" title={`${folder.name} / ${path}`}
+            <button data-file-drag-root={folder.root} data-file-drag-path={path} className="starred-file-open" title={`${folder.name} / ${path}`}
               aria-current={active ? "page" : undefined}
               onClick={event => { if (event.detail <= 1) onOpen(folder, path); }}
               onDoubleClick={() => onOpen(folder, path, true)}>
