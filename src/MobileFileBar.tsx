@@ -7,30 +7,11 @@ export default function MobileFileBar({ tabs, selected, onSelect, onNew, onRenam
   onNew: () => void; onRename?: () => void; onCloseTab: (tab: NoteTab) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const gesture = useRef<{ x: number; y: number } | null>(null);
-  const swiped = useRef(false);
   const current = tabs.find(tab => tabId(tab) === selected);
   return <div className="mobile-file-bar">
     <button className="mobile-file-picker" aria-label={`Open files${current ? `: ${current.path.split("/").at(-1)}` : ""}`}
       aria-haspopup="dialog" aria-expanded={open}
-      onTouchStart={event => {
-        swiped.current = false;
-        gesture.current = event.touches.length === 1 ? { x: event.touches[0].clientX, y: event.touches[0].clientY } : null;
-      }}
-      onTouchMove={event => { if (event.touches.length !== 1) gesture.current = null; }}
-      onTouchCancel={() => { gesture.current = null; }}
-      onTouchEnd={event => {
-        const start = gesture.current; gesture.current = null;
-        if (!start || !event.changedTouches.length) return;
-        const dx = event.changedTouches[0].clientX - start.x;
-        const dy = event.changedTouches[0].clientY - start.y;
-        if (Math.abs(dx) < 50 || Math.abs(dy) > 24) return;
-        swiped.current = true;
-        const index = tabs.findIndex(tab => tabId(tab) === selected);
-        const next = index < 0 ? undefined : tabs[index + (dx < 0 ? 1 : -1)];
-        if (next) onSelect(next);
-      }}
-      onClick={event => { if (swiped.current && event.detail !== 0) { swiped.current = false; return; } setOpen(true); }}>
+      onClick={() => setOpen(true)}>
       <FileText size={17} /><span>{current?.path.split("/").at(-1) ?? "Open files"}</span>
       <span className="mobile-file-count">{tabs.length}</span><ChevronDown size={16} />
     </button>

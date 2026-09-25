@@ -109,3 +109,20 @@ html[data-mobile-keyboard="true"] .app-shell[data-compact="true"] .toast { botto
 .app-shell[data-compact="true"] .format-scroll .format-divider { display: none; }
 .app-shell[data-compact="true"] .format-scroll > :is([aria-label="Undo"], [aria-label="Redo"]) { order: -2; }
 .app-shell[data-compact="true"] .format-scroll > :is([aria-label="Bold"], [aria-label="Italic"], [aria-label="Task list"]) { order: -1; }
+
+/* Three full panels share one offset, so outgoing and incoming notes track the finger. */
+.mobile-note-carousel, .note-carousel-current { display: flex; flex: 1; min-width: 0; min-height: 0; }
+.mobile-note-carousel { position: relative; overflow: hidden; --note-drag: 0px; }
+.mobile-note-carousel[data-enabled="true"] { touch-action: pan-y pinch-zoom; }
+.note-carousel-current { width: 100%; transform: translate3d(var(--note-drag), 0, 0); }
+.note-carousel-neighbor { position: absolute; inset: 0; display: flex; visibility: hidden; pointer-events: none; background: #18191c; }
+.note-carousel-previous { transform: translate3d(calc(var(--note-drag) - 100%), 0, 0); }
+.note-carousel-next { transform: translate3d(calc(var(--note-drag) + 100%), 0, 0); }
+.mobile-note-carousel:not([data-motion="idle"]) > .note-carousel-neighbor { visibility: visible; }
+.mobile-note-carousel:not([data-motion="idle"]) > * { will-change: transform; }
+.mobile-note-carousel[data-motion="settling"] > * { transition: transform var(--note-settle-duration, 180ms) cubic-bezier(.2,.7,.2,1); }
+.note-preview { background: #18191c; }
+.app-shell[data-galaxy="true"] .note-preview { background: var(--galaxy-black, #09090d); }
+.note-preview .mobile-file-bar .icon-button { display: flex; align-items: center; justify-content: center; }
+.note-preview-placeholder { padding: 32px 22px; color: #b5aebf; }
+.mobile-note-carousel[data-enabled="false"] > .note-carousel-current { transform: none; }

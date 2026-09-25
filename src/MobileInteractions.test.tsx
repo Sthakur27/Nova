@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
-import { act, type PointerEvent as ReactPointerEvent, type TouchEvent as ReactTouchEvent } from "react";
+import { act, type PointerEvent as ReactPointerEvent } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import MobileFileBar from "./MobileFileBar";
 import RenameDialog from "./RenameDialog";
 import FileTitle from "./FileTitle";
-import { canStartFileSwipe, dismissKeyboardOutsideEditor, fileSwipeDirection } from "./mobileGestures";
+import { dismissKeyboardOutsideEditor } from "./mobileGestures";
 import { tabId } from "./tabs";
 let container: HTMLDivElement;
 let root: Root;
@@ -66,19 +66,4 @@ it("dismisses for blank note padding while preserving caret taps and formatting 
   tap(editable.firstElementChild!); expect(document.activeElement).toBe(editable);
   tap(container.querySelector("button")!); expect(document.activeElement).toBe(editable);
   tap(editable); expect(document.activeElement).not.toBe(editable); expect(preventDefault).toHaveBeenCalledOnce();
-});
-
-it("distinguishes horizontal switching from vertical scrolling, small taps, selection and horizontal code scrolling", () => {
-  expect(fileSwipeDirection(-100, 10)).toBe(1); expect(fileSwipeDirection(100, -10)).toBe(-1);
-  expect(fileSwipeDirection(100, 40)).toBe(0); expect(fileSwipeDirection(10, 0)).toBe(0);
-  container.innerHTML = '<div><p>Text</p><pre style="overflow-x:auto">Code</pre></div>';
-  const p = container.querySelector("p")!, pre = container.querySelector("pre")!;
-  const event = (target: Element) => ({ target, currentTarget: container, touches: [{}] }) as unknown as ReactTouchEvent<HTMLElement>;
-  window.getSelection()?.removeAllRanges();
-  expect(canStartFileSwipe(event(p))).toBe(true);
-  Object.defineProperties(pre, { scrollWidth: { value: 200 }, clientWidth: { value: 100 } });
-  expect(canStartFileSwipe(event(pre))).toBe(false);
-  const range = document.createRange(); range.selectNodeContents(p); window.getSelection()?.addRange(range);
-  expect(canStartFileSwipe(event(p))).toBe(false);
-  window.getSelection()?.removeAllRanges();
 });

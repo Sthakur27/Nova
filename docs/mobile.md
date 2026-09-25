@@ -17,7 +17,7 @@ Desktop terminal, desktop voice engine, new windows, folder pickers, and file-lo
 ## Touch editing and open files
 
 - Tap **New** beside the current file, or **New note** at the top of Notes, to create a note in the active space.
-- Tap the file bar to open the **Open files** sheet. Choose a file to switch to it, or use its close button. Swipe left across the note or file bar for the next open file, and right for the previous one. Switching stops at either end; it does not wrap. Vertical scrolling, text selections, and horizontally scrolling code/table regions do not trigger note swipes.
+- Tap the file bar to open the **Open files** sheet. Choose a file to switch to it, or use its close button. Drag left anywhere across the editor or file bar for the next open file, and right for the previous one. The current and neighboring panels follow your finger together. Switching cycles from the last file to the first and back; a short or reversed drag snaps back. Horizontal swipes over text, code, and tables switch files too. Vertical gestures scroll normally, and long presses remain available for text selection.
 - Tap the note title or the pencil beside the file picker to rename. The name is selected for replacement; **Rename** confirms and **Cancel** leaves it unchanged. Mobile renaming preserves the extension and does not commit merely because focus moves away.
 - Tap blank note padding or outside the editor to dismiss the keyboard. Tapping text still positions the caret. **Done** beside the formatting controls also dismisses it.
 - Undo, redo, bold, italic, and task lists come first in the horizontally scrolling toolbar. Scroll it for headings, code, lists, and quotes; **Done** stays visible. Formatting is disabled for non-Markdown files.
@@ -98,9 +98,9 @@ cargo test --manifest-path src-tauri/Cargo.toml
 
 Verified on September 25, 2026 for the mobile controls update:
 
-- 472 frontend tests pass, including rename confirmation/cancellation, file selection/closing, keyboard focus protection, and swipe eligibility.
+- 477 frontend tests pass, including rename confirmation/cancellation, file selection/closing, keyboard focus protection, cyclic panel swipes, cancellation, and failed-save recovery.
 - Production frontend build and debug iOS simulator archive succeed. The archive launches and renders the updated interface on the iPhone 18 Pro simulator. A bundled debug device archive also builds, installs, and displays existing notes on a physical iPhone 16 Pro Max with the development server stopped.
-- Browser checks cover note creation, rename dialog, Open files selection, synthetic horizontal swipe switching, and phone/tablet/desktop layouts. Real iOS swipe and software-keyboard interactions remain unverified for this update.
+- Browser checks cover note creation, rename dialog, Open files selection, synthetic full-panel dragging, cyclic switching, and draft retention, and phone/tablet/desktop layouts. Real iOS swipe and software-keyboard interactions remain unverified for this update.
 
 Earlier verification on September 19, 2026:
 

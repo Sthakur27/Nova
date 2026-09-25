@@ -18,7 +18,9 @@ import ReadFind from "./ReadFind";
 import { installFileSearchShortcut } from "./fileSearchShortcut";
 import FileTitle from "./FileTitle";
 import MobileFileBar from "./MobileFileBar";
-import { canStartFileSwipe, dismissKeyboardOutsideEditor, dismissNoteKeyboard, fileSwipeDirection } from "./mobileGestures";
+import { dismissKeyboardOutsideEditor, dismissNoteKeyboard } from "./mobileGestures";
+import MobileNoteCarousel from "./MobileNoteCarousel";
+import MobileNotePreview, { type MobilePreview } from "./MobileNotePreview";
 import { mobile, supportsFrosted } from "./platform";
 import { useCompactLayout } from "./useCompactLayout";
 import { useFocusTransition } from "./useFocusTransition";
@@ -161,7 +163,6 @@ type PaneSession = { workspace: Workspace; path: string; data: DocumentData; mod
 export default function App() {
   const [launchMessage] = useState(() => launchMessages[Math.floor(Math.random() * launchMessages.length)]);
   const compact = useCompactLayout();
-  const noteSwipe = useRef<{ x: number; y: number } | null>(null);
   const [mobileView, setMobileView] = useState<"notes" | "editor" | "bookmarks">("editor");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [activeSettingId, setActiveSettingId] = useState<string | null>(null);
@@ -1652,6 +1653,16 @@ export default function App() {
     }
     return () => { cancelled = true; };
   }, [foldersReady, paneLayout, tabs, folders, workspace.root, path, updatePaneLayout]);
+  const loadMobilePreview = useCallback(async (tab: NoteTab): Promise<MobilePreview> => {
+    const id = tabId(tab);
+    const session = paneSessions.current.get(id);
+    const snapshot = paneEditors.current.get(id)?.snapshot() ?? snapshots.current.get(id);
+    // Read neighboring content without touching recovery drafts or the active document.
+    const note = snapshot ? { text: snapshot.state.doc.toString(), revision: session?.data.revision ?? "preview", bookmarks: session?.data.bookmarks ?? [] }
+      : session?.dirty ? session.data : await loadDraft(tab.root, tab.path) ?? await readNote(tab.root, tab.path);
+    const preferred = sharedViewMode.current ?? session?.mode ?? readFileMode(tab.path);
+    return { note, snapshot, mode: availablePaneMode(preferred, tab.path, note.text.length, showReadMode) };
+  }, [showReadMode]);
   if (mobile && (!drive.status.connected || (!cloud.loaded && !folders.some(folder => folder.cloudSpace?.account === drive.status.account && !!drive.status.account)))) {
     return <CloudSetup drive={drive} loading={cloud.loading} error={cloud.error} retry={()=>void cloud.refresh()}/>;
   }
@@ -1753,19 +1764,7 @@ export default function App() {
       const isMarkdown = /\.(md|markdown|mdx)$/i.test(path);
       const documentView = isMarkdown && !(mode === "read" && readingLayout === "pages") && supportsDocumentView(data?.text.length ?? 0, editorSnapshot?.state.doc.length ?? 0, preview.length);
       return (
-        <div className="document-area" data-registry={path === ".nova"}
-          onTouchStart={event => { noteSwipe.current = compact && canStartFileSwipe(event) ? { x: event.touches[0].clientX, y: event.touches[0].clientY } : null; }}
-          onTouchMove={event => { if (event.touches.length !== 1 || (noteSwipe.current && Math.abs(event.touches[0].clientY - noteSwipe.current.y) > 24)) noteSwipe.current = null; }}
-          onTouchCancel={() => { noteSwipe.current = null; }}
-          onTouchEnd={event => {
-            const start = noteSwipe.current; noteSwipe.current = null;
-            if (!compact || !start || !event.changedTouches.length || !window.getSelection()?.isCollapsed) return;
-            const direction = fileSwipeDirection(event.changedTouches[0].clientX - start.x, event.changedTouches[0].clientY - start.y);
-            const index = tabs.findIndex(tab => tabId(tab) === pane.selected);
-            const next = direction && index >= 0 ? tabs[index + direction] : undefined;
-            const folder = next && folders.find(folder => folder.root === next.root);
-            if (next && folder) { dismissNoteKeyboard(); void openNote(next.path, undefined, folder); }
-          }}>
+        <div className="document-area" data-registry={path === ".nova"}>
           {data && (mode === "read" || (mode === "edit" && documentView)) && <ReadFind
             key={JSON.stringify([workspace.root, path, data.revision])}
             text={preview}
@@ -2190,9 +2189,24 @@ export default function App() {
           </button>
         </div>
         </div>
+        <MobileNoteCarousel enabled={compact && mobileView === "editor" && !palette && !settingsOpen && !activeSettingId && !renameTarget && !fileAction && !syncFolder && !bookmarkDraft}
+          ids={tabs.map(tabId)} selected={tabId({ root: workspace.root, path })}
+          onSelect={async id => {
+            const tab = tabsRef.current.find(tab => tabId(tab) === id);
+            const folder = tab && current.current.folders.find(folder => folder.root === tab.root);
+            if (!tab || !folder) return false;
+            dismissNoteKeyboard();
+            return openNote(tab.path, undefined, folder);
+          }}
+          renderPreview={id => {
+            const tab = tabs.find(tab => tabId(tab) === id);
+            return tab ? <MobileNotePreview key={id} tab={tab} count={tabs.length} load={loadMobilePreview}
+              showLineNumbers={showLineNumbers} showLineHighlight={showLineHighlight} wordWrap={wordWrap} readingLayout={readingLayout} /> : null;
+          }}>
         <EditorPanes layout={paneLayout} active={activePane} compact={compact}
           onActivate={activatePane} renderTabs={renderPaneTabs} renderDocument={renderPaneDocument}
           onResize={(id, ratio) => updatePaneLayout(mapPane(paneLayoutRef.current, id, node => node.kind === "split" ? { ...node, ratio } : node))} />
+        </MobileNoteCarousel>
         {!mobile && <TerminalPanel hoveredEdge={hoveredBottom} started={terminalStarted} open={terminalOpen && statusBar} root={workspace.root} controlsContainer={terminalControls}
           bottomPanelOpen={statusBar} onBottomPanelOpenChange={setStatusBar}
           onOpenChange={changeTerminalOpen} onStorageError={() => setNotice("Terminal height changed, but could not be saved on this device.")} />}
