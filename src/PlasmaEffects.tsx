@@ -385,7 +385,7 @@ export default function PlasmaEffects({ active, dirty, lineHighlight, supernova 
       // The title is editable text; its hover rim follows the line preference too.
       if (!lineHighlight && element.closest(".file-heading")) return null;
       // Composite controls share one frame around their full outer boundary.
-      return element.closest(".bookmark-card, .palette-input") ?? element.closest(targets);
+      return element.closest(".bookmark-card, .saved-state-card, .palette-input") ?? element.closest(targets);
     };
     const over = (event: PointerEvent) => { hover = target(event.target); refresh(); };
     const out = (event: PointerEvent) => { hover = target(event.relatedTarget); refresh(); };

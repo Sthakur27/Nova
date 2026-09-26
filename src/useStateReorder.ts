@@ -3,11 +3,12 @@ import { useEffect, useRef } from "react";
 /** Match tab dragging: pointer events work when a desktop webview intercepts file drops. */
 export function useStateReorder(onReorder?: (from: number, before: number | null) => void, disabled = false) {
   const ref = useRef<HTMLDivElement>(null);
+  const suppressClick = useRef(false);
   useEffect(() => {
     const list = ref.current;
     if (!list || !onReorder || disabled) return;
     let drag: { slot: number; pointer: number; handle: HTMLElement; x: number; y: number; startY: number; moving: boolean } | null = null;
-    let before: number | null = null, valid = false, frame = 0, suppressClick = false;
+    let before: number | null = null, valid = false, frame = 0;
     const cards = () => Array.from(list.querySelectorAll<HTMLElement>("[data-state-slot]"));
     const clear = () => cards().forEach(card => { delete card.dataset.drop; delete card.dataset.dragging; });
     function locate() {
@@ -41,11 +42,14 @@ export function useStateReorder(onReorder?: (from: number, before: number | null
       if (commit && active.moving && valid) onReorder!(active.slot, before);
     }
     function down(event: PointerEvent) {
-      suppressClick = false;
+      suppressClick.current = false;
       if (event.button !== 0 || !event.isPrimary || event.pointerType === "touch") return;
-      const handle = event.target instanceof Element ? event.target.closest<HTMLElement>(".saved-state-drag") : null;
-      const card = handle?.closest<HTMLElement>("[data-state-slot]");
-      if (!handle || !card) return;
+      const target = event.target instanceof Element ? event.target : null;
+      const card = target?.closest<HTMLElement>("[data-state-slot]");
+      if (!card || target?.closest(".saved-state-confirm")) return;
+      const button = target?.closest("button");
+      if (button && !button.matches(".saved-state-drag, .saved-state-restore")) return;
+      const handle = card;
       drag = { slot: Number(card.dataset.stateSlot), pointer: event.pointerId, handle, x: event.clientX, y: event.clientY, startY: event.clientY, moving: false };
     }
     function move(event: PointerEvent) {
@@ -53,7 +57,7 @@ export function useStateReorder(onReorder?: (from: number, before: number | null
       drag.x = event.clientX; drag.y = event.clientY;
       if (!drag.moving && Math.abs(drag.y - drag.startY) < 5) return;
       event.preventDefault();
-      if (!drag.moving) { drag.moving = true; suppressClick = true; drag.handle.setPointerCapture?.(drag.pointer); frame = requestAnimationFrame(scroll); }
+      if (!drag.moving) { drag.moving = true; suppressClick.current = true; drag.handle.setPointerCapture?.(drag.pointer); frame = requestAnimationFrame(scroll); }
       locate();
     }
     function up(event: PointerEvent) {
@@ -64,7 +68,7 @@ export function useStateReorder(onReorder?: (from: number, before: number | null
     }
     const cancel = () => finish(false);
     const key = (event: KeyboardEvent) => { if (event.key === "Escape") cancel(); };
-    const click = (event: MouseEvent) => { if (suppressClick && event.detail > 0) { event.preventDefault(); event.stopPropagation(); } };
+    const click = (event: MouseEvent) => { if (suppressClick.current && event.detail > 0) { event.preventDefault(); event.stopPropagation(); } };
     list.addEventListener("pointerdown", down);
     list.addEventListener("click", click, true);
     window.addEventListener("pointermove", move, { passive: false }); window.addEventListener("pointerup", up);

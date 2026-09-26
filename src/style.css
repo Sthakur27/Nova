@@ -2948,12 +2948,12 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 .saved-states-list { overflow-y: auto; flex: 1; padding: 0 12px; }
 .saved-state-card { border: 1px solid #ffffff12; border-radius: 9px; margin-bottom: 10px; overflow: hidden; }
 .saved-state-restore { width: 100%; padding: 12px; text-align: left; color: inherit; background: transparent; border: 0; cursor: pointer; }
-.saved-state-restore:hover { background: #b598da0c; }
+.saved-state-card:hover { background: #b598da0c; }
 .saved-state-heading { display: flex; align-items: baseline; gap: 8px; }
 .saved-state-heading strong { flex: 1; overflow-wrap: anywhere; font-size: 13px; font-weight: 500; }
 .saved-state-heading kbd { color: #96909f; white-space: nowrap; font: inherit; font-size: 10px; }
 .saved-state-restore > small { display: block; color: #96909f; font-size: 11px; line-height: 1.5; margin-top: 7px; overflow-wrap: anywhere; }
-.saved-state-actions { display: flex; justify-content: flex-end; padding: 0 6px 5px; }
+.saved-state-actions { display: flex; align-items: center; justify-content: flex-end; padding: 0 6px 5px; }
 .saved-state-actions .icon-button { width: 28px; height: 28px; }
 .saved-state-create { padding: 16px; border-top: 1px solid #ffffff0c; }
 .saved-state-create label { display: block; font-size: 12px; color: #b5aebf; margin-bottom: 9px; }
@@ -3001,10 +3001,20 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 .saved-state-drag:hover, .saved-state-drag:focus-visible { opacity: 1; }
 .saved-state-card[data-drop="before"] { box-shadow: 0 -2px #b598da; }
 .saved-state-card[data-drop="after"] { box-shadow: 0 2px #b598da; }
-.saved-state-overwrite { display: flex; align-items: center; gap: 5px; border: 0; background: transparent; color: #b5aebf; padding: 6px 8px; border-radius: 5px; font: inherit; font-size: 11px; cursor: pointer; }
+
 .saved-state-confirm { border-top: 1px solid #ffffff12; padding: 10px; font-size: 12px; }
 .saved-state-confirm p { margin: 0 0 10px; color: #b5aebf; line-height: 1.5; overflow-wrap: anywhere; }
 .saved-state-confirm button { padding: 7px 8px; border: 1px solid #ffffff20; border-radius: 5px; background: #b598da15; color: #dedbe5; font: inherit; font-size: 11px; cursor: pointer; margin: 0 5px 4px 0; }
 
 .saved-state-card[data-dragging="true"] { opacity: .5; }
 .saved-state-drag { touch-action: pan-y; user-select: none; }
+
+.saved-state-card[data-state-slot] { cursor: grab; user-select: none; touch-action: pan-y; }
+.saved-state-title { padding: 10px 12px 0; gap: 5px; align-items: center; }
+.saved-state-card:has(.saved-state-drag) .saved-state-title { padding-left: 30px; }
+.saved-state-title .saved-state-restore { width: auto; min-width: 0; padding: 0; }
+.saved-state-card:has(.saved-state-drag) .saved-state-title .saved-state-restore { padding: 0; }
+.saved-state-title kbd { margin-left: auto; }
+.saved-state-rename { flex-shrink: 0; width: 24px; height: 26px; }
+.saved-state-files { color: #96909f; font-size: 11px; line-height: 1.5; padding: 7px 12px 10px; overflow-wrap: anywhere; }
+.saved-state-card:has(.saved-state-drag) .saved-state-files { padding-left: 30px; }

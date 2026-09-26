@@ -390,8 +390,8 @@ export default function App() {
   const [paragraphStyle, setParagraphStyle] = useState<FormatAction>("paragraph");
   const [cursor, setCursor] = useState([1, 1]);
   const [notice, setNotice] = useState("");
-  const restoredNoticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => clearTimeout(restoredNoticeTimer.current), []);
+  const stateNoticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(stateNoticeTimer.current), []);
   useEffect(() => {
     // Browser previews already provide their own page zoom shortcuts.
     if (!desktop) return;
@@ -539,7 +539,7 @@ export default function App() {
     setBookmarkView("states"); setRail(true); setFocusMode(false);
   };
   const persistSavedStates = (next: (SavedState | null)[]) => {
-    try { localStorage.setItem(savedStatesKey, JSON.stringify(next)); setSavedStates(next); return true; }
+    try { localStorage.setItem(savedStatesKey, JSON.stringify(next)); setSavedStates(parseSavedStates(JSON.stringify(next))); return true; }
     catch (error) { reportSavedStateError(`Unable to save states: ${String(error)}`); return false; }
   };
   const captureCurrentState = (name: string): SavedState => {
@@ -552,6 +552,11 @@ export default function App() {
     }
     return { name, tabs: tabsRef.current.map(t => ({ ...t, pinned: true })), layout: paneLayoutRef.current, activePane: activePaneRef.current, views };
   };
+  const showStateNotice = (message: string) => {
+    clearTimeout(stateNoticeTimer.current);
+    setNotice(message);
+    stateNoticeTimer.current = setTimeout(() => setNotice(current => current === message ? "" : current), 1000);
+  };
   const saveCurrentState = (slot: number, name: string, expected?: SavedState) => {
     if (!data || operation.current || saveInFlight.current || voiceBusy.current) { reportSavedStateError("Open a note and finish the current operation before saving a state."); return false; }
     const captured = captureCurrentState(name);
@@ -561,7 +566,7 @@ export default function App() {
       setSavedStates(next); reportSavedStateError("This slot changed. Review the latest state before saving over it."); return false;
     }
     next[slot] = captured;
-    if (persistSavedStates(next)) { savedLayoutBaseline.current = captured; setSavedStatesError(""); setNotice(`Saved state “${name}”.`); return true; }
+    if (persistSavedStates(next)) { savedLayoutBaseline.current = captured; setSavedStatesError(""); showStateNotice(`Saved state “${name}”.`); return true; }
     return false;
   };
   const restoreSavedState = async (slot: number | "previous") => {
@@ -604,12 +609,7 @@ export default function App() {
       setMode(session.mode); setDirty(session.dirty); setPreview(session.preview);
       setEditorSnapshot(session.snapshot); applyMarks(session.data.bookmarks); setCursor([1, 1]); setActiveMark(null);
       setRestoredState(previous => ({ generation: previous.generation + 1, views: state!.views }));
-      const message = `Restored “${state.name}”.`;
-      clearTimeout(restoredNoticeTimer.current);
-      setNotice(message);
-      restoredNoticeTimer.current = setTimeout(() => {
-        setNotice(current => current === message ? "" : current);
-      }, 1000);
+      showStateNotice(`Restored “${state.name}”.`);
     } catch (error) { reportSavedStateError(`Unable to restore state: ${String(error)}`); }
     finally { operation.current = false; }
   };
@@ -2387,6 +2387,16 @@ export default function App() {
             </div>
           </header>
           {bookmarkView === "states" ? <SavedStatesPanel suggestedName={suggestedStateName(tabs, paneLayout)} previousState={previousState} onReturn={() => restoreSavedState("previous")} error={savedStatesError} slots={savedStates} onSave={saveCurrentState} onRestore={restoreSavedState}
+            onRename={(slot, name, expected) => {
+              const latest = parseSavedStates(localStorage.getItem(savedStatesKey));
+              if (JSON.stringify(latest[slot]) !== JSON.stringify(expected)) {
+                setSavedStates(latest);
+                throw new Error("This state changed in another window. Close this dialog and try again.");
+              }
+              latest[slot] = { ...expected, name };
+              if (!persistSavedStates(latest)) throw new Error("Unable to save the new name. Try again.");
+              setSavedStatesError(""); showStateNotice(`Renamed state “${name}”.`);
+            }}
             onReorder={(from, before) => {
               try {
                 const latest = parseSavedStates(localStorage.getItem(savedStatesKey));

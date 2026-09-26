@@ -99,10 +99,48 @@ it("cancels overwrites and reorders from the handle with keyboard or drag withou
     await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
     await act(async () => window.dispatchEvent(event("pointerup", 30)));
     expect(onReorder).not.toHaveBeenCalled();
-    await act(async () => handle.dispatchEvent(event("pointerdown", 150)));
+    const body = host.querySelector('[data-state-slot="2"] .saved-state-files')!;
+    const save = host.querySelector('[aria-label="Save over Personal"]')!;
+    await act(async () => save.dispatchEvent(event("pointerdown", 150)));
     await act(async () => window.dispatchEvent(event("pointermove", 30)));
     await act(async () => window.dispatchEvent(event("pointerup", 30)));
+    expect(onReorder).not.toHaveBeenCalled();
+    await act(async () => body.dispatchEvent(event("pointerdown", 150)));
+    await act(async () => window.dispatchEvent(event("pointermove", 30)));
+    await act(async () => window.dispatchEvent(event("pointerup", 30)));
+    await act(async () => body.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 })));
     expect(onReorder).toHaveBeenLastCalledWith(2, 0);
     expect(onRestore).not.toHaveBeenCalled();
+  } finally { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); }
+});
+
+it("renames with a modal, preserves the expected snapshot, and allows cancel or retry after a conflict", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+  HTMLDialogElement.prototype.close = function () { this.open = false; };
+  const host = document.createElement("div"); document.body.append(host);
+  const root = createRoot(host), onRename = vi.fn(), onSave = vi.fn(() => true);
+  try {
+    await act(async () => root.render(<SavedStatesPanel slots={[state]} error="" onSave={onSave}
+      onRestore={async () => {}} onDelete={() => {}} onRename={onRename} />));
+    const pencil = host.querySelector('[aria-label="Rename Work"]') as HTMLButtonElement;
+    await act(async () => pencil.click());
+    await act(async () => host.querySelector("dialog")!.dispatchEvent(new Event("cancel", { cancelable: true })));
+    expect(onRename).not.toHaveBeenCalled();
+    await act(async () => pencil.click());
+    const input = host.querySelector("dialog input") as HTMLInputElement;
+    expect(input.value).toBe("Work");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "  Writing  ");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    onRename.mockImplementationOnce(() => { throw new Error("State changed elsewhere"); });
+    const submit = () => host.querySelector("dialog form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await act(async () => { submit(); });
+    expect(host.querySelector('dialog [role="alert"]')?.textContent).toBe("State changed elsewhere");
+    await act(async () => { submit(); });
+    expect(onRename).toHaveBeenLastCalledWith(0, "Writing", state);
+    expect(host.querySelector("dialog")).toBeNull();
+    expect(onSave).not.toHaveBeenCalled();
   } finally { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); }
 });
