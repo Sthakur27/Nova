@@ -248,3 +248,26 @@ it.each(["notes.txt", "NOTES.TXT", "notes.md", "code.ts"])("handles typed arrows
     vi.unstubAllGlobals();
   }
 });
+
+it("restores a saved-state scroll offset without replacing current text or undo history", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const height = vi.spyOn(Element.prototype, "clientHeight", "get").mockReturnValue(300);
+  const host = document.createElement("div"); document.body.append(host);
+  const root = createRoot(host), ref = createRef<EditorHandle>();
+  const props = { bookmarks: [], onChange: () => {}, onBookmarks: () => {}, onCursor: () => {},
+    onBookmark: () => {}, onSave: () => {}, isMarkdown: false, showLineNumbers: false,
+    showLineHighlight: false, wordWrap: false, spellcheck: false };
+  try {
+    await act(async () => root.render(<Editor key="before" ref={ref} initial="Latest contents" {...props} />));
+    const view = EditorView.findFromDOM(host.querySelector(".cm-editor")!)!;
+    await act(async () => view.dispatch({ changes: { from: view.state.doc.length, insert: " with edits" } }));
+    const snapshot = ref.current!.snapshot();
+    snapshot.scrollTop = 25;
+    await act(async () => root.render(<Editor key="restored" ref={ref} initial="Latest contents"
+      snapshot={snapshot} initialScrollTop={900} {...props} />));
+    expect(ref.current!.text()).toBe("Latest contents with edits");
+    expect(ref.current!.snapshot().scrollTop).toBe(900);
+    await act(async () => ref.current!.undo());
+    expect(ref.current!.text()).toBe("Latest contents");
+  } finally { await act(async () => root.unmount()); host.remove(); height.mockRestore(); vi.unstubAllGlobals(); }
+});

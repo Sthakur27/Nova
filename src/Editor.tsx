@@ -9,7 +9,7 @@ import { textChanges } from "./documentMarkdown";
 import GalaxyMark from "./GalaxyMark";
 import FileTitle from "./FileTitle";
 import { createPortal } from "react-dom";
-import { initialScrollTop } from "./scrollSpace";
+import { initialScrollTop, trackScrollSpace } from "./scrollSpace";
 import { GFM } from "@lezer/markdown";
 import { tags } from "@lezer/highlight";
 import {
@@ -132,6 +132,7 @@ export type EditorHandle = {
 type Props = {
   initial: string;
   snapshot?: EditorSnapshot;
+  initialScrollTop?: number;
   bookmarks: Bookmark[];
   onChange: () => void;
   onBookmarks: (b: Bookmark[]) => void;
@@ -441,7 +442,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
     // A source editor can mount hidden behind Read mode. Wait until it has a
     // viewport before positioning the first line below the space above it.
     const positionSource = () => {
-      v.scrollDOM.scrollTop = p.snapshot?.scrollTop ?? initialScrollTop(v.scrollDOM, mobile);
+      v.scrollDOM.scrollTop = p.initialScrollTop ?? p.snapshot?.scrollTop ?? initialScrollTop(v.scrollDOM, mobile);
     };
     let openingObserver: ResizeObserver | undefined;
     if (v.scrollDOM.clientHeight) positionSource();
@@ -519,7 +520,7 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
         },
       });
       if (documentPane.current) {
-        documentPane.current.scrollTop = props.snapshot?.scrollTop ?? initialScrollTop(documentPane.current, mobile);
+        documentPane.current.scrollTop = props.initialScrollTop ?? props.snapshot?.scrollTop ?? initialScrollTop(documentPane.current, mobile);
       }
       documentEditor.current.setFindMatches(findMatches.current.matches, findMatches.current.active);
       documentEditor.current.setBookmarks(latest.current.bookmarks);
@@ -532,6 +533,10 @@ export default forwardRef<EditorHandle, Props>(function Editor(props, ref) {
     } finally { bridging.current = false; }
     latest.current.onFormatting?.(documentEditor.current.activeFormatting());
   }, [props.documentMode, props.spellcheck]);
+  useEffect(() => {
+    const surface = props.documentMode ? documentPane.current : view.current?.scrollDOM;
+    return surface ? trackScrollSpace(surface, mobile) : undefined;
+  }, [props.documentMode]);
   useEffect(() => () => { documentEditor.current?.destroy(); documentEditor.current = null; }, []);
   useEffect(() => {
     const v = view.current;

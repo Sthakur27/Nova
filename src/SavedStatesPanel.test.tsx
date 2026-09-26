@@ -1,0 +1,68 @@
+// @vitest-environment jsdom
+import { act } from "react";
+import { createRoot } from "react-dom/client";
+import { expect, it, vi } from "vitest";
+import SavedStatesPanel from "./SavedStatesPanel";
+import { type SavedState } from "./savedStates";
+const id = JSON.stringify(["cloud", "work.md"]);
+const state: SavedState = { name: "Work", tabs: [{ root: "cloud", path: "work.md", pinned: true }], activePane: "main",
+  layout: { kind: "pane", id: "main", tabs: [id], selected: id }, views: { [id]: { scrollTop: 800 } } };
+it("saves to the first free shortcut and restores, updates, and deletes directly from a card", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const host = document.createElement("div"); document.body.append(host);
+  const root = createRoot(host), onSave = vi.fn(() => true), onRestore = vi.fn(async () => {}), onDelete = vi.fn();
+  const onReturn = vi.fn(async () => {});
+  const slots = [state, null, ...Array(7).fill(null)];
+  try {
+    await act(async () => root.render(<SavedStatesPanel previousState={state} onReturn={onReturn} slots={slots} error="" onSave={onSave} onRestore={onRestore} onDelete={onDelete} />));
+    expect(host.querySelector("dialog")).toBeNull();
+    await act(async () => (host.querySelector('[aria-label="Return to previous state"]') as HTMLButtonElement).click());
+    expect(onReturn).toHaveBeenCalledOnce();
+    const input = host.querySelector("input")!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "  Work + personal  ");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    expect(onSave).toHaveBeenCalledWith(1, "Work + personal");
+    expect(input.value).toBe("");
+    await act(async () => (host.querySelector('[aria-label="Restore Work"]') as HTMLButtonElement).click());
+    expect(onRestore).toHaveBeenCalledWith(0);
+    await act(async () => (host.querySelector('[aria-label="Update Work with current layout"]') as HTMLButtonElement).click());
+    expect(onSave).toHaveBeenCalledWith(0, "Work");
+    await act(async () => (host.querySelector('[aria-label="Delete Work"]') as HTMLButtonElement).click());
+    expect(onDelete).toHaveBeenCalledWith(0);
+    await act(async () => root.render(<SavedStatesPanel slots={Array(9).fill(state)} error="Open the folder first." onSave={onSave} onRestore={onRestore} onDelete={onDelete} />));
+    expect(host.querySelector("input")).toBeNull();
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe("Open the folder first.");
+  } finally { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); }
+});
+
+it("accepts a suggested name with Tab or saves it directly without overwriting a custom name", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const host = document.createElement("div"); document.body.append(host);
+  const root = createRoot(host), onSave = vi.fn(() => true);
+  try {
+    await act(async () => root.render(<SavedStatesPanel slots={Array(9).fill(null)} suggestedName="Work + personal"
+      error="" onSave={onSave} onRestore={async () => {}} onDelete={() => {}} />));
+    const input = host.querySelector("input")!, button = host.querySelector('button[type="submit"]') as HTMLButtonElement;
+    expect(input.placeholder).toBe("Work + personal");
+    expect(button.disabled).toBe(false);
+    await act(async () => button.click());
+    expect(onSave).toHaveBeenLastCalledWith(0, "Work + personal");
+    await act(async () => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true })));
+    expect(input.value).toBe("");
+    const tab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+    await act(async () => input.dispatchEvent(tab));
+    expect(input.value).toBe("Work + personal");
+    expect(tab.defaultPrevented).toBe(false);
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "My custom state");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => input.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true })));
+    expect(input.value).toBe("My custom state");
+    await act(async () => button.click());
+    expect(onSave).toHaveBeenLastCalledWith(0, "My custom state");
+  } finally { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); }
+});

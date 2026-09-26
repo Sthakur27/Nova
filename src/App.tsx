@@ -1,3 +1,7 @@
+import FocusStateNav from "./FocusStateNav";
+import ReadPaneSurface from "./ReadPaneSurface";
+import SavedStatesPanel from "./SavedStatesPanel";
+import { parseSavedStates, savedStatesKey, savedStateShortcut, suggestedStateName, sameStateLayout, type SavedState } from "./savedStates";
 import { LocalChangeRetry, prepareLocalReload } from "./localFileReload";
 import { useLocalChanges } from "./useLocalChanges";
 import { AppUpdateIndicator } from "./AppUpdate";
@@ -112,7 +116,6 @@ import SidebarAppearance from "./SidebarAppearance";
 import GalaxyMark from "./GalaxyMark";
 import SidebarSection from "./SidebarSection";
 import { useAppUpdate } from "./useAppUpdate";
-import { initialScrollTop } from "./scrollSpace";
 import { readFileMode, saveFileMode } from "./fileModes";
 import { RICH_DOCUMENT_LIMIT, supportsDocumentView } from "./documentLimits";
 import PlasmaEffects from "./PlasmaEffects";
@@ -223,6 +226,14 @@ export default function App() {
   const [activePane, setActivePane] = useState("main");
   const activePaneRef = useRef("main");
   const paneSessions = useRef(new Map<string, PaneSession>());
+  const [previousState, setPreviousState] = useState<SavedState | null>(null);
+  const savedLayoutBaseline = useRef<SavedState | null>(null);
+  const [savedStatesError, setSavedStatesError] = useState("");
+  const [savedStates, setSavedStates] = useState(() => {
+    try { return parseSavedStates(localStorage.getItem(savedStatesKey)); } catch { return parseSavedStates(null); }
+  });
+  const [restoredState, setRestoredState] = useState<{ generation: number; views: SavedState["views"] }>({ generation: 0, views: {} });
+  const readSurfaces = useRef(new Map<string, HTMLDivElement>());
   const paneEditors = useRef(new Map<string, EditorHandle>());
   const paneActions = useRef<{ capture: () => void; activate: (id: string) => boolean; drop: (id: string, target: PaneDrop, file?: NavigationFile) => void } | null>(null);
   const updatePaneLayout = useCallback((next: PaneNode) => {
@@ -342,7 +353,7 @@ export default function App() {
   const [hoveredBottom, setHoveredBottom] = useState(false);
   const [hoveredTop, setHoveredTop] = useState(false);
   const [hoveredEdge, setHoveredEdge] = useState<"left" | "right" | null>(null);
-  const [bookmarkView, setBookmarkView] = useState<"passages" | "files" | "outline">("files");
+  const [bookmarkView, setBookmarkView] = useState<"passages" | "files" | "outline" | "states">("files");
   const activeStarFolder = folders.find(folder => folder.root === workspace.root);
   const activeFileStarred = activeStarFolder?.starred?.includes(path) ?? false;
   const [bookmarkScope, setBookmarkScope] = useState<SearchScope>("current");
@@ -379,6 +390,8 @@ export default function App() {
   const [paragraphStyle, setParagraphStyle] = useState<FormatAction>("paragraph");
   const [cursor, setCursor] = useState([1, 1]);
   const [notice, setNotice] = useState("");
+  const restoredNoticeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(restoredNoticeTimer.current), []);
   useEffect(() => {
     // Browser previews already provide their own page zoom shortcuts.
     if (!desktop) return;
@@ -400,10 +413,6 @@ export default function App() {
   } | null>(null);
   const editor = useRef<EditorHandle>(null);
   const previewElement = useRef<HTMLDivElement>(null);
-  const attachPreview = useCallback((element: HTMLDivElement | null) => {
-    previewElement.current = element;
-    if (element) element.scrollTo({ top: initialScrollTop(element, mobile), behavior: "instant" });
-  }, []);
   const largeRead = useRef<LargeReadHandle>(null);
   const revision = useRef("");
   const operation = useRef(false);
@@ -522,6 +531,96 @@ export default function App() {
       return true;
     } catch (error) { setNotice(`Unable to preserve a pane's draft: ${String(error)}`); return false; }
   }, []);
+  const reportSavedStateError = (message: string) => { setSavedStatesError(message); setNotice(message); };
+  const openSavedStates = () => {
+    setSavedStatesError("");
+    try { setSavedStates(parseSavedStates(localStorage.getItem(savedStatesKey))); }
+    catch (error) { reportSavedStateError(`Unable to read saved states: ${String(error)}`); }
+    setBookmarkView("states"); setRail(true); setFocusMode(false);
+  };
+  const persistSavedStates = (next: (SavedState | null)[]) => {
+    try { localStorage.setItem(savedStatesKey, JSON.stringify(next)); setSavedStates(next); return true; }
+    catch (error) { reportSavedStateError(`Unable to save states: ${String(error)}`); return false; }
+  };
+  const captureCurrentState = (name: string): SavedState => {
+    capturePane();
+    const views: SavedState["views"] = {};
+    for (const pane of paneLeaves(paneLayoutRef.current)) {
+      if (!pane.selected) continue;
+      const session = paneSessions.current.get(pane.selected);
+      if (session) views[pane.selected] = { scrollTop: readSurfaces.current.get(pane.selected)?.scrollTop ?? paneEditors.current.get(pane.selected)?.snapshot().scrollTop ?? 0 };
+    }
+    return { name, tabs: tabsRef.current.map(t => ({ ...t, pinned: true })), layout: paneLayoutRef.current, activePane: activePaneRef.current, views };
+  };
+  const saveCurrentState = (slot: number, name: string) => {
+    if (!data || operation.current || saveInFlight.current || voiceBusy.current) { reportSavedStateError("Open a note and finish the current operation before saving a state."); return false; }
+    const captured = captureCurrentState(name);
+    let next: (SavedState | null)[];
+    try { next = parseSavedStates(localStorage.getItem(savedStatesKey)); } catch (error) { reportSavedStateError(String(error)); return false; }
+    next[slot] = captured;
+    if (persistSavedStates(next)) { savedLayoutBaseline.current = captured; setSavedStatesError(""); setNotice(`Saved state “${name}”.`); return true; }
+    return false;
+  };
+  const restoreSavedState = async (slot: number | "previous") => {
+    let state: SavedState | null;
+    try { state = slot === "previous" ? previousState : parseSavedStates(localStorage.getItem(savedStatesKey))[slot]; }
+    catch (error) { reportSavedStateError(String(error)); return; }
+    if (!state) { setNotice(slot === "previous" ? "There is no previous state to return to." : `Saved state ${slot + 1} is empty.`); return; }
+    if (operation.current || saveInFlight.current || voiceBusy.current || !foldersReady) { reportSavedStateError("Finish the current operation before restoring a state."); return; }
+    setSavedStatesError("");
+    operation.current = true;
+    try {
+      if (current.current.path !== ".nova" && current.current.workspace.cloudSpace && dirtyRef.current && !await save()) return;
+      const generation = editGeneration.current;
+      const outgoing = data ? captureCurrentState("Previous state") : null;
+      if (!await preserveInactiveDrafts() || !await preserveDraft()) { reportSavedStateError("Unable to preserve a recovery draft. Save your notes before restoring."); return; }
+      // Prepare every document before replacing the layout. Missing roots/files leave it intact.
+      const sessions = new Map<string, PaneSession>();
+      for (const tab of state.tabs) {
+        const folder = current.current.folders.find(f => f.root === tab.root);
+        if (!folder || folder.error) throw new Error(`Open the folder for ${tab.path} before restoring this state.`);
+        const { note, recovered } = await readRecoverableNote(tab.root, tab.path);
+        const id = tabId(tab), cached = paneEditors.current.get(id)?.snapshot() ?? snapshots.current.get(id);
+        sessions.set(id, { workspace: folder, path: tab.path, data: note, dirty: recovered,
+          mode: availablePaneMode(paneSessions.current.get(id)?.mode ?? sharedViewMode.current ?? readFileMode(tab.path), tab.path, note.text.length, showReadMode),
+          snapshot: cached?.state.doc.toString() === note.text ? cached : undefined,
+          cursor: [1, 1], preview: note.text });
+      }
+      if (generation !== editGeneration.current) throw new Error("The note changed while restoring. Try again after finishing your edit.");
+      const pane = paneLeaves(state.layout).find(p => p.id === state.activePane)!;
+      const session = sessions.get(pane.selected!)!;
+      if (slot === "previous") setPreviousState(null);
+      else if (outgoing && !sameStateLayout(outgoing, savedLayoutBaseline.current)) setPreviousState(outgoing);
+      savedLayoutBaseline.current = slot === "previous" ? null : state;
+      updateTabs(state.tabs);
+      paneSessions.current = sessions;
+      updatePaneLayout(state.layout); focusPane(pane.id);
+      current.current = { ...current.current, workspace: session.workspace, path: session.path, mode: session.mode, hasDocument: true };
+      revision.current = session.data.revision; dirtyRef.current = session.dirty;
+      setWorkspace(session.workspace); setPath(session.path); setData(session.data);
+      setMode(session.mode); setDirty(session.dirty); setPreview(session.preview);
+      setEditorSnapshot(session.snapshot); applyMarks(session.data.bookmarks); setCursor([1, 1]); setActiveMark(null);
+      setRestoredState(previous => ({ generation: previous.generation + 1, views: state!.views }));
+      const message = `Restored “${state.name}”.`;
+      clearTimeout(restoredNoticeTimer.current);
+      setNotice(message);
+      restoredNoticeTimer.current = setTimeout(() => {
+        setNotice(current => current === message ? "" : current);
+      }, 1000);
+    } catch (error) { reportSavedStateError(`Unable to restore state: ${String(error)}`); }
+    finally { operation.current = false; }
+  };
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (compact || syncFolder || settingsOpen || activeSettingId || palette || bookmarkDraft || renameTarget || fileAction || document.querySelector("dialog[open]")) return;
+      const action = savedStateShortcut(event);
+      if (action === null) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      if (action === "manager") openSavedStates(); else void restoreSavedState(action);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  });
   const prepareUpdate = async () => {
     if (operation.current || saveInFlight.current || voiceBusy.current || !current.current.foldersReady) {
       throw new Error("Finish the current operation or voice typing before updating.");
@@ -811,6 +910,7 @@ export default function App() {
             editor.current.snapshot(),
           );
         const id = tabId({ root: ws.root, path: nextPath });
+        setRestoredState(previous => { const views = { ...previous.views }; delete views[id]; return { ...previous, views }; });
         const cached = snapshots.current.get(id);
         // An external file change invalidates its cached history.
         setEditorSnapshot(
@@ -1793,7 +1893,8 @@ export default function App() {
           {data && (
             <div className={"write-pane " + (mode === "read" && !documentView ? "hidden" : "")}>
               <Editor
-                key={JSON.stringify([workspace.root, path, data.revision])}
+                key={JSON.stringify([workspace.root, path, data.revision, restoredState.generation])}
+                initialScrollTop={restoredState.views[tabId({ root: workspace.root, path })]?.scrollTop}
                 ref={handle => {
                   const id = tabId({ root: workspace.root, path });
                   if (handle) paneEditors.current.set(id, handle); else paneEditors.current.delete(id);
@@ -1822,7 +1923,11 @@ export default function App() {
             </div>
           )}
           {data && mode === "read" && !documentView && (
-            <div className="read-pane" ref={isActive ? attachPreview : undefined}>
+            <ReadPaneSurface key={JSON.stringify([workspace.root, path, restoredState.generation])} scrollTop={restoredState.views[tabId({ root: workspace.root, path })]?.scrollTop} onElement={element => {
+              const id = tabId({ root: workspace.root, path });
+              if (element) readSurfaces.current.set(id, element); else readSurfaces.current.delete(id);
+              if (isActive) previewElement.current = element;
+            }}>
               <div className="start-mark" aria-hidden="true"><GalaxyMark circled /></div>
               <article className="prose">
                 <div className="document-eyebrow">
@@ -1848,7 +1953,7 @@ export default function App() {
                   <GalaxyMark circled />
                 </div>
               </article>
-            </div>
+            </ReadPaneSurface>
           )}
           {!data && !loading && (
             <div className="empty-editor">
@@ -1913,6 +2018,15 @@ export default function App() {
           </span>
         </button>
       )}
+      {!compact && focusModeActive && <FocusStateNav slots={savedStates} previousState={previousState}
+        suggestedName={suggestedStateName(tabs, paneLayout)} error={savedStatesError} onRestore={restoreSavedState}
+        onQuickSave={() => {
+          try {
+            const freeSlot = parseSavedStates(localStorage.getItem(savedStatesKey)).findIndex(state => !state);
+            if (freeSlot < 0) { reportSavedStateError("All nine slots are in use. Update or delete a state from the sidebar."); return false; }
+            return saveCurrentState(freeSlot, suggestedStateName(tabsRef.current, paneLayoutRef.current));
+          } catch (error) { reportSavedStateError(String(error)); return false; }
+        }} />}
       {compact && focusMode && <div className="mobile-focus-controls">
         <MobileViewControls focused galaxy={galaxyMode} onFocus={changeFocusMode} onGalaxy={toggleGalaxy} />
       </div>}
@@ -2264,9 +2378,13 @@ export default function App() {
               <button aria-label="Heading outline" title="Heading outline" aria-pressed={bookmarkView === "outline"} onClick={() => setBookmarkView("outline")}>
                 <ListOrdered size={17} aria-hidden="true" />
               </button>
+              {!compact && <button aria-label="Saved states" title={`Saved states (${mod} ${mod === "⌘" ? "Option" : "Alt"} S)`} aria-pressed={bookmarkView === "states"} onClick={openSavedStates}>
+                <PanelsTopLeft size={17} aria-hidden="true" />
+              </button>}
             </div>
           </header>
-          {bookmarkView === "outline" ? <HeadingOutline text={preview} markdown={isMarkdown} hasDocument={!!data}
+          {bookmarkView === "states" ? <SavedStatesPanel suggestedName={suggestedStateName(tabs, paneLayout)} previousState={previousState} onReturn={() => restoreSavedState("previous")} error={savedStatesError} slots={savedStates} onSave={saveCurrentState} onRestore={restoreSavedState}
+            onDelete={slot => { try { const next = parseSavedStates(localStorage.getItem(savedStatesKey)); next[slot] = null; if (persistSavedStates(next)) setSavedStatesError(""); } catch (error) { reportSavedStateError(String(error)); } }} /> : bookmarkView === "outline" ? <HeadingOutline text={preview} markdown={isMarkdown} hasDocument={!!data}
             onJump={from => { setMobileView("editor"); requestAnimationFrame(() => jump(from)); }} /> : bookmarkView === "files" ? <StarredFiles folders={folders} activeRoot={workspace.root} activePath={path}
             onOpen={(folder, file, pinned) => void openNote(file, undefined, folder, undefined, pinned)} onStar={starFile} /> : <>
           <ScopeToggle label="Bookmark scope" scope={bookmarkScope} onChange={setBookmarkScope} currentLabel="Current tab" allLabel="All bookmarks" />

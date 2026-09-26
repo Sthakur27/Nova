@@ -14,6 +14,12 @@ Entries describe source changes; availability in published installers has not be
 
 - Two-key desktop appearance shortcuts: Command-E / Ctrl-E cycles editor backgrounds; Command-L toggles Black/Frosted panels on Mac. Shortcuts work in focus mode, enable Galaxy mode when needed, and briefly confirm the selection. Inline code remains available through the formatting toolbar and backticks.
 
+- Desktop saved states remember named tab layouts, pane sizes, active panes/tabs, and visible notes’ scroll positions. Restoring leaves focus mode, panel visibility, and appearance unchanged. An automatic Previous state preserves the unsaved layout you leave and returns with Command-Option-0 / Ctrl-Alt-0. A right-edge hover control in focus mode provides state navigation and quick save without opening the sidebar. Save up to nine device-local states and restore them with Command-Option-1–9 / Ctrl-Alt-1–9 while preserving recovery drafts and loading current file contents.
+
+#### Fixed
+
+- Entering focus mode or collapsing the top bars now moves note content into the freed space. Scroll positions compensate for viewport-sized note padding in Source, Edit, and Read, and reverse when panels expand.
+
 ### 2026-09-25
 
 #### Added
