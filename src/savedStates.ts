@@ -58,3 +58,14 @@ export function suggestedStateName(tabs: NoteTab[], layout: PaneNode): string {
   }).filter(Boolean);
   return (names.join(" + ") || "My layout").slice(0, 100);
 }
+
+/** Reorder occupied shortcut slots without filling holes left by deleted states. */
+export function reorderSavedStates(slots: (SavedState | null)[], from: number, before: number | null): (SavedState | null)[] {
+  if (!slots[from] || from === before || (before !== null && !slots[before])) return slots;
+  const occupied = slots.flatMap((state, slot) => state ? [{ slot, state }] : []);
+  const moved = occupied.find(entry => entry.slot === from)!;
+  const ordered = occupied.filter(entry => entry.slot !== from);
+  ordered.splice(before === null ? ordered.length : ordered.findIndex(entry => entry.slot === before), 0, moved);
+  let index = 0;
+  return slots.map(state => state ? ordered[index++].state : null);
+}

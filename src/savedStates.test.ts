@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { parseSavedStates, savedStateShortcut, sameStateLayout, suggestedStateName, type SavedState } from "./savedStates";
+import { parseSavedStates, savedStateShortcut, sameStateLayout, suggestedStateName, reorderSavedStates, type SavedState } from "./savedStates";
 import { initialPane, movePaneTab, reconcilePanes } from "./paneLayout";
 import { tabId } from "./tabs";
 
@@ -54,4 +54,16 @@ it("ignores appearance and view-mode settings from older saved states", () => {
 it("suggests a name from visible notes rather than hidden tabs", () => {
   expect(suggestedStateName([...tabs, { root: "cloud-a", path: "hidden.md", pinned: true }], layout)).toBe("work + personal");
   expect(suggestedStateName([], initialPane())).toBe("My layout");
+});
+
+it("reorders occupied slots while preserving holes and state data", () => {
+  const second = { ...state, name: "Second" }, third = { ...state, name: "Third" };
+  const slots = [state, null, second, third, ...Array(5).fill(null)];
+  const moved = reorderSavedStates(slots, 3, 0);
+  expect(moved.slice(0, 4)).toEqual([third, null, state, second]);
+  expect(moved[0]).toBe(third);
+  expect(slots[0]).toBe(state);
+  expect(reorderSavedStates(moved, 0, null)).toEqual(slots);
+  expect(reorderSavedStates(slots, 1, 0)).toBe(slots);
+  expect(reorderSavedStates(slots, 0, 1)).toBe(slots);
 });

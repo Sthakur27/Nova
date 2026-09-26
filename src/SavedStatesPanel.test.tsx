@@ -28,8 +28,11 @@ it("saves to the first free shortcut and restores, updates, and deletes directly
     expect(input.value).toBe("");
     await act(async () => (host.querySelector('[aria-label="Restore Work"]') as HTMLButtonElement).click());
     expect(onRestore).toHaveBeenCalledWith(0);
-    await act(async () => (host.querySelector('[aria-label="Update Work with current layout"]') as HTMLButtonElement).click());
-    expect(onSave).toHaveBeenCalledWith(0, "Work");
+    await act(async () => (host.querySelector('[aria-label="Save over Work"]') as HTMLButtonElement).click());
+    expect(onSave).not.toHaveBeenCalledWith(0, "Work", state);
+    const confirm = Array.from(host.querySelectorAll("button")).find(button => button.textContent === "Confirm overwrite")!;
+    await act(async () => confirm.click());
+    expect(onSave).toHaveBeenCalledWith(0, "Work", state);
     await act(async () => (host.querySelector('[aria-label="Delete Work"]') as HTMLButtonElement).click());
     expect(onDelete).toHaveBeenCalledWith(0);
     await act(async () => root.render(<SavedStatesPanel slots={Array(9).fill(state)} error="Open the folder first." onSave={onSave} onRestore={onRestore} onDelete={onDelete} />));
@@ -64,5 +67,42 @@ it("accepts a suggested name with Tab or saves it directly without overwriting a
     expect(input.value).toBe("My custom state");
     await act(async () => button.click());
     expect(onSave).toHaveBeenLastCalledWith(0, "My custom state");
+  } finally { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); }
+});
+
+it("cancels overwrites and reorders from the handle with keyboard or drag without restoring", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const host = document.createElement("div"); document.body.append(host);
+  const root = createRoot(host), onSave = vi.fn(() => true), onReorder = vi.fn(), onRestore = vi.fn(async () => {});
+  const second = { ...state, name: "Personal" };
+  try {
+    await act(async () => root.render(<SavedStatesPanel slots={[state, null, second, ...Array(6).fill(null)]}
+      error="" onSave={onSave} onReorder={onReorder} onRestore={onRestore} onDelete={() => {}} />));
+    await act(async () => (host.querySelector('[aria-label="Save over Work"]') as HTMLButtonElement).click());
+    await act(async () => Array.from(host.querySelectorAll("button")).find(button => button.textContent === "Cancel")!.click());
+    expect(onSave).not.toHaveBeenCalled();
+    const handle = host.querySelector('[aria-label="Reorder Personal"]') as HTMLButtonElement;
+    await act(async () => handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true })));
+    expect(onReorder).toHaveBeenLastCalledWith(2, 0);
+    onReorder.mockClear();
+    const list = host.querySelector('.saved-states-list')!;
+    vi.spyOn(list, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 200, 400));
+    vi.spyOn(host.querySelector('[data-state-slot="0"]')!, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 200, 100));
+    vi.spyOn(host.querySelector('[data-state-slot="2"]')!, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 100, 200, 100));
+    const event = (name: string, clientY: number) => {
+      const result = new Event(name, { bubbles: true, cancelable: true });
+      Object.defineProperties(result, { pointerId: { value: 1 }, isPrimary: { value: true }, button: { value: 0 }, pointerType: { value: "mouse" }, clientX: { value: 100 }, clientY: { value: clientY } });
+      return result;
+    };
+    await act(async () => handle.dispatchEvent(event("pointerdown", 150)));
+    await act(async () => window.dispatchEvent(event("pointermove", 30)));
+    await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
+    await act(async () => window.dispatchEvent(event("pointerup", 30)));
+    expect(onReorder).not.toHaveBeenCalled();
+    await act(async () => handle.dispatchEvent(event("pointerdown", 150)));
+    await act(async () => window.dispatchEvent(event("pointermove", 30)));
+    await act(async () => window.dispatchEvent(event("pointerup", 30)));
+    expect(onReorder).toHaveBeenLastCalledWith(2, 0);
+    expect(onRestore).not.toHaveBeenCalled();
   } finally { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); }
 });

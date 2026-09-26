@@ -1,7 +1,7 @@
 import FocusStateNav from "./FocusStateNav";
 import ReadPaneSurface from "./ReadPaneSurface";
 import SavedStatesPanel from "./SavedStatesPanel";
-import { parseSavedStates, savedStatesKey, savedStateShortcut, suggestedStateName, sameStateLayout, type SavedState } from "./savedStates";
+import { parseSavedStates, savedStatesKey, savedStateShortcut, suggestedStateName, sameStateLayout, reorderSavedStates, type SavedState } from "./savedStates";
 import { LocalChangeRetry, prepareLocalReload } from "./localFileReload";
 import { useLocalChanges } from "./useLocalChanges";
 import { AppUpdateIndicator } from "./AppUpdate";
@@ -552,11 +552,14 @@ export default function App() {
     }
     return { name, tabs: tabsRef.current.map(t => ({ ...t, pinned: true })), layout: paneLayoutRef.current, activePane: activePaneRef.current, views };
   };
-  const saveCurrentState = (slot: number, name: string) => {
+  const saveCurrentState = (slot: number, name: string, expected?: SavedState) => {
     if (!data || operation.current || saveInFlight.current || voiceBusy.current) { reportSavedStateError("Open a note and finish the current operation before saving a state."); return false; }
     const captured = captureCurrentState(name);
     let next: (SavedState | null)[];
     try { next = parseSavedStates(localStorage.getItem(savedStatesKey)); } catch (error) { reportSavedStateError(String(error)); return false; }
+    if ((expected && JSON.stringify(next[slot]) !== JSON.stringify(expected)) || (!expected && next[slot])) {
+      setSavedStates(next); reportSavedStateError("This slot changed. Review the latest state before saving over it."); return false;
+    }
     next[slot] = captured;
     if (persistSavedStates(next)) { savedLayoutBaseline.current = captured; setSavedStatesError(""); setNotice(`Saved state “${name}”.`); return true; }
     return false;
@@ -2384,6 +2387,13 @@ export default function App() {
             </div>
           </header>
           {bookmarkView === "states" ? <SavedStatesPanel suggestedName={suggestedStateName(tabs, paneLayout)} previousState={previousState} onReturn={() => restoreSavedState("previous")} error={savedStatesError} slots={savedStates} onSave={saveCurrentState} onRestore={restoreSavedState}
+            onReorder={(from, before) => {
+              try {
+                const latest = parseSavedStates(localStorage.getItem(savedStatesKey));
+                if (JSON.stringify(latest) !== JSON.stringify(savedStates)) { setSavedStates(latest); reportSavedStateError("Saved states changed in another window. Try reordering again."); return; }
+                if (persistSavedStates(reorderSavedStates(latest, from, before))) setSavedStatesError("");
+              } catch (error) { reportSavedStateError(String(error)); }
+            }}
             onDelete={slot => { try { const next = parseSavedStates(localStorage.getItem(savedStatesKey)); next[slot] = null; if (persistSavedStates(next)) setSavedStatesError(""); } catch (error) { reportSavedStateError(String(error)); } }} /> : bookmarkView === "outline" ? <HeadingOutline text={preview} markdown={isMarkdown} hasDocument={!!data}
             onJump={from => { setMobileView("editor"); requestAnimationFrame(() => jump(from)); }} /> : bookmarkView === "files" ? <StarredFiles folders={folders} activeRoot={workspace.root} activePath={path}
             onOpen={(folder, file, pinned) => void openNote(file, undefined, folder, undefined, pinned)} onStar={starFile} /> : <>

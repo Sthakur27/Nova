@@ -1,24 +1,34 @@
-import { useRef, useState } from "react";
-import { Plus, RotateCcw, Trash2, PanelsTopLeft } from "lucide-react";
+import { useStateReorder } from "./useStateReorder";
+import { useEffect, useRef, useState } from "react";
+import { Plus, Save, GripVertical, Trash2, PanelsTopLeft } from "lucide-react";
 import { paneLeaves } from "./paneLayout";
 import { tabId } from "./tabs";
 import type { SavedState } from "./savedStates";
 
-export default function SavedStatesPanel({ suggestedName = "My layout", previousState = null, onReturn, error, slots, onSave, onRestore, onDelete }: {
+export default function SavedStatesPanel({ suggestedName = "My layout", previousState = null, onReturn, error, slots, onSave, onRestore, onDelete, onReorder }: {
   suggestedName?: string;
   previousState?: SavedState | null; onReturn?: () => Promise<void>;
-  error: string; slots: (SavedState | null)[]; onSave: (slot: number, name: string) => boolean;
+  error: string; slots: (SavedState | null)[]; onSave: (slot: number, name: string, expected?: SavedState) => boolean;
+  onReorder?: (from: number, before: number | null) => void;
   onRestore: (slot: number) => Promise<void>; onDelete: (slot: number) => void;
 }) {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
+  const [confirm, setConfirm] = useState<{ slot: number; state: SavedState } | null>(null);
+  const list = useStateReorder(onReorder, busy);
+  useEffect(() => {
+    const cancel = (event: KeyboardEvent) => { if (event.key === "Escape") setConfirm(null); };
+    window.addEventListener("keydown", cancel);
+    return () => window.removeEventListener("keydown", cancel);
+  }, []);
+  const occupied = slots.flatMap((state, slot) => state ? [slot] : []);
   const freeSlot = slots.findIndex(state => !state);
   const mod = navigator.platform.toLowerCase().includes("mac") ? "⌘⌥" : "Ctrl Alt";
   return <section className="saved-states-panel" aria-label="Saved states">
     <div className="rail-intro">Your layouts, ready to return to.</div>
     {error && <p className="saved-states-error" role="alert">{error}</p>}
-    <div className="saved-states-list">
+    <div className="saved-states-list" ref={list}>
       {previousState && <div className="saved-state-card previous-state-card">
         <button className="saved-state-restore" disabled={busy} aria-label="Return to previous state" onClick={async () => {
           if (pending.current) return;
@@ -39,7 +49,16 @@ export default function SavedStatesPanel({ suggestedName = "My layout", previous
         if (!state) return null;
         const visible = new Set(paneLeaves(state.layout).map(pane => pane.selected));
         const files = state.tabs.filter(tab => visible.has(tabId(tab))).map(tab => tab.path.split("/").at(-1));
-        return <div className="saved-state-card" key={slot}>
+        return <div className="saved-state-card" key={slot} data-state-slot={slot}>
+          {onReorder && <button className="saved-state-drag icon-button" aria-label={`Reorder ${state.name}`}
+            title="Drag to reorder · Arrow keys to move" disabled={busy} onPointerDown={() => setConfirm(null)}
+            onKeyDown={event => {
+              if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+              event.preventDefault(); setConfirm(null);
+              const index = occupied.indexOf(slot);
+              if (event.key === "ArrowUp" && index > 0) onReorder(slot, occupied[index - 1]);
+              if (event.key === "ArrowDown" && index < occupied.length - 1) onReorder(slot, occupied[index + 2] ?? null);
+            }}><GripVertical size={14} /></button>}
           <button className="saved-state-restore" disabled={busy} aria-label={`Restore ${state.name}`}
             title={`Restore ${state.name} (${mod} ${slot + 1})`} onClick={async () => {
               if (pending.current) return;
@@ -50,11 +69,16 @@ export default function SavedStatesPanel({ suggestedName = "My layout", previous
             <small>{files.join(" · ")}</small>
           </button>
           <div className="saved-state-actions">
-            <button className="icon-button" disabled={busy} aria-label={`Update ${state.name} with current layout`}
-              title="Update with current layout" onClick={() => onSave(slot, state.name)}><RotateCcw size={13} /></button>
+            <button className="saved-state-overwrite" disabled={busy} aria-label={`Save over ${state.name}`}
+              title="Overwrite with current layout" onClick={() => setConfirm({ slot, state })}><Save size={13} />Save</button>
             <button className="icon-button" disabled={busy} aria-label={`Delete ${state.name}`}
               title="Delete saved state" onClick={() => onDelete(slot)}><Trash2 size={13} /></button>
           </div>
+          {confirm?.slot === slot && confirm.state === state && <div className="saved-state-confirm" role="group" aria-label={`Confirm overwrite ${state.name}`}>
+            <p>Replace “{state.name}” with the current layout?</p>
+            <button disabled={busy} onClick={() => { if (onSave(slot, state.name, state)) setConfirm(null); }}>Confirm overwrite</button>
+            <button disabled={busy} onClick={() => setConfirm(null)}>Cancel</button>
+          </div>}
         </div>;
       })}
     </div>
