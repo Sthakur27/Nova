@@ -32,7 +32,7 @@ export default function SavedStatesPanel({ suggestedName = "My layout", previous
     <div className="rail-intro">Your layouts, ready to return to.</div>
     {error && <p className="saved-states-error" role="alert">{error}</p>}
     <div className="saved-states-list" ref={list}>
-      {previousState && <div className="saved-state-card previous-state-card">
+      {previousState && <div className="saved-state-card previous-state-card" data-panel-no-drag>
         <button className="saved-state-restore" disabled={busy} aria-label="Return to previous state" onClick={async () => {
           if (pending.current) return;
           pending.current = true; setBusy(true);
@@ -57,7 +57,7 @@ export default function SavedStatesPanel({ suggestedName = "My layout", previous
           pending.current = true; setBusy(true);
           try { await onRestore(slot); } finally { pending.current = false; setBusy(false); }
         };
-        return <div className="saved-state-card" key={slot} data-state-slot={slot} onClick={event => {
+        return <div className="saved-state-card" data-panel-no-drag key={slot} data-state-slot={slot} onClick={event => {
           if (!(event.target instanceof Element) || event.target.closest("button, .saved-state-confirm")) return;
           void restore();
         }}>

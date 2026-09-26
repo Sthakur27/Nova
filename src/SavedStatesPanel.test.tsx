@@ -2,6 +2,7 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
+import { usePanelDrag } from "./usePanelDrag";
 import SavedStatesPanel from "./SavedStatesPanel";
 import { type SavedState } from "./savedStates";
 const id = JSON.stringify(["cloud", "work.md"]);
@@ -70,14 +71,21 @@ it("accepts a suggested name with Tab or saves it directly without overwriting a
   } finally { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); }
 });
 
-it("cancels overwrites and reorders from the handle with keyboard or drag without restoring", async () => {
+it("reorders card bodies without restoring or resizing the sidebar, while preserving panel background resizing", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const host = document.createElement("div"); document.body.append(host);
   const root = createRoot(host), onSave = vi.fn(() => true), onReorder = vi.fn(), onRestore = vi.fn(async () => {});
   const second = { ...state, name: "Personal" };
+  const onPanelStart = vi.fn(() => 260), onPanelMove = vi.fn(), onPanelFinish = vi.fn();
+  function Harness() {
+    usePanelDrag({ shell: () => host, onStart: onPanelStart, onMove: onPanelMove, onFinish: onPanelFinish });
+    return <aside className="bookmark-rail"><span className="panel-background">Background</span>
+      <SavedStatesPanel slots={[state, null, second, ...Array(6).fill(null)]}
+        error="" onSave={onSave} onReorder={onReorder} onRestore={onRestore} onDelete={() => {}} />
+    </aside>;
+  }
   try {
-    await act(async () => root.render(<SavedStatesPanel slots={[state, null, second, ...Array(6).fill(null)]}
-      error="" onSave={onSave} onReorder={onReorder} onRestore={onRestore} onDelete={() => {}} />));
+    await act(async () => root.render(<Harness />));
     await act(async () => (host.querySelector('[aria-label="Save over Work"]') as HTMLButtonElement).click());
     await act(async () => Array.from(host.querySelectorAll("button")).find(button => button.textContent === "Cancel")!.click());
     expect(onSave).not.toHaveBeenCalled();
@@ -89,9 +97,9 @@ it("cancels overwrites and reorders from the handle with keyboard or drag withou
     vi.spyOn(list, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 200, 400));
     vi.spyOn(host.querySelector('[data-state-slot="0"]')!, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 200, 100));
     vi.spyOn(host.querySelector('[data-state-slot="2"]')!, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 100, 200, 100));
-    const event = (name: string, clientY: number) => {
+    const event = (name: string, clientY: number, clientX = 100) => {
       const result = new Event(name, { bubbles: true, cancelable: true });
-      Object.defineProperties(result, { pointerId: { value: 1 }, isPrimary: { value: true }, button: { value: 0 }, pointerType: { value: "mouse" }, clientX: { value: 100 }, clientY: { value: clientY } });
+      Object.defineProperties(result, { pointerId: { value: 1 }, isPrimary: { value: true }, button: { value: 0 }, pointerType: { value: "mouse" }, clientX: { value: clientX }, clientY: { value: clientY } });
       return result;
     };
     await act(async () => handle.dispatchEvent(event("pointerdown", 150)));
@@ -111,6 +119,22 @@ it("cancels overwrites and reorders from the handle with keyboard or drag withou
     await act(async () => body.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 })));
     expect(onReorder).toHaveBeenLastCalledWith(2, 0);
     expect(onRestore).not.toHaveBeenCalled();
+    expect(onPanelStart).not.toHaveBeenCalled();
+    expect(onPanelMove).not.toHaveBeenCalled();
+    // A diagonal card drag must not also change the sidebar width.
+    await act(async () => body.dispatchEvent(event("pointerdown", 150)));
+    await act(async () => window.dispatchEvent(event("pointermove", 30, 160)));
+    await act(async () => window.dispatchEvent(event("pointerup", 30, 160)));
+    expect(onPanelStart).not.toHaveBeenCalled();
+    expect(onPanelMove).not.toHaveBeenCalled();
+    expect(onPanelFinish).not.toHaveBeenCalled();
+    vi.spyOn(host, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 1000, 800));
+    await act(async () => host.querySelector(".panel-background")!.dispatchEvent(event("pointerdown", 150)));
+    await act(async () => window.dispatchEvent(event("pointermove", 150, 160)));
+    await act(async () => window.dispatchEvent(event("pointerup", 150, 160)));
+    expect(onPanelStart).toHaveBeenCalledWith("right");
+    expect(onPanelMove).toHaveBeenCalledWith("right", 200);
+    expect(onPanelFinish).toHaveBeenCalledWith("right", true);
   } finally { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); }
 });
 
