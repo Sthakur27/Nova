@@ -1555,9 +1555,9 @@ export default function App() {
       if (panel === "left") setNavigation(focusMode || !navigation);
       else if (panel === "right") setRail(focusMode || !rail);
       else if (panel === "top") setTopBars(focusMode || !topBars);
-      else changeTerminalOpen(focusMode || !(terminalOpen && statusBar));
+      else setStatusBar(focusMode || !statusBar);
     });
-  }, [compact, syncFolder, settingsOpen, activeSettingId, palette, bookmarkDraft, renameTarget, fileAction, focusMode, navigation, rail, topBars, terminalOpen, statusBar, changeTerminalOpen, setFocusMode, setNavigation, setRail, setTopBars]);
+  }, [compact, syncFolder, settingsOpen, activeSettingId, palette, bookmarkDraft, renameTarget, fileAction, focusMode, navigation, rail, topBars, statusBar, setStatusBar, setFocusMode, setNavigation, setRail, setTopBars]);
   useEffect(() => {
     const toggleFocus = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "g" || event.isComposing) return;
@@ -2237,7 +2237,7 @@ export default function App() {
             </span>
           </button>}
           {!compact && <button className="icon-button toolbar-icon" onClick={toggleTerminal}
-            aria-label={terminalOpen && statusBar ? "Collapse terminal" : "Open terminal"} title={`Toggle terminal (${mod}${mod === "⌘" ? "⌥" : " Alt "}↓)`} aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+Alt+ArrowDown`}
+            aria-label={terminalOpen && statusBar ? "Collapse terminal" : "Open terminal"} title="Toggle terminal"
             aria-expanded={terminalOpen && statusBar} aria-controls="terminal-panel"><TerminalSquare size={17} /></button>}
           {!mobile && <VoiceControl
             disabled={!data || loading || saving}

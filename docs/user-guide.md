@@ -112,7 +112,7 @@ Desktop appearance shortcuts: **Command-E / Ctrl-E** cycles the editor backgroun
 
 ## Terminal
 
-The desktop app includes terminal tabs below the note. Open them with the terminal icon above the note, **Terminal** in the status bar, or **Command-Option-Down / Ctrl-Alt-Down**. The browser preview displays an explanation instead of starting a shell.
+The desktop app includes terminal tabs below the note. Open them with the terminal icon above the note or **Terminal** in the status bar. The browser preview displays an explanation instead of starting a shell.
 
 - **Sessions**: the first shell starts when you first open the terminal. Use **+** to start another session in the active note folder, or your home directory in the sample workspace. Existing sessions keep their own working directory when you switch notes or folders.
 - **Tabs**: switching tabs or collapsing the tray keeps each shell and its output alive. Closing a terminal tab ends its shell; closing the Nova window ends that window's shells. Sessions are not restored after restart. Each tab retains up to 5,000 lines of scrollback.
@@ -120,7 +120,7 @@ The desktop app includes terminal tabs below the note. Open them with the termin
 - **Keyboard resizing**: focus the divider and use Up/Down, with Shift for larger steps. Home collapses, End expands to the maximum, and Enter resets the height.
 - **Shell**: Mac uses the shell configured by `SHELL` as a login shell (falling back to `/bin/sh`); Windows uses `COMSPEC` (falling back to `cmd.exe`). Commands run with your normal user permissions.
 
-**Panel shortcuts**: Command-Option + arrow keys on Mac, or Ctrl-Alt + arrow keys on Windows, toggle navigation (Left), bookmarks (Right), top bars (Up), and terminal (Down). They also work inside editors and terminals; ordinary Command/Ctrl + arrows retain cursor movement, and Shift-modified shortcuts retain text selection. Panel shortcuts are suspended while app dialogs or search are open. Top bars use their toggle control rather than drag resizing.
+**Panel shortcuts**: Command-Option + arrow keys on Mac, or Ctrl-Alt + arrow keys on Windows, toggle navigation (Left), bookmarks (Right), top bars (Up), and the whole bottom panel (Down). Down uses the same action as the bottom-edge arrow: it hides or reveals the status bar and any open terminal without changing the terminal’s own open/closed state. They also work inside editors and terminals; ordinary Command/Ctrl + arrows retain cursor movement, and Shift-modified shortcuts retain text selection. Panel shortcuts are suspended while app dialogs or search are open. Top bars use their toggle control rather than drag resizing.
 
 ## Tabs
 

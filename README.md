@@ -139,7 +139,7 @@ Show dotfiles and dotfolders with the hover eye button beside Local’s Recent a
 
 ### A few handy shortcuts
 
-Use **⌘⌥ + arrow keys** on Mac or **Ctrl-Alt + arrow keys** on Windows to toggle panels: **← navigation**, **→ bookmarks**, **↑ top bars**, and **↓ terminal**. These shortcuts also work while editing a note or using the terminal; ordinary Command/Ctrl + arrows and their Shift variants retain cursor movement and text selection.
+Use **⌘⌥ + arrow keys** on Mac or **Ctrl-Alt + arrow keys** on Windows to toggle panels: **← navigation**, **→ bookmarks**, **↑ top bars**, and **↓ bottom panel**. These shortcuts also work while editing a note or using the terminal; ordinary Command/Ctrl + arrows and their Shift variants retain cursor movement and text selection.
 
 | What you'd like to do | Mac | Windows |
 | --- | --- | --- |

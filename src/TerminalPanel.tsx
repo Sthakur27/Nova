@@ -18,6 +18,7 @@ export default function TerminalPanel({ open, root, onOpenChange, bottomPanelOpe
   controlsContainer: HTMLElement | null;
   open: boolean; root: string; onOpenChange: (open: boolean) => void; onStorageError: () => void;
 }) {
+  const mac = navigator.platform.toLowerCase().includes("mac");
   const panel = useRef<HTMLElement>(null);
   const [height, setHeight] = useState(readHeight);
   const [maximum, setMaximum] = useState(500);
@@ -88,11 +89,13 @@ export default function TerminalPanel({ open, root, onOpenChange, bottomPanelOpe
     data-open={open} data-snap-collapse={draft === 0} style={{ height: actualHeight }}>
     <div className="panel-toggle-zone panel-toggle-terminal" data-expanded={bottomPanelOpen} data-edge-hover={hoveredEdge}>
       <button className="panel-toggle" aria-label={bottomPanelOpen ? "Collapse bottom panel" : "Expand bottom panel"}
+        aria-keyshortcuts={`${mac ? "Meta" : "Control"}+Alt+ArrowDown`}
         aria-describedby="bottom-panel-tooltip" aria-expanded={bottomPanelOpen} aria-controls="terminal-body status-bar"
         onClick={() => onBottomPanelOpenChange(!bottomPanelOpen)}>
         {bottomPanelOpen ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
         <span className="focus-tooltip" id="bottom-panel-tooltip" role="tooltip">
           <span>{bottomPanelOpen ? "Collapse" : "Expand"} bottom panel</span>
+          <span className="focus-tooltip-keys"><kbd>{mac ? "⌘" : "Ctrl"}</kbd><kbd>{mac ? "⌥" : "Alt"}</kbd><kbd>↓</kbd></span>
         </span>
       </button>
     </div>

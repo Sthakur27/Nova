@@ -22,6 +22,8 @@ Entries describe source changes; availability in published installers has not be
 
 #### Fixed
 
+- The Down panel shortcut now matches the bottom-edge arrow, toggling the entire bottom panel while preserving the terminal’s open/closed state.
+
 - Entering focus mode or collapsing the top bars now moves note content into the freed space. Scroll positions compensate for viewport-sized note padding in Source, Edit, and Read, and reverse when panels expand.
 
 ### 2026-09-25
