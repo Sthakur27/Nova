@@ -4,11 +4,10 @@ import { createRoot } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 import { useAppearanceShortcuts } from "./useAppearanceShortcuts";
 
-afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+afterEach(() => { vi.unstubAllGlobals(); });
 
 it.each([true, false])("cycles supported modes without editing or losing focus (Mac: %s)", async mac => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  vi.useFakeTimers();
   const host = document.createElement("div"); document.body.append(host);
   const root = createRoot(host);
   let enabled = true;
@@ -16,8 +15,8 @@ it.each([true, false])("cycles supported modes without editing or losing focus (
     const [background, onBackground] = useState<"on" | "off" | "frosted">("on");
     const [frosted, onFrosted] = useState(false);
     const [galaxy, onGalaxy] = useState(false);
-    const notice = useAppearanceShortcuts({ enabled, mac, supportsFrosted: mac, background, frosted, onBackground, onFrosted, onGalaxy });
-    return <><textarea defaultValue="unchanged note" /><output data-background={background} data-frosted={frosted} data-galaxy={galaxy}>{notice}</output></>;
+    useAppearanceShortcuts({ enabled, mac, supportsFrosted: mac, background, frosted, onBackground, onFrosted, onGalaxy });
+    return <><textarea defaultValue="unchanged note" /><output data-background={background} data-frosted={frosted} data-galaxy={galaxy} /></>;
   }
   const press = async (key: string, extra: KeyboardEventInit = {}) => {
     const event = new KeyboardEvent("keydown", { key, metaKey: mac, ctrlKey: !mac, bubbles: true, cancelable: true, ...extra });
@@ -32,7 +31,6 @@ it.each([true, false])("cycles supported modes without editing or losing focus (
     expect((await press("e")).defaultPrevented).toBe(true);
     expect(output.dataset.background).toBe("off");
     expect(output.dataset.galaxy).toBe("true");
-    expect(output.textContent).toBe("Editor: Black");
     expect(editorBinding).not.toHaveBeenCalled();
     expect((await press("e", { repeat: true })).defaultPrevented).toBe(true);
     expect(output.dataset.background).toBe("off");
@@ -41,8 +39,7 @@ it.each([true, false])("cycles supported modes without editing or losing focus (
     expect((await press("l")).defaultPrevented).toBe(mac);
     expect(output.dataset.frosted).toBe(String(mac));
     if (mac) {
-      expect(output.textContent).toBe("Panels: Frosted");
-      await press("l"); expect(output.textContent).toBe("Panels: Black");
+      await press("l"); expect(output.dataset.frosted).toBe("false");
     }
     for (const extra of [{ shiftKey: true }, { altKey: true }, { isComposing: true },
       { metaKey: !mac, ctrlKey: mac }, { metaKey: true, ctrlKey: true }, { metaKey: false, ctrlKey: false }]) {
@@ -55,8 +52,6 @@ it.each([true, false])("cycles supported modes without editing or losing focus (
     expect(document.activeElement).toBe(input);
     expect(input.value).toBe("unchanged note");
     expect([input.selectionStart, input.selectionEnd]).toEqual([3, 6]);
-    await act(async () => vi.advanceTimersByTime(1800));
-    expect(output.textContent).toBe("");
     await act(async () => root.unmount());
     expect((await press("e")).defaultPrevented).toBe(false);
   } finally { host.remove(); }

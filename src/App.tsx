@@ -1534,7 +1534,7 @@ export default function App() {
     refreshDirty();
     preserveDraft();
   };
-  const appearanceNotice = useAppearanceShortcuts({
+  useAppearanceShortcuts({
     enabled: !mobile && !syncFolder && !settingsOpen && !activeSettingId && !palette && !bookmarkDraft && !renameTarget && !fileAction,
     mac: mod === "⌘", supportsFrosted, background: backgroundMode, frosted: frostedPanes,
     onBackground: setBackgroundMode, onFrosted: setFrostedPanes, onGalaxy: setGalaxyMode,
@@ -2498,7 +2498,6 @@ export default function App() {
           </>}
         </aside>
       )}
-      {appearanceNotice && !notice && <div className="toast" role="status">{appearanceNotice}</div>}
       {notice && (
         <div className="toast" role="status">
           <span>{notice}</span>

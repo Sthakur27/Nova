@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 
 type Background = "on" | "off" | "frosted";
-const labels = { on: "Translucent", off: "Black", frosted: "Frosted" };
 
 /** Capture before rich-editor formatting or terminal bindings consume these keys. */
 export function useAppearanceShortcuts({ enabled, mac, supportsFrosted, background, frosted,
@@ -9,12 +8,6 @@ export function useAppearanceShortcuts({ enabled, mac, supportsFrosted, backgrou
   enabled: boolean; mac: boolean; supportsFrosted: boolean; background: Background; frosted: boolean;
   onBackground: (value: Background) => void; onFrosted: (value: boolean) => void; onGalaxy: (value: boolean) => void;
 }) {
-  const [feedback, setFeedback] = useState<{ text: string } | null>(null);
-  useEffect(() => {
-    if (!feedback) return;
-    const timer = window.setTimeout(() => setFeedback(null), 1800);
-    return () => window.clearTimeout(timer);
-  }, [feedback]);
   useEffect(() => {
     if (!enabled) return;
     const key = (event: KeyboardEvent) => {
@@ -32,14 +25,11 @@ export function useAppearanceShortcuts({ enabled, mac, supportsFrosted, backgrou
         const current = !supportsFrosted && background === "frosted" ? "off" : background;
         const next = modes[(modes.indexOf(current) + 1) % modes.length];
         onBackground(next);
-        setFeedback({ text: `Editor: ${labels[next]}` });
       } else {
         onFrosted(!frosted);
-        setFeedback({ text: `Panels: ${frosted ? "Black" : "Frosted"}` });
       }
     };
     window.addEventListener("keydown", key, { capture: true });
     return () => window.removeEventListener("keydown", key, { capture: true });
   }, [enabled, mac, supportsFrosted, background, frosted, onBackground, onFrosted, onGalaxy]);
-  return feedback?.text;
 }
