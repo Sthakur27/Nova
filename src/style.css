@@ -2945,7 +2945,7 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 }
 
 .saved-states-panel { display: flex; flex-direction: column; min-height: 0; flex: 1; }
-.saved-states-list { overflow-y: auto; flex: 1; padding: 0 12px; }
+.saved-states-list { overflow-y: auto; flex: 1; padding: 6px 12px 0; }
 .saved-state-card { border: 1px solid #ffffff12; border-radius: 9px; margin-bottom: 10px; overflow: hidden; }
 .saved-state-restore { width: 100%; padding: 12px; text-align: left; color: inherit; background: transparent; border: 0; cursor: pointer; }
 .saved-state-card:hover { background: #b598da0c; }
@@ -2999,8 +2999,19 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 .saved-state-card:has(.saved-state-drag) .saved-state-restore { padding-left: 30px; }
 .saved-state-drag { position: absolute; left: 2px; top: 8px; width: 25px; height: 28px; cursor: grab; opacity: .5; }
 .saved-state-drag:hover, .saved-state-drag:focus-visible { opacity: 1; }
-.saved-state-card[data-drop="before"] { box-shadow: 0 -2px #b598da; }
-.saved-state-card[data-drop="after"] { box-shadow: 0 2px #b598da; }
+.saved-state-card[data-drop] { overflow: visible; }
+.saved-state-card[data-drop]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: #b598da;
+  pointer-events: none;
+}
+.saved-state-card[data-drop="before"]::after { top: -7px; }
+.saved-state-card[data-drop="after"]::after { bottom: -7px; }
 
 .saved-state-confirm { border-top: 1px solid #ffffff12; padding: 10px; font-size: 12px; }
 .saved-state-confirm p { margin: 0 0 10px; color: #b5aebf; line-height: 1.5; overflow-wrap: anywhere; }
