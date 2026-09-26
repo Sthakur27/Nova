@@ -2237,7 +2237,7 @@ export default function App() {
             </span>
           </button>}
           {!compact && <button className="icon-button toolbar-icon" onClick={toggleTerminal}
-            aria-label={terminalOpen && statusBar ? "Collapse terminal" : "Open terminal"} title={`Toggle terminal (${mod}↓)`} aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+ArrowDown`}
+            aria-label={terminalOpen && statusBar ? "Collapse terminal" : "Open terminal"} title={`Toggle terminal (${mod}${mod === "⌘" ? "⌥" : " Alt "}↓)`} aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+Alt+ArrowDown`}
             aria-expanded={terminalOpen && statusBar} aria-controls="terminal-panel"><TerminalSquare size={17} /></button>}
           {!mobile && <VoiceControl
             disabled={!data || loading || saving}
@@ -2311,12 +2311,12 @@ export default function App() {
         </div>
         <div className="panel-toggle-zone panel-toggle-top" data-expanded={topBars} data-edge-hover={hoveredTop}>
           <button className="panel-toggle" aria-label={topBars ? "Collapse top bars" : "Expand top bars"}
-            aria-describedby="top-bars-tooltip" aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+ArrowUp`} aria-expanded={topBars} aria-controls="top-bars"
+            aria-describedby="top-bars-tooltip" aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+Alt+ArrowUp`} aria-expanded={topBars} aria-controls="top-bars"
             onClick={() => setTopBars(!topBars)}>
             {topBars ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
             <span className="focus-tooltip" id="top-bars-tooltip" role="tooltip">
               <span>{topBars ? "Collapse" : "Expand"} top bars</span>
-              <span className="focus-tooltip-keys"><kbd>{mod}</kbd><kbd>↑</kbd></span>
+              <span className="focus-tooltip-keys"><kbd>{mod}</kbd><kbd>{mod === "⌘" ? "⌥" : "Alt"}</kbd><kbd>↑</kbd></span>
             </span>
           </button>
         </div>

@@ -126,12 +126,12 @@ export default function SidePanelControls({ navigation, bookmarks, hoveredEdge, 
         </div>
         <button className="panel-toggle" aria-label={`${expanded ? "Collapse" : "Expand"} ${label}`}
           aria-describedby={`${side}-panel-tooltip`}
-          aria-keyshortcuts={`${modifier}+${side === "left" ? "ArrowLeft" : "ArrowRight"}`} aria-expanded={expanded} aria-controls={controls}
+          aria-keyshortcuts={`${modifier}+Alt+${side === "left" ? "ArrowLeft" : "ArrowRight"}`} aria-expanded={expanded} aria-controls={controls}
           onClick={side === "left" ? onNavigation : onBookmarks}>
           {(side === "left" ? expanded : !expanded) ? <ChevronLeft size={20} /> : <ChevronRight size={20} />}
           <span className="focus-tooltip" id={`${side}-panel-tooltip`} role="tooltip">
             <span>{expanded ? "Collapse" : "Expand"} {label}</span>
-            <span className="focus-tooltip-keys"><kbd>{modifier === "Meta" ? "⌘" : "Ctrl"}</kbd><kbd>{side === "left" ? "←" : "→"}</kbd></span>
+            <span className="focus-tooltip-keys"><kbd>{modifier === "Meta" ? "⌘" : "Ctrl"}</kbd><kbd>{modifier === "Meta" ? "⌥" : "Alt"}</kbd><kbd>{side === "left" ? "←" : "→"}</kbd></span>
           </span>
         </button>
       </div>;

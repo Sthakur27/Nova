@@ -16,6 +16,10 @@ Entries describe source changes; availability in published installers has not be
 
 - Desktop saved states remember named tab layouts, pane sizes, active panes/tabs, and visible notes’ scroll positions. Restoring leaves focus mode, panel visibility, and appearance unchanged. An automatic Previous state preserves the unsaved layout you leave and returns with Command-Option-0 / Ctrl-Alt-0. A right-edge hover control in focus mode provides state navigation and quick save without opening the sidebar. Save up to nine device-local states and restore them with Command-Option-1–9 / Ctrl-Alt-1–9 while preserving recovery drafts and loading current file contents.
 
+#### Changed
+
+- Panel toggles now use Command-Option + arrows on Mac and Ctrl-Alt + arrows on Windows, freeing ordinary Command/Ctrl + arrows for cursor movement and preserving Shift-modified text selection.
+
 #### Fixed
 
 - Entering focus mode or collapsing the top bars now moves note content into the freed space. Scroll positions compensate for viewport-sized note padding in Source, Edit, and Read, and reverse when panels expand.
