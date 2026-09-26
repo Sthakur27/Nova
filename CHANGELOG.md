@@ -8,6 +8,12 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 Entries describe source changes; availability in published installers has not been verified. The initial backfill covers commits through `7d47fbe`.
 
+### 2026-09-26
+
+#### Added
+
+- Two-key desktop appearance shortcuts: Command-E / Ctrl-E cycles editor backgrounds; Command-L toggles Black/Frosted panels on Mac. Shortcuts work in focus mode, enable Galaxy mode when needed, and briefly confirm the selection. Inline code remains available through the formatting toolbar and backticks.
+
 ### 2026-09-25
 
 #### Added

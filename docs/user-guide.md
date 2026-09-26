@@ -108,6 +108,8 @@ Formatting buttons highlight the formats active at the cursor or across the sele
 
 Use **Inline code** for short snippets, or surround text with single backticks; typing the closing backtick applies the format. Use the adjacent **Code block** button (Command/Ctrl-Alt-C) for multiline code. In Edit, it toggles the current paragraph or selected blocks; Enter adds a code line, and three Enters at the end return to normal text. In Source, it adds fences around the current or selected lines; clicking it inside a fenced block removes the fences. The button highlights while the cursor is in a code block (a fenced block in Source).
 
+Desktop appearance shortcuts: **Command-E / Ctrl-E** cycles the editor background through Translucent → Black → Frosted (Mac) or Translucent → Black (Windows). **Command-L** toggles Mac panels between Black and Frosted. These work while typing and in focus mode, enable Galaxy mode when needed, remember the selection, and briefly show the new appearance. Held keys do not repeat; dialogs and search suspend the shortcuts. On desktop, Command-E / Ctrl-E takes priority over the rich editor’s inline-code shortcut; use **Inline code** in the formatting toolbar or backticks instead. Mac Control-E still moves to the end of the line.
+
 ## Terminal
 
 The desktop app includes terminal tabs below the note. Open them with the terminal icon above the note, **Terminal** in the status bar, or **Command-Down / Ctrl-Down**. The browser preview displays an explanation instead of starting a shell.

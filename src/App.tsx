@@ -36,6 +36,7 @@ import { loadDraft, storeDraft, clearDraft, moveDraft } from "./drafts";
 import Settings from "./Settings";
 import { codeLanguage } from "./codeLanguages";
 import TerminalPanel from "./TerminalPanel";
+import { useAppearanceShortcuts } from "./useAppearanceShortcuts";
 import { installPanelShortcuts } from "./panelShortcuts";
 import SidePanelControls from "./SidePanelControls";
 import TextWidthControl, { textWidths, type TextWidth } from "./TextWidthControl";
@@ -1430,6 +1431,11 @@ export default function App() {
     refreshDirty();
     preserveDraft();
   };
+  const appearanceNotice = useAppearanceShortcuts({
+    enabled: !mobile && !syncFolder && !settingsOpen && !activeSettingId && !palette && !bookmarkDraft && !renameTarget && !fileAction,
+    mac: mod === "⌘", supportsFrosted, background: backgroundMode, frosted: frostedPanes,
+    onBackground: setBackgroundMode, onFrosted: setFrostedPanes, onGalaxy: setGalaxyMode,
+  });
   const transitionFocus = useFocusTransition(galaxyMode && !compact);
   const changeFocusMode = useCallback((focused: boolean) => transitionFocus(focused, () => {
     if (compact) setMobileView("editor");
@@ -2093,11 +2099,12 @@ export default function App() {
             className="icon-button toolbar-icon focus-toggle transparency-control"
             aria-label={`Background: ${backgroundLabels[backgroundMode]}. Switch to ${backgroundLabels[nextBackgroundMode]}`}
             aria-describedby="translucency-tooltip"
+            aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+e`}
             onClick={() => setBackgroundMode(nextBackgroundMode)}
           >
             <Blend size={17} aria-hidden="true" />
             <span className="focus-tooltip" id="translucency-tooltip" role="tooltip">
-              Background · {backgroundLabels[backgroundMode]}<br />
+              Background · {backgroundLabels[backgroundMode]} · {mod}E<br />
               Click for {backgroundLabels[nextBackgroundMode].toLowerCase()}
             </span>
           </button>}
@@ -2106,11 +2113,12 @@ export default function App() {
             aria-label="Frosted panels"
             aria-pressed={frostedPanes}
             aria-describedby="pane-background-tooltip"
+            aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+l`}
             onClick={() => setFrostedPanes(!frostedPanes)}
           >
             <PanelsTopLeft size={17} aria-hidden="true" />
             <span className="focus-tooltip" id="pane-background-tooltip" role="tooltip">
-              Panels · {frostedPanes ? "Frosted" : "Black"}<br />
+              Panels · {frostedPanes ? "Frosted" : "Black"} · {mod}L<br />
               Click for {frostedPanes ? "black" : "frosted"}
             </span>
           </button>}
@@ -2352,6 +2360,7 @@ export default function App() {
           </>}
         </aside>
       )}
+      {appearanceNotice && !notice && <div className="toast" role="status">{appearanceNotice}</div>}
       {notice && (
         <div className="toast" role="status">
           <span>{notice}</span>
