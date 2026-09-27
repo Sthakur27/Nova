@@ -12,6 +12,8 @@ Entries describe source changes; availability in published installers has not be
 
 #### Changed
 
+- Cloud stays expanded with a plain section heading in Cloud-only windows; mixed windows retain their collapse controls.
+
 - Sidebar navigation now groups Files (lines icon), Search, Open Folder in New Window, and Recents below Quick find. Hidden-file visibility stays in Settings and Command-K; Cloud and Local use matching neutral + buttons.
 
 - Single-folder Local browsing now shows files directly beneath a header named for the folder, falling back to Local when space is tight with the full name and path in a tooltip. Sync errors in the bottom panel offer a red Review action.

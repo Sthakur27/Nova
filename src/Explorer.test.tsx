@@ -318,3 +318,24 @@ it("omits Local and its folder prompts in a Cloud-only window", async () => {
     expect(host.textContent).not.toContain("Open a folder");
   } finally { await act(async () => root.unmount()); vi.unstubAllGlobals(); }
 });
+
+it("keeps Cloud expanded in Cloud-only windows despite a saved collapsed preference", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  localStorage.setItem("nova:explorer-cloud-collapsed:v1", "on");
+  const host = document.createElement("div"), root = createRoot(host), noop = () => {};
+  const cloud: Workspace = { root: "/cloud", name: "Cloud", files: [{ path: "note.md", name: "note.md" }], cloudSpace: { id: "id", name: "Cloud", account: "me" } };
+  const render = (cloudOnly: boolean) => <Explorer cloudOnly={cloudOnly} folders={[cloud]} activeRoot="" activePath="" onOpen={noop} onRename={noop} onFileAction={noop} onChange={noop} onRemove={noop} onRefresh={noop} onAdd={noop} externalDrag={false}/>;
+  try {
+    await act(async () => root.render(render(true)));
+    expect(host.querySelector('h2')?.textContent).toBe("Cloud");
+    expect(host.querySelector('h2 button')).toBeNull();
+    expect(host.querySelector<HTMLElement>('#explorer-cloud')!.hidden).toBe(false);
+    expect(host.querySelector('.file-open')?.textContent).toContain("note.md");
+    expect(localStorage.getItem("nova:explorer-cloud-collapsed:v1")).toBe("on");
+    await act(async () => root.render(render(false)));
+    expect(host.querySelector('h2 button')?.getAttribute("aria-expanded")).toBe("false");
+    expect(host.querySelector<HTMLElement>('#explorer-cloud')!.hidden).toBe(true);
+    await act(async () => host.querySelector<HTMLButtonElement>('h2 button')!.click());
+    expect(host.querySelector<HTMLElement>('#explorer-cloud')!.hidden).toBe(false);
+  } finally { await act(async () => root.unmount()); localStorage.clear(); vi.unstubAllGlobals(); }
+});

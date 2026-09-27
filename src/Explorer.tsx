@@ -301,7 +301,8 @@ export default function Explorer({
           const isCloud = kind === "Cloud";
           const ordered = folders.filter(folder => !!folder.cloudSpace === isCloud);
           if ((isCloud && !ordered.length) || (!isCloud && (mobile || cloudOnly))) return null;
-          const collapsed = isCloud ? cloudCollapsed : localCollapsed;
+          const alwaysExpanded = isCloud && cloudOnly;
+          const collapsed = !alwaysExpanded && (isCloud ? cloudCollapsed : localCollapsed);
           const setCollapsed = isCloud ? setCloudCollapsed : setLocalCollapsed;
           const flatRoot = ordered.length === 1;
           const localFolder = !isCloud && flatRoot ? ordered[0] : undefined;
@@ -309,10 +310,10 @@ export default function Explorer({
             ?? ordered.find(folder => !folder.error);
           return <section className="explorer-section" key={kind} aria-label={`${kind} notes`}>
             <div className="explorer-section-header">
-              <h2><button className="explorer-section-label explorer-section-toggle" title={localFolder ? `${localFolder.name} — ${localFolder.root === "demo" ? "Sample notes" : localFolder.root}` : undefined} aria-label={localFolder ? `${localFolder.name} local folder` : undefined} aria-expanded={!collapsed} aria-controls={`explorer-${kind.toLowerCase()}`} onClick={() => setCollapsed(!collapsed)}>
+              <h2>{alwaysExpanded ? <span className="explorer-section-label">Cloud</span> : <button className="explorer-section-label explorer-section-toggle" title={localFolder ? `${localFolder.name} — ${localFolder.root === "demo" ? "Sample notes" : localFolder.root}` : undefined} aria-label={localFolder ? `${localFolder.name} local folder` : undefined} aria-expanded={!collapsed} aria-controls={`explorer-${kind.toLowerCase()}`} onClick={() => setCollapsed(!collapsed)}>
                 {collapsed ? <ChevronRight size={13} aria-hidden="true" /> : <ChevronDown size={13} aria-hidden="true" />}
                 {localFolder ? <FolderSectionLabel name={localFolder.name}/> : kind}
-              </button></h2>
+              </button>}</h2>
               <div className="explorer-section-actions">
                 {onNew && <CreateMenu label={isCloud ? "Create in Cloud" : `Create in Local${createTarget ? `: ${createTarget.name}` : ""}`} disabled={!createTarget}
                   onFile={() => { setCollapsed(false); if (createTarget) onNew(createTarget); }}
