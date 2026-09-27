@@ -16,6 +16,8 @@ Entries describe source changes; availability in published installers has not be
 
 #### Fixed
 
+- Desktop tab strips automatically reveal the active file when opening, creating, or switching notes, including in narrow split panes.
+
 - Refresh Cloud now syncs notes and folders inside existing spaces on desktop and iOS. Full sync requests wait behind focused-note checks instead of being skipped, and saves made during a running sync receive a follow-up pass.
 
 #### Added
