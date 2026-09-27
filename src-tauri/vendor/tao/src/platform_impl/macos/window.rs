@@ -53,7 +53,7 @@ use objc2::{
 use objc2_app_kit::{
   self as appkit, NSApp, NSApplicationPresentationOptions, NSBackingStoreType, NSColor, NSEvent,
   NSEventModifierFlags, NSEventSubtype, NSEventType, NSRequestUserAttentionType, NSScreen, NSView,
-  NSWindow, NSWindowButton, NSWindowCollectionBehavior, NSWindowFullScreenButton,
+  NSWindow, NSWindowButton, NSWindowCollectionBehavior,
   NSWindowOrderingMode, NSWindowSharingType, NSWindowStyleMask,
 };
 use objc2_foundation::{
@@ -271,7 +271,6 @@ fn create_window(
       }
       if pl_attrs.titlebar_buttons_hidden {
         for titlebar_button in &[
-          NSWindowFullScreenButton,
           NSWindowButton::MiniaturizeButton,
           NSWindowButton::CloseButton,
           NSWindowButton::ZoomButton,

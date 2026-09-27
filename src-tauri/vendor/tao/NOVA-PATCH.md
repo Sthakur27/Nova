@@ -20,4 +20,13 @@ Build-warning cleanup also removes the unused macOS `yes` callback,
 calculation. The shared `hit_test` helper is compiled only for its Windows and
 Linux/BSD callers. These changes do not alter window behavior.
 
+Additional macOS cleanup removes unused imports, redundant unsafe blocks, and
+unused internal event-loop badge wrappers (the public badge APIs keep their
+existing implementations). Key-up events use `NSEventType::KeyUp`. Hidden titlebar
+buttons omit the obsolete fullscreen button, whose lookup always returns nil;
+the existing zoom-button entry handles the fullscreen control.
+
+Remaining macOS warnings concern the legacy filename pasteboard protocol and
+retained icon data. Migrating native file drag-and-drop is outside this cleanup.
+
 Remove this Cargo patch once the supported Tauri dependency includes both iOS fixes.
