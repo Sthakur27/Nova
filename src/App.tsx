@@ -1,3 +1,4 @@
+import BuiltinDocs from "./BuiltinDocs";
 import SyncAttention from "./SyncAttention";
 import FocusStateNav from "./FocusStateNav";
 import ReadPaneSurface from "./ReadPaneSurface";
@@ -2114,6 +2115,7 @@ export default function App() {
             <RecentFolders folders={recents.filter(recent => !folders.some(folder => folder.root === recent.root))}
               onOpen={recent => void openRecent(recent)} onClear={() => updateRecents([])} onCloud={() => void launchCloud()}/>
           </>}
+          <BuiltinDocs />
         </div>
         {workspaceSearchRequest.id > 0 && <div className="workspace-search-host" hidden={navigationView !== "search"}>
           <WorkspaceSearch folders={folders} active={navigationView === "search" && !palette} request={workspaceSearchRequest}

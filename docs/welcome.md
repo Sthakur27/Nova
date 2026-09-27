@@ -53,4 +53,4 @@ Use **Open files** to choose a note, **New note** to start one, and swipe left o
 
 ## Come back whenever you like
 
-The **About Nova** book icon at the bottom of the explorer opens a menu with **Welcome** and **Changelog**. Both are included with the app and readable offline. The changelog records changes by development date; it does not promise that every listed change has reached a published installer.
+The **About Nova** book icon below Quick find, beside Files and Search, opens this Welcome page directly. Switch to **Changelog** using the buttons at the top. Both are included with the app and readable offline. The changelog records changes by development date; it does not promise that every listed change has reached a published installer.

@@ -32,7 +32,7 @@ Entries describe source changes; availability in published installers has not be
 
 #### Added
 
-- An About Nova book icon at the bottom of the explorer opens a dropdown for the offline Welcome guide and Changelog. Built-in pages are read-only and stay separate from your notes.
+- An About Nova book icon below Quick find, alongside the navigation controls, opens the offline Welcome guide directly, with Changelog available inside the tabbed viewer. The heading no longer receives initial focus. Built-in pages are read-only and stay separate from your notes.
 
 - Open a Cloud-only window from the sidebar folder menu or Recents without selecting a local folder. Cloud-only sessions retain local folders in Recents, show Google Drive setup when needed, and keep the Local section out of the way.
 
