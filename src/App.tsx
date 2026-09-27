@@ -82,6 +82,7 @@ import {
   FolderOpen,
   Code2,
   ListOrdered,
+  List,
   ScanLine,
   PanelsTopLeft,
   Plus,
@@ -104,6 +105,7 @@ import Palette from "./Palette";
 import WorkspaceSearch, { type SearchRequest } from "./WorkspaceSearch";
 import { installWorkspaceSearchShortcut } from "./workspaceSearchShortcut";
 import Explorer from "./Explorer";
+import RecentFolders from "./RecentFolders";
 import { createFolder } from "./storage";
 import FileActionDialog from "./FileActionDialog";
 import RenameDialog from "./RenameDialog";
@@ -2067,9 +2069,14 @@ export default function App() {
         </>}
         </SidebarSection>
         {compact && <button className="mobile-create-note" onClick={() => void newTab()}><Plus size={19} />New note</button>}
-        <div className="navigation-views" role="group" aria-label="Navigation view">
-          <button aria-label="Files" title="Files" aria-pressed={navigationView === "files"} onClick={() => setNavigationView("files")}><FolderOpen size={18} aria-hidden="true"/></button>
+        <div className="navigation-views" role="group" aria-label="Navigation">
+          <button aria-label="Files" title="Files" aria-pressed={navigationView === "files"} onClick={() => setNavigationView("files")}><List size={18} aria-hidden="true"/></button>
           <button aria-label="Search across files" aria-pressed={navigationView === "search"} title={`Search across files (${mod} ⇧ F)`} onClick={() => openWorkspaceSearch()}><Search size={18} aria-hidden="true"/></button>
+          {!mobile && <>
+            <button aria-label="Open local folder in new window" title="Open Folder in New Window…" onClick={() => void openFolder()}><FolderOpen size={18} aria-hidden="true"/></button>
+            <RecentFolders folders={recents.filter(recent => !folders.some(folder => folder.root === recent.root))}
+              onOpen={recent => void openRecent(recent)} onClear={() => updateRecents([])}/>
+          </>}
         </div>
         {workspaceSearchRequest.id > 0 && <div className="workspace-search-host" hidden={navigationView !== "search"}>
           <WorkspaceSearch folders={folders} active={navigationView === "search" && !palette} request={workspaceSearchRequest}
@@ -2080,7 +2087,7 @@ export default function App() {
             }}/>
         </div>}
         {navigationView === "files" && <Explorer
-          showHidden={showHidden} onShowHidden={setShowHidden}
+          showHidden={showHidden}
           folders={folders.filter(folder => !folder.cloudSpace || (drive.status.connected && folder.cloudSpace.account === drive.status.account))}
           activeRoot={workspace.root}
           activePath={path}
@@ -2102,7 +2109,6 @@ export default function App() {
           onRemove={(root) => void removeFolder(root)}
           onRefresh={(root) => void refreshFolder(root)}
           onAdd={() => void openFolder()}
-          recents={recents} onRecent={recent => void openRecent(recent)} onForgetRecents={() => updateRecents([])}
           onLoadDirectory={(root, path, more) => void loadDirectory(root, path, more)} onToggleDirectory={toggleDirectory} loadingDirectories={loadingDirectories}
           externalDrag={externalDrag}
         />}

@@ -3,8 +3,6 @@ import { mobile } from "./platform";
 import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import {
-  Eye,
-  EyeOff,
   Cloud,
   CloudOff,
   ChevronDown,
@@ -21,8 +19,6 @@ import { syncIncluded, type SyncPolicy } from "./syncPolicy";
 import type { Workspace } from "./model";
 import FolderSectionLabel from "./FolderSectionLabel";
 import CreateMenu from "./CreateMenu";
-import RecentFolders from "./RecentFolders";
-import type { RecentFolder } from "./localFolders";
 import { revealFile, fileAncestors } from "./revealFile";
 import { closedDirectories } from "./folders";
 function FileTree({
@@ -153,10 +149,6 @@ function FileTree({
 type Props = {
   folders: Workspace[];
   showHidden?: boolean;
-  onShowHidden?: (value: boolean) => void;
-  recents?: RecentFolder[];
-  onRecent?: (folder: RecentFolder) => void;
-  onForgetRecents?: () => void;
   onLoadDirectory?: (root: string, path: string, more?: boolean) => void;
   onToggleDirectory?: (root: string, path: string) => void;
   loadingDirectories?: Record<string, string[]>;
@@ -179,12 +171,12 @@ type Props = {
 };
 export default function Explorer({
   folders,
-  recents = [], onRecent, onForgetRecents, onLoadDirectory, onToggleDirectory, loadingDirectories = {},
+  onLoadDirectory, onToggleDirectory, loadingDirectories = {},
   activeRoot,
   activePath,
   onOpen,
   onRename,
-  showHidden = false, onShowHidden,
+  showHidden = false,
   onChange,
   onFileAction,
   onRemove,
@@ -320,13 +312,8 @@ export default function Explorer({
                 {collapsed ? <ChevronRight size={13} aria-hidden="true" /> : <ChevronDown size={13} aria-hidden="true" />}
                 {localFolder ? <FolderSectionLabel name={localFolder.name}/> : kind}
               </button></h2>
-              {!isCloud && <div className="explorer-section-actions">
-                {onShowHidden && <button className="icon-button hidden-files-toggle" aria-label={showHidden ? "Hide hidden files and folders" : "Show hidden files and folders"} title={showHidden ? "Hide hidden files and folders" : "Show hidden files and folders"} aria-pressed={showHidden} onClick={() => onShowHidden(!showHidden)}>{showHidden ? <Eye size={15}/> : <EyeOff size={15}/>}</button>}
-                <RecentFolders folders={recents.filter(recent => !ordered.some(folder => folder.root === recent.root))} onOpen={onRecent} onClear={onForgetRecents}/>
-                <button className="icon-button explorer-open-local" aria-label="Open local folder in new window" title="Open Folder in New Window…" onClick={onAdd}><FolderOpen size={15}/></button>
-              </div>}
               <div className="explorer-section-actions">
-                {onNew && <CreateMenu prominent={isCloud} label={isCloud ? "Create in Cloud" : `Create in Local${createTarget ? `: ${createTarget.name}` : ""}`} disabled={!createTarget}
+                {onNew && <CreateMenu label={isCloud ? "Create in Cloud" : `Create in Local${createTarget ? `: ${createTarget.name}` : ""}`} disabled={!createTarget}
                   onFile={() => { setCollapsed(false); if (createTarget) onNew(createTarget); }}
                   onFolder={onNewFolder && createTarget && createTarget.root !== "demo" ? () => { setCollapsed(false); onNewFolder(createTarget); } : undefined}/>}
                 {flatRoot && rootOptions(ordered[0], isCloud ? "Cloud" : ordered[0].name)}

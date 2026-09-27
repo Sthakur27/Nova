@@ -87,8 +87,7 @@ it("toggles Local and Cloud independently from their labels and remembers both s
     expect(section("local").hidden).toBe(true);
     expect(host.querySelector('.workspace-label [aria-label="Open Folder"]')).toBeNull();
     expect(host.querySelector('[aria-label="Open Recent"]')).toBeNull();
-    await act(async()=>host.querySelector<HTMLButtonElement>('[aria-label="Open local folder in new window"]')!.click());
-    expect(onAdd).toHaveBeenCalledOnce();
+    expect(host.querySelector('[aria-label="Open local folder in new window"], .hidden-files-toggle')).toBeNull();
   } finally { await act(async()=>root.unmount());host.remove();localStorage.clear();vi.unstubAllGlobals(); }
 });
 
@@ -120,17 +119,16 @@ it("offers a direct Drive action only for Cloud files and restores focus after s
   } finally { await act(async () => root.unmount()); host.remove(); localStorage.clear(); vi.unstubAllGlobals(); }
 });
 
-it("browses unloaded directories, paginates, shows actionable errors and exposes recent folders", async () => {
+it("browses unloaded directories, paginates, shows actionable errors without header folder shortcuts", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   localStorage.clear();
   const host = document.createElement("div"), root = createRoot(host);
   document.body.append(host);
   const folder: Workspace = { root: "/large", name: "Large", collapsed: false, files: [], directories: ["nested", "denied"], expandedDirectories: ["denied"], directoryPages: { "": 300 }, directoryErrors: { denied: "Permission denied" }, starred: ["unopened/star.md"] };
-  const recent = { root: "/other", name: "Other", tabs: [], active: null, mode: "edit" as const };
-  const onToggleDirectory = vi.fn(), onLoadDirectory = vi.fn(), onRecent = vi.fn(), noop = () => {};
+  const onToggleDirectory = vi.fn(), onLoadDirectory = vi.fn(), noop = () => {};
   const click = async (selector: string) => act(async () => host.querySelector<HTMLButtonElement>(selector)!.click());
   try {
-    await act(async () => root.render(<Explorer folders={[folder]} recents={[recent]} onRecent={onRecent} activeRoot={folder.root} activePath=""
+    await act(async () => root.render(<Explorer folders={[folder]} activeRoot={folder.root} activePath=""
       onOpen={noop} onRename={noop} onFileAction={noop} onChange={noop} onRemove={noop} onRefresh={noop} onAdd={noop} externalDrag={false}
       onToggleDirectory={onToggleDirectory} onLoadDirectory={onLoadDirectory} />));
     expect(host.textContent).toContain("Permission denied");
@@ -140,9 +138,6 @@ it("browses unloaded directories, paginates, shows actionable errors and exposes
     expect(onLoadDirectory).toHaveBeenCalledWith(folder.root, "", true);
     await click('.folder-error button');
     expect(onLoadDirectory).toHaveBeenCalledWith(folder.root, "denied", undefined);
-    await click('[aria-label="Open Recent"]');
-    await act(async () => document.querySelector<HTMLButtonElement>('button[title="/other"]')!.click());
-    expect(onRecent).toHaveBeenCalledWith(recent);
     expect(host.querySelector('.root-grip')).toBeNull();
     expect(host.querySelector(".stars-toggle, .file-star")).toBeNull();
   } finally { await act(async () => root.unmount()); host.remove(); localStorage.clear(); vi.unstubAllGlobals(); }
@@ -253,8 +248,7 @@ it("creates in the collapsed local folder while Cloud is active without toggling
     expect(onAdd).not.toHaveBeenCalled();
     expect(host.querySelector('[aria-label="Local folder folder"]')).toBeNull();
     expect(host.querySelector('#explorer-cloud .root-new-note')).toBeNull();
-    await act(async () => host.querySelector<HTMLButtonElement>('.explorer-open-local')!.click());
-    expect(onAdd).toHaveBeenCalledOnce();
+    expect(host.querySelector('.explorer-open-local')).toBeNull();
     expect(onNew).toHaveBeenCalledOnce();
     await act(async () => root.render(render({ ...local, error: "Folder unavailable" })));
     expect(create.disabled).toBe(true);

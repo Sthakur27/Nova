@@ -12,7 +12,9 @@ Entries describe source changes; availability in published installers has not be
 
 #### Changed
 
-- Single-folder Local browsing now shows files directly beneath a header named for the folder, falling back to Local when space is tight with the full name and path in a tooltip. Cloud’s + button is more prominent, and sync errors in the bottom panel offer a red Review action.
+- Sidebar navigation now groups Files (lines icon), Search, Open Folder in New Window, and Recents below Quick find. Hidden-file visibility stays in Settings and Command-K; Cloud and Local use matching neutral + buttons.
+
+- Single-folder Local browsing now shows files directly beneath a header named for the folder, falling back to Local when space is tight with the full name and path in a tooltip. Sync errors in the bottom panel offer a red Review action.
 
 - The desktop note toolbar exposes file location and Cloud actions beside View. Cloud notes open directly in Google Drive; Local notes show a muted cloud button for a confirmed Move to Cloud. Background and frosted-panel controls remain in the sidebar and Settings instead of the top toolbar.
 

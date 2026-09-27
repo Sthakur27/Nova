@@ -14,11 +14,12 @@ it("hides empty recents, escapes sidebar clipping, and restores focus on Escape"
   const host = document.createElement("div"), root = createRoot(host);
   host.style.overflow = "hidden";
   document.body.append(host);
+  const onOpen = vi.fn(), onClear = vi.fn();
   const folder = { root: "/notes", name: "Notes", active: null, tabs: [], mode: "edit" as const };
   try {
     await act(async () => root.render(<RecentFolders folders={[]} />));
     expect(host.querySelector('button')).toBeNull();
-    await act(async () => root.render(<RecentFolders folders={[folder]} />));
+    await act(async () => root.render(<RecentFolders folders={[folder]} onOpen={onOpen} onClear={onClear} />));
     const trigger = host.querySelector<HTMLButtonElement>('button')!;
     await act(async () => trigger.click());
     const menu = document.querySelector<HTMLDivElement>('[role="menu"][aria-label="Recent folders"]')!;
@@ -28,5 +29,12 @@ it("hides empty recents, escapes sidebar clipping, and restores focus on Escape"
     await act(async () => menu.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
     expect(document.querySelector('[aria-label="Recent folders"]')).toBeNull();
     expect(document.activeElement).toBe(trigger);
+    await act(async () => trigger.click());
+    await act(async () => document.querySelector<HTMLButtonElement>('button[title="/notes"]')!.click());
+    expect(onOpen).toHaveBeenCalledExactlyOnceWith(folder);
+    expect(document.querySelector('[aria-label="Recent folders"]')).toBeNull();
+    await act(async () => trigger.click());
+    await act(async () => document.querySelector<HTMLButtonElement>('.recent-clear')!.click());
+    expect(onClear).toHaveBeenCalledOnce();
   } finally { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); }
 });
