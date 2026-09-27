@@ -12,6 +12,7 @@ Nova is a notes app for Mac and Windows that gives your words room to breathe. W
 
 *Your files on the left. Your thoughts in the middle. Your favorite passages on the right.*
 
+- **Get to know Nova.** Open Welcome and Changelog from the About Nova book icon at the bottom of the explorer, even offline.
 - **Keep your notes yours.** Open folders you already use. Your notes remain files you can open in other apps.
 - **Find your way back.** Search for a filename or a phrase, star a favorite note, or give an important passage its own bookmark.
 - **Return to a working layout.** Save named states per folder, with a separate Cloud-only set, including split panes, tabs, and scroll positions, then recall them with a keyboard shortcut—or return to the unsaved layout you left.

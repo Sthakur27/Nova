@@ -1,0 +1,23 @@
+.builtin-doc-links { position: relative; flex-shrink: 0; padding: 6px 12px; border-top: 1px solid #ffffff0a; }
+.builtin-doc-trigger { width: 30px; height: 30px; }
+.builtin-doc-menu { position: absolute; z-index: 30; bottom: calc(100% - 4px); left: 12px; min-width: 170px; padding: 5px; border: 1px solid #ffffff18; border-radius: 8px; background: #242329; box-shadow: 0 8px 30px #0006; }
+.builtin-doc-menu button { display: flex; align-items: center; gap: 9px; width: 100%; padding: 9px 10px; border: 0; border-radius: 5px; background: transparent; color: #d3cedc; text-align: left; font-size: 12px; }
+.builtin-doc-menu button:hover { background: #ffffff08; color: #e2d8ef; }
+.builtin-doc-links button:focus-visible { outline: 2px solid #bda0ed; outline-offset: -2px; }
+.settings-dialog.builtin-doc-dialog { width: min(800px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); }
+.builtin-doc-tabs { display: flex; gap: 8px; padding: 12px 24px; flex-shrink: 0; border-bottom: 1px solid #ffffff0a; }
+.builtin-doc-tabs button { border: 1px solid transparent; border-radius: 6px; background: transparent; padding: 8px 12px; color: #aaa3b6; }
+.builtin-doc-tabs button[aria-current] { background: #b497dc19; border-color: #b497dc45; color: #e2d8ef; }
+.builtin-doc-body { overflow: auto; min-height: 0; padding: 8px 32px 32px; color: #d3cedc; font-size: 15px; line-height: 1.75; overflow-wrap: anywhere; }
+.builtin-doc-body h1 { font-size: 28px; line-height: 1.25; color: #eee8f6; }
+.builtin-doc-body h2 { margin-top: 1.6em; font-size: 20px; line-height: 1.4; color: #eee8f6; }
+.builtin-doc-body h3 { font-size: 17px; }
+.builtin-doc-body h4 { font-size: 15px; }
+.builtin-doc-body a { color: #cfacff; text-decoration: underline; }
+.builtin-doc-body li { margin-bottom: 8px; }
+.builtin-doc-body code { font-size: .9em; }
+@media (max-width: 600px) {
+  .builtin-doc-dialog .settings-header { padding: 18px 16px; }
+  .builtin-doc-tabs { padding: 10px 12px; }
+  .builtin-doc-body { padding: 4px 20px 24px; }
+}

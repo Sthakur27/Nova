@@ -1,3 +1,4 @@
+import BuiltinDocs from "./BuiltinDocs";
 import { usePreference } from "./preferences";
 import { mobile } from "./platform";
 import { createPortal } from "react-dom";
@@ -424,6 +425,7 @@ export default function Explorer({
           <div className="folder-drop-message">Drop a folder to open it</div>
         )}
       </nav>
+      <BuiltinDocs />
       {menu && createPortal(<div ref={menuRef} className="file-context-menu" role="menu" aria-label={`Actions for ${menu.path}`} style={{ left: menu.x, top: menu.y }} onKeyDown={event => {
         event.stopPropagation();
         const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>("button:not(:disabled):not([hidden])")];

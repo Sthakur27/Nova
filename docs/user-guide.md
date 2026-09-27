@@ -215,3 +215,7 @@ Code assistance runs locally and requires no Python, Node, or Java installation.
 ## App updates
 
 Desktop Nova checks for a newer version shortly after launch and whenever Settings opens. A top-left update icon opens Settings when an update is available. Settings shows check progress, errors, and a **Check for updates** button to retry. When available, open **Update Nova** in Settings and choose **Download update**. You can continue writing during the download. Choose **Restart to update** to install; Nova first preserves the session and recovery draft. Finish voice typing and close other Nova windows before restarting. Terminal sessions end on restart. See the [update guide](app-updates.md) for release and verification details.
+
+## Built-in Welcome and Changelog
+
+Click the **About Nova** book icon at the bottom of the Files explorer, then choose **Welcome** or **Changelog**. Hover over the icon to see its label; Escape or clicking outside dismisses the menu. The initial Open Folder screen stays unchanged. These read-only pages are bundled with the app, work offline, and are available even with no folder open. Switch pages using the buttons above the document; close the viewer or press Escape to return to your work. They are not workspace files and cannot be edited, saved, or synced. Updates to the pages arrive with app updates. External links still need an internet connection. Changelog dates describe development, not verified installer publication.
