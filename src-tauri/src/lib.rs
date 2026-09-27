@@ -333,7 +333,7 @@ async fn open_workspace(root: String, access: State<'_, Access>) -> Result<Works
             if fs::symlink_metadata(scan.join(".nova")).is_ok_and(|m| m.is_file()) {
                 files.push(NoteFile { path: ".nova".into(), name: ".nova".into() });
             }
-            Ok((files, None, None, Vec::new()))
+            Ok((files, Some(cloud_directories(&scan)?), None, Vec::new()))
         } else {
             let listing = local_tree::list(&scan, "", 0)?;
             let mut pages = std::collections::HashMap::new();
@@ -767,6 +767,54 @@ fn rename_note(root: String, path: String, name: String, access: State<'_, Acces
     }
     Ok(target.strip_prefix(root).map_err(err)?.to_string_lossy().replace('\\', "/"))
 }
+fn create_folder_at(root: &Path, path: &str) -> Result<String, String> {
+    if path.is_empty() || path.split('/').any(|name| name.starts_with('.') || !drive_upload::safe_name(name)
+        || name.contains(['<', '>', '"', '|', '?', '*']) || name.ends_with(['.', ' '])) {
+        return Err("Enter a folder path with ordinary names separated by /.".into());
+    }
+    let mut target = root.to_path_buf();
+    // Validate every existing ancestor before creating anything; never follow links.
+    for part in path.split('/') {
+        target.push(part);
+        match fs::symlink_metadata(&target) {
+            Ok(meta) if !meta.is_dir() || meta.file_type().is_symlink() => return Err("A file or symbolic link occupies this folder path.".into()),
+            Ok(_) => {},
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {},
+            Err(e) => return Err(err(e)),
+        }
+    }
+    if target.exists() { return Err("That folder already exists.".into()); }
+    fs::create_dir_all(&target).map_err(err)?;
+    Ok(path.into())
+}
+#[tauri::command]
+fn create_folder(root: String, path: String, access: State<'_, Access>) -> Result<String, String> {
+    let _guard = access.writes.lock().map_err(err)?;
+    let root = root_path(&access, &root)?;
+    let mut registry = read_registry(&root)?;
+    let next = create_folder_at(&root, &path)?;
+    if registry["cloudSpace"].is_object() {
+        registry["cloudPendingFolders"][&next] = serde_json::json!(true);
+        let stars = registry_stars(&registry)?;
+        if let Err(error) = write_registry(&root, registry, &stars) {
+            let _ = fs::remove_dir(root.join(&next));
+            return Err(error);
+        }
+    }
+    Ok(next)
+}
+fn cloud_directories(root: &Path) -> Result<Vec<String>, String> {
+    let mut paths = Vec::new();
+    for entry in WalkDir::new(root).min_depth(1).follow_links(false).into_iter()
+        .filter_entry(|entry| !entry.file_name().to_string_lossy().starts_with('.')) {
+        let entry = entry.map_err(err)?;
+        if entry.file_type().is_dir() {
+            paths.push(entry.path().strip_prefix(root).map_err(err)?.to_string_lossy().replace('\\', "/"));
+        }
+    }
+    paths.sort();
+    Ok(paths)
+}
 fn move_target(root: &Path, source: &Path, directory: &str) -> Result<PathBuf, String> {
     let relative = Path::new(directory);
     if relative.is_absolute() || relative.components().any(|c| !matches!(c, std::path::Component::Normal(_) | std::path::Component::CurDir)) {
@@ -1033,6 +1081,7 @@ pub fn run() {
             create_note,
             rename_note,
             move_note,
+            create_folder,
             delete_note,
             reveal_note,
             speech::speech_status,
@@ -1082,14 +1131,14 @@ pub fn run() {
         drive_upload::cloud_spaces::cloud_setup, drive_upload::cloud_spaces::cloud_move_in,
         drive_upload::drive_upload, drive_upload::drive_resolve_missing, drive_upload::drive_open_folder, drive_upload::drive_open_file, drive_upload::drive_workspaces, drive_upload::drive_restore,
         registry_editor::read_registry_document, registry_editor::validate_registry_document, registry_editor::save_registry_document,
-        open_workspace, set_file_star, set_sync_choice, read_note, save_note, save_bookmarks, search_notes, cancel_search, load_draft, save_draft, load_explorer, save_explorer, create_note, rename_note, move_note, delete_note
+        open_workspace, set_file_star, set_sync_choice, read_note, save_note, save_bookmarks, search_notes, cancel_search, load_draft, save_draft, load_explorer, save_explorer, create_note, create_folder, rename_note, move_note, delete_note
     ]);
     #[cfg(not(target_os = "ios"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
             registry_editor::read_registry_document, registry_editor::validate_registry_document, registry_editor::save_registry_document,
             open_workspace, set_file_star, set_sync_choice, read_note, save_note,
             save_bookmarks, search_notes, cancel_search, load_draft, save_draft, load_explorer,
-            save_explorer, create_note, rename_note, move_note, delete_note
+            save_explorer, create_note, create_folder, rename_note, move_note, delete_note
         ]);
     builder.run(tauri::generate_context!())
         .expect("Unable to run Nova");
@@ -1223,6 +1272,27 @@ mod tests {
         assert_eq!(create_untitled(dir.path(), ".md").unwrap(), "Untitled 3.md");
         assert_eq!(fs::read_to_string(dir.path().join("Untitled.md")).unwrap(), "keep me");
     }
+    #[test]
+    fn creates_nested_empty_folders_and_rejects_collisions_and_escapes() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(dir.path()).unwrap();
+        assert_eq!(create_folder_at(&root, "Projects/Research").unwrap(), "Projects/Research");
+        assert_eq!(cloud_directories(&root).unwrap(), vec!["Projects", "Projects/Research"]);
+        fs::write(root.join("note.md"), "keep").unwrap();
+        for path in ["", "../escape", "/absolute", ".nova/private", "note.md/child", "Projects/Research", "bad?/name"] {
+            assert!(create_folder_at(&root, path).is_err(), "{path}");
+        }
+        let target = move_target(&root, &root.join("note.md"), "Projects/Research").unwrap();
+        fs::rename(root.join("note.md"), &target).unwrap();
+        assert_eq!(move_target(&root, &target, "").unwrap(), root.join("note.md"));
+        #[cfg(unix)] {
+            let outside = tempfile::tempdir().unwrap();
+            std::os::unix::fs::symlink(outside.path(), root.join("link")).unwrap();
+            assert!(create_folder_at(&root, "link/escape").is_err());
+            assert!(!outside.path().join("escape").exists());
+        }
+    }
+
     #[test]
     fn move_destination_is_existing_and_scoped() {
         let temp = tempfile::tempdir().unwrap();

@@ -6,7 +6,7 @@ import { driveSupported } from "./platform";
 export type UploadItem = { path: string; state: "uploading" | "uploaded" | "local" | "error"; message: string; missingDriveId?: string };
 export type SyncChange = { path: string; previousPath: string };
 type Report = { root: string; folderUrl: string; items: UploadItem[]; changes?: SyncChange[]; uploaded?: boolean };
-type SyncContext = { roots: string[]; focusedFile?: () => { root: string; path: string } | null; protectedPaths: (root: string) => string[]; onDeleted?: (root: string, path: string) => Promise<void>; onComplete: (root: string, changes: SyncChange[]) => Promise<void> };
+type SyncContext = { roots: string[]; focusedFile?: () => { root: string; path: string } | null; protectedPaths: (root: string) => string[]; onDeleted?: (root: string, path: string) => Promise<void>; onFolders?: (root: string) => Promise<void>; onComplete: (root: string, changes: SyncChange[]) => Promise<void> };
 export function useDriveUploads(connected: boolean) {
   const context = useRef<SyncContext | null>(null);
   const queuedRoots = useRef(new Set<string>());
@@ -59,6 +59,7 @@ export function useDriveUploads(connected: boolean) {
           for (const item of report.items) next[`${root}\n${item.path}`] = item;
           return JSON.stringify(old) === JSON.stringify(next) ? old : next;
         });
+        if (!onlyPath && !report.changes?.length) await context.current?.onFolders?.(root);
         await context.current?.onComplete(root, report.changes ?? []);
         const failed = report.items.filter(item => item.state === "error");
         const changed = !!report.uploaded || !!report.changes?.length;

@@ -41,7 +41,8 @@ export async function openWorkspace(root: string, expandedDirectories: string[] 
     return { ...demoWorkspace };
   }
   let folder = await invoke<Workspace>("open_workspace", { root });
-  if (folder.directories) {
+  if (folder.cloudSpace) folder = { ...folder, expandedDirectories };
+  if (folder.directories && !folder.cloudSpace) {
     folder = { ...folder, expandedDirectories };
     // Restore only explicitly expanded branches, never traverse the whole root.
     const listings = await Promise.all(expandedDirectories.map(async path => {
@@ -298,6 +299,10 @@ export async function createNote(root: string, extension = DEFAULT_EXTENSION): P
   demoWorkspace.files = [...demoWorkspace.files, { path, name: path }];
   persistDemoFiles();
   return path;
+}
+export async function createFolder(root: string, path: string): Promise<string> {
+  if (root !== "demo") return invoke("create_folder", { root, path });
+  throw new Error("Folder creation is available in native workspaces.");
 }
 export async function renameNote(root: string, path: string, name: string): Promise<string> {
   if (!name.trim() || /[/\\:*?"<>|\x00-\x1f\x7f]/.test(name) || name === "." || name === ".." || name === ".nova")

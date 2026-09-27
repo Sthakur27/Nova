@@ -151,7 +151,7 @@ fn action(baseline: Option<&str>, local: &str, remote: &str) -> Action {
         Action::Conflict
     }
 }
-fn local_target(root: &Path, path: &str) -> Result<PathBuf, String> {
+pub(super) fn local_target(root: &Path, path: &str) -> Result<PathBuf, String> {
     if path.is_empty()
         || !path
             .split('/')
@@ -1026,27 +1026,50 @@ mod integration_tests {
         assert_eq!(drive.folder("base","different-workspace-key","Renamed").unwrap(),"created-id");
     }
     #[test]
-    fn local_rename_updates_same_id_with_conditional_put_never_post() {
+    fn empty_folder_reservation_is_reused_and_missing_remote_folder_is_not_recreated() {
         let server = Server::new("baseline");
         let drive = server.drive();
-        let linked = json!({"id":"stable-id","name":"old.txt","parents":["parent"],"appProperties":{"novaKey":"original-key"}});
-        let id = drive
-            .upload_file(
-                "parent",
-                "original-key",
-                "new.txt",
-                b"baseline",
-                Some(&crate::revision(b"baseline")),
-                Some(&linked),
-                None,
-            )
-            .unwrap();
-        assert_eq!(id, "stable-id");
-        let requests = server.requests.lock().unwrap();
-        assert_eq!(requests.len(), 3);
-        assert!(requests[2].starts_with("PUT /upload/stable-id"));
-        assert!(requests[2].to_lowercase().contains("if-match: \"guard\""));
-        assert!(requests[2].contains("\"title\":\"new.txt\""));
-        assert!(!requests.iter().any(|r| r.starts_with("POST")));
+        let dir = tempfile::tempdir().unwrap();
+        let mut registry = json!({"driveFolders":{"account":{"created-id":{"id":"created-id","localPath":"Empty","pending":true}}}});
+        crate::write_registry(dir.path(), registry.clone(), &[]).unwrap();
+        let mut known = HashSet::new();
+        assert_eq!(ensure_folder(&drive, dir.path(), "account", "root", "Empty", &mut known).unwrap(), "created-id");
+        assert_eq!(ensure_folder(&drive, dir.path(), "account", "root", "Empty", &mut known).unwrap(), "created-id");
+        assert_eq!(server.requests.lock().unwrap().len(), 1);
+        registry["driveFolders"]["account"]["created-id"]["pending"] = json!(false);
+        crate::write_registry(dir.path(), registry, &[]).unwrap();
+        assert!(ensure_folder(&drive, dir.path(), "account", "root", "Empty", &mut HashSet::new()).is_err());
+        assert_eq!(server.requests.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn local_rename_updates_same_id_with_conditional_put_never_post() {
+        for destination in ["parent", "nested-folder", "workspace-root"] {
+            let server = Server::new("baseline");
+            let drive = server.drive();
+            let linked = json!({"id":"stable-id","name":"old.txt","parents":["parent"],"appProperties":{"novaKey":"original-key"}});
+            let id = drive
+                .upload_file(
+                    destination,
+                    "original-key",
+                    "new.txt",
+                    b"baseline",
+                    Some(&crate::revision(b"baseline")),
+                    Some(&linked),
+                    None,
+                )
+                .unwrap();
+            assert_eq!(id, "stable-id");
+            let requests = server.requests.lock().unwrap();
+            assert_eq!(requests.len(), 3);
+            assert!(requests[2].starts_with("PUT /upload/stable-id"));
+            assert!(requests[2].to_lowercase().contains("if-match: \"guard\""));
+            assert!(requests[2].contains("\"title\":\"new.txt\""));
+            assert!(!requests.iter().any(|r| r.starts_with("POST")));
+            if destination != "parent" {
+                assert!(requests[2].contains(&format!("addParents={destination}")));
+                assert!(requests[2].contains("removeParents=parent"));
+            }
+        }
     }
 }

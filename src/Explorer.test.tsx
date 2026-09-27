@@ -174,13 +174,13 @@ it.each(["Cloud", "Local"])("reveals a switched tab in a collapsed %s section an
     await act(async () => root.render(<Harness activeRoot={targetRoot} activePath="deep/nested/note.md" />));
     expect(host.querySelector<HTMLElement>(`#explorer-${kind.toLowerCase()}`)!.hidden).toBe(false);
     expect(host.querySelector(".file-row.active .file-open")?.getAttribute("title")).toBe("deep/nested/note.md");
-    expect(onLoadDirectory.mock.calls).toEqual([[targetRoot, "deep"], [targetRoot, "deep/nested"]]);
+    expect(onLoadDirectory.mock.calls).toEqual(kind === "Cloud" ? [] : [[targetRoot, "deep"], [targetRoot, "deep/nested"]]);
     expect(scroll).toHaveBeenCalledExactlyOnceWith({ block: "nearest", inline: "nearest" });
     expect(host.querySelector(".nova-star, .file-star, .stars-toggle")).toBeNull();
     // A subsequent manual collapse stays collapsed until another tab is selected.
     await act(async () => host.querySelector<HTMLButtonElement>(`[aria-label="${kind} folder"]`)!.click());
     expect(host.querySelector(`[aria-label="${kind} folder"]`)?.getAttribute("aria-expanded")).toBe("false");
-    expect(onLoadDirectory).toHaveBeenCalledTimes(2);
+    expect(onLoadDirectory).toHaveBeenCalledTimes(kind === "Cloud" ? 0 : 2);
     const sectionToggle = host.querySelector<HTMLButtonElement>(`[aria-controls="explorer-${kind.toLowerCase()}"]`)!;
     await act(async () => sectionToggle.click());
     expect(sectionToggle.getAttribute("aria-expanded")).toBe("false");
@@ -257,4 +257,27 @@ it("creates in the collapsed local folder while Cloud is active without toggling
     await act(async () => create.click());
     expect(onNew).toHaveBeenCalledOnce();
   } finally { await act(async () => root.unmount()); host.remove(); localStorage.clear(); vi.unstubAllGlobals(); }
+});
+
+it("shows empty Cloud folders and exposes folder creation", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  localStorage.clear();
+  const host = document.createElement("div"), root = createRoot(host);
+  document.body.append(host);
+  const folder: Workspace = {root:"/cloud",name:"Notes",files:[],directories:["Empty"],collapsed:false,
+    cloudSpace:{id:"id",name:"Notes",account:"account"}};
+  const onNewFolder = vi.fn(), onLoadDirectory = vi.fn(), noop = () => {};
+  try {
+    await act(async () => root.render(<Explorer folders={[folder]} activeRoot="" activePath=""
+      onNewFolder={onNewFolder} onLoadDirectory={onLoadDirectory} onOpen={noop} onRename={noop}
+      onFileAction={noop} onChange={noop} onRemove={noop} onRefresh={noop} onAdd={noop} externalDrag={false}/>));
+    expect(host.querySelector(".folder-row")?.textContent).toContain("Empty");
+    const create = [...host.querySelectorAll("button")].find(button => button.textContent === "New folder…")!;
+    await act(async () => create.click());
+    expect(onNewFolder).toHaveBeenCalledWith(folder);
+    expect(onLoadDirectory).not.toHaveBeenCalled();
+  } finally {
+    await act(async () => root.unmount());
+    host.remove(); vi.unstubAllGlobals();
+  }
 });

@@ -81,11 +81,24 @@ retains local and Drive files. Mobile returns to setup. It does not revoke Googl
 app authorization. Existing Local folders and legacy selections do not participate
 in the managed Cloud sync loop.
 
+## Organize Cloud notes
+
+Open a Cloud space’s **… → New folder…** and enter a name, or a nested path such as
+`Projects/Research`. Empty folders appear in Explorer and sync when connected.
+To move a note, use its **Move…** action, choose or enter an existing destination,
+or clear the destination to return it to the space’s root. On mobile, open the
+note’s **…** actions first. Create a folder before moving a note into it.
+
+Moves within a space update the existing Drive file instead of uploading a
+duplicate. Bookmarks, stars, recovery drafts, and open tabs follow the note on
+this device. Offline folder creation and moves sync after reconnection.
+Folder rename, folder deletion, and moving whole folders are not yet available.
+
 ## Limits
 
 - UTF-8 text files up to 32 MiB; initial downloads up to 512 MiB and 50,000 notes.
 - Google Docs conversion, attachments, bookmark/star sync, and automatic merging
-  are not available. Empty subfolders are not shown in the current Explorer.
+  are not available.
 - External filesystem renames are not inferred from file contents.
 - Other backup applications can still upload files in their own watched folders.
 - Browser previews and Android cannot connect to Drive.

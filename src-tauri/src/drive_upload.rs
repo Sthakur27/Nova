@@ -203,6 +203,34 @@ fn upload_workspace(app: tauri::AppHandle, root: PathBuf, protected_paths: Vec<S
     let root_id = crate::mobile_storage::identity(&app.path().app_data_dir().map_err(crate::err)?, &root)?;
     let mut report = Report { root: root_id, folder_url: format!("https://drive.google.com/drive/folders/{folder}"), items: Vec::new(), changes: Vec::new(), uploaded: false };
     let (remote, remote_folders) = reconcile::remote_tree_with_folders(&drive, &folder)?;
+    let mut known_folders = remote_folders.iter().map(|e| id(&e.file)).collect::<Result<std::collections::HashSet<_>,_>>()?;
+    {
+        let access = app.state::<Access>();
+        let _lock = access.writes.lock().map_err(crate::err)?;
+        let mut registry = crate::read_registry(&root)?;
+        if registry["cloudSpace"].is_object() {
+            for entry in &remote_folders {
+                let target = reconcile::local_target(&root, &entry.path)?;
+                fs::create_dir_all(target).map_err(crate::err)?;
+                let remote_id = id(&entry.file)?;
+                registry["driveFolders"][&account][&remote_id] = json!({"id":remote_id,"localPath":entry.path});
+            }
+            let stars = crate::registry_stars(&registry)?;
+            crate::write_registry(&root, registry, &stars)?;
+            if only_path.is_none() {
+                let pending = crate::read_registry(&root)?["cloudPendingFolders"].as_object().cloned().unwrap_or_default();
+                for directory in pending.keys() {
+                    if !reconcile::local_target(&root, directory)?.is_dir() { continue; }
+                    ensure_folder(&drive, &root, &account, &folder, directory, &mut known_folders)?;
+                    let mut registry = crate::read_registry(&root)?;
+                    if let Some(paths) = registry["cloudPendingFolders"].as_object_mut() { paths.remove(directory); }
+                    let stars = crate::registry_stars(&registry)?;
+                    crate::write_registry(&root, registry, &stars)?;
+                    report.uploaded = true;
+                }
+            }
+        }
+    }
     if only_path.is_none() && reconcile::workspace_unchanged(
         &root, &account, &remote, &app.path().app_data_dir().map_err(crate::err)?, &protected_paths,
     )? {
@@ -224,7 +252,7 @@ fn upload_workspace(app: tauri::AppHandle, root: PathBuf, protected_paths: Vec<S
         let stars=crate::registry_stars(&registry)?;crate::write_registry(&root,registry,&stars)?;
     }
     let blocked = reconcile::pull(&app, &drive, &root, &account, &remote, &protected_paths, &mut report, only_path.as_deref())?;
-    let mut known_folders = remote_folders.iter().map(|e| id(&e.file)).collect::<Result<std::collections::HashSet<_>,_>>()?;
+
     for file in crate::files_in(&root)? {
         if only_path.as_deref().is_some_and(|selected| selected != file.path) { continue; }
         if blocked.contains(&file.path) || protected_paths.contains(&file.path) { continue; }
@@ -241,37 +269,12 @@ fn upload_workspace(app: tauri::AppHandle, root: PathBuf, protected_paths: Vec<S
                 return Ok(false);
             }
             emit("uploading", "Uploading saved file…");
-            let mut parent = folder.clone();
             let parts: Vec<_> = file.path.split('/').collect();
-            for (index, part) in parts[..parts.len()-1].iter().enumerate() {
-                let path = parts[..=index].join("/");
+            let parent = {
                 let access = app.state::<Access>();
                 let _lock = access.writes.lock().map_err(crate::err)?;
-                let mut registry = crate::read_registry(&root)?;
-                let tracked = registry["driveFolders"][&account].as_object().into_iter().flat_map(|m|m.values())
-                    .filter(|v|v["localPath"].as_str() == Some(&path))
-                    .min_by_key(|v| !v["id"].as_str().is_some_and(|id|known_folders.contains(id))).cloned();
-                let folder_id = match tracked {
-                    Some(ref value) => id(value)?,
-                    None => drive.generate_id()?,
-                };
-                let exists = known_folders.contains(&folder_id);
-                if !exists {
-                    if tracked.as_ref().is_some_and(|v|v["pending"] != true) {
-                        return Err("The destination Drive folder was removed. Restore it before syncing.".into());
-                    }
-                    registry["driveFolders"][&account][&folder_id] = json!({"id":folder_id,"localPath":path,"pending":true});
-                    let stars = crate::registry_stars(&registry)?;
-                    crate::write_registry(&root, registry.clone(), &stars)?;
-                    let value: Value = checked(drive.client.post(&drive.api).bearer_auth(&drive.token)
-                        .json(&json!({"id":folder_id,"name":part,"mimeType":"application/vnd.google-apps.folder","parents":[parent],"appProperties":{"novaKey":folder_id}}))
-                        .send().map_err(network)?)?.json().map_err(network)?;
-                    if id(&value)? != folder_id { return Err("Drive folder identity changed.".into()); }
-                    known_folders.insert(folder_id.clone());
-                    // Keep the reservation until the next listing confirms it; retries use the same ID.
-                }
-                parent = folder_id;
-            }
+                ensure_folder(&drive, &root, &account, &folder, &parts[..parts.len()-1].join("/"), &mut known_folders)?
+            };
             if !allowed(&root,&file.path)? { return Err("Selection changed. File was not uploaded.".into()); }
             // Reserve a real Drive ID before creation. Retries never rediscover by name.
             let tracked = {
@@ -437,7 +440,42 @@ pub async fn drive_workspaces(auth: State<'_,DriveAuth>) -> Result<Vec<CloudWork
             .map(|v|Ok(CloudWorkspace {id:id(v)?,name:v["name"].as_str().unwrap_or("Notes").into()})).collect()
     }).await.map_err(crate::err)?
 }
-fn safe_name(name: &str) -> bool {
+fn ensure_folder(drive: &Drive, root: &Path, account: &str, folder: &str, directory: &str,
+    known_folders: &mut std::collections::HashSet<String>) -> Result<String, String> {
+    let mut parent = folder.to_string();
+    if directory.is_empty() { return Ok(parent); }
+    let parts: Vec<_> = directory.split('/').collect();
+    for (index, part) in parts.iter().enumerate() {
+        let path = parts[..=index].join("/");
+        let mut registry = crate::read_registry(root)?;
+        let tracked = registry["driveFolders"][&account].as_object().into_iter().flat_map(|m|m.values())
+            .filter(|v|v["localPath"].as_str() == Some(&path))
+            .min_by_key(|v| !v["id"].as_str().is_some_and(|id|known_folders.contains(id))).cloned();
+        let folder_id = match tracked {
+            Some(ref value) => id(value)?,
+            None => drive.generate_id()?,
+        };
+        let exists = known_folders.contains(&folder_id);
+        if !exists {
+            if tracked.as_ref().is_some_and(|v|v["pending"] != true) {
+                return Err("The destination Drive folder was removed. Restore it before syncing.".into());
+            }
+            registry["driveFolders"][&account][&folder_id] = json!({"id":folder_id,"localPath":path,"pending":true});
+            let stars = crate::registry_stars(&registry)?;
+            crate::write_registry(root, registry.clone(), &stars)?;
+            let value: Value = checked(drive.client.post(&drive.api).bearer_auth(&drive.token)
+                .json(&json!({"id":folder_id,"name":part,"mimeType":"application/vnd.google-apps.folder","parents":[parent],"appProperties":{"novaKey":folder_id}}))
+                .send().map_err(network)?)?.json().map_err(network)?;
+            if id(&value)? != folder_id { return Err("Drive folder identity changed.".into()); }
+            known_folders.insert(folder_id.clone());
+            // Keep the reservation until the next listing confirms it; retries use the same ID.
+        }
+        parent = folder_id;
+    }
+    Ok(parent)
+}
+
+pub(crate) fn safe_name(name: &str) -> bool {
     #[cfg(target_os = "windows")]
     if !windows_name(name) { return false; }
     !name.is_empty() && name != "." && name != ".." && name != ".nova" && !name.contains(['/', '\\', ':']) && !name.chars().any(char::is_control)

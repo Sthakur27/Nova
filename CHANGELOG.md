@@ -8,6 +8,12 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 Entries describe source changes; availability in published installers has not been verified. The initial backfill covers commits through `7d47fbe`.
 
+### 2026-09-27
+
+#### Added
+
+- Create nested folders in Cloud spaces, including empty folders that sync across devices. Move notes between folders or back to the root using folder suggestions while retaining their Drive identity, bookmarks, stars, drafts, and open tabs.
+
 ### 2026-09-26
 
 #### Added

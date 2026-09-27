@@ -142,6 +142,16 @@ in Drive. `live_update_and_conflict_guard` creates a generated test folder,
 checks updates and stale-write rejection, then deletes that test folder. Both
 use the saved desktop connection; run only the intended test with `--ignored`.
 
+Cloud folder creation queues paths in the protected `cloudPendingFolders` registry
+field. Sync reserves Drive folder IDs before creation, reuses reservations on retry,
+and materializes remote empty folders without following symlinks. Cloud Explorer
+receives a complete directory listing; Local retains lazy directory paging.
+Folder paths are not note identities: note moves continue to update the same
+Drive ID with conditional parent changes. Native regression tests use temporary
+filesystem folders and a loopback HTTP server; live multi-device Drive verification
+remains separate.
+
+
 ## Google Drive connection test
 
 Use `python3 scripts/test-drive-connection.py --help` for the standalone Drive smoke test, which performs manual OAuth, generated-note upload, and exact read-back checks. It is independent of the app’s stored connection and is not run by the normal test suite.

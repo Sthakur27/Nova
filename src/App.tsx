@@ -102,6 +102,7 @@ import Palette from "./Palette";
 import WorkspaceSearch, { type SearchRequest } from "./WorkspaceSearch";
 import { installWorkspaceSearchShortcut } from "./workspaceSearchShortcut";
 import Explorer from "./Explorer";
+import { createFolder } from "./storage";
 import FileActionDialog from "./FileActionDialog";
 import RenameDialog from "./RenameDialog";
 import FormatToolbar from "./FormatToolbar";
@@ -176,7 +177,7 @@ export default function App() {
   const [defaultExtension, setDefaultExtension, extensionError] = usePreference<string>("default-extension", DEFAULT_EXTENSION);
   const starQueue = useRef(Promise.resolve());
   const createdNotes = useRef(new Map<string, { root: string; path: string }>());
-  const [fileAction, setFileAction] = useState<{ folder: Workspace; path: string; action: "move" | "delete" } | null>(null);
+  const [fileAction, setFileAction] = useState<{ folder: Workspace; path: string; action: "move" | "delete" | "folder" } | null>(null);
   const drive = useDriveConnection();
   const uploads = useDriveUploads(drive.status.connected);
   const [syncFolder, setSyncFolder] = useState<Workspace | null>(null);
@@ -1025,7 +1026,7 @@ export default function App() {
       if (nextPath !== oldPath) createdNotes.current.delete(tabId({ root: folder.root, path: oldPath }));
       name = nextPath.split("/").at(-1)!;
       const updated = { ...folder, ...(await openWorkspace(folder.root, folder.expandedDirectories)) };
-      setFolders(old => old.map(f => f.root === folder.root ? { ...f, files: updated.files, syncPolicy: updated.syncPolicy, starred: updated.starred } : f));
+      setFolders(old => old.map(f => f.root === folder.root ? { ...f, files: updated.files, directories: updated.directories, syncPolicy: updated.syncPolicy, starred: updated.starred } : f));
       const oldId = tabId({ root: folder.root, path: oldPath });
       paneActions.current?.capture();
       renamePaneTab(oldId, { root: folder.root, path: nextPath, pinned: true });
@@ -1386,6 +1387,7 @@ export default function App() {
       }
       await refreshFolder(root);
     },
+    onFolders: refreshFolder,
     onComplete: async (root, changes) => {
       if (!changes.length) return;
       await refreshFolder(root);
@@ -1431,7 +1433,7 @@ export default function App() {
   };
   const loadDirectory = async (root: string, path: string, more = false) => {
     const folder = current.current.folders.find(folder => folder.root === root);
-    if (!folder?.directories) return;
+    if (!folder?.directories || folder.cloudSpace) return;
     const key = JSON.stringify([root, path]);
     if (directoryRequests.current.has(key)) return;
     const ticket = Symbol(); directoryRequests.current.set(key, ticket);
@@ -2091,6 +2093,7 @@ export default function App() {
           }}
           onSync={drive.status.connected ? folder => showSync(folder) : undefined}
           onNew={folder => void newTab(folder)}
+          onNewFolder={folder => setFileAction({ folder, path: "", action: "folder" })}
           onCloudMove={drive.status.connected ? (folder, path) => void moveToCloud(folder, path) : undefined}
           syncBusy={!!uploads.activeRoot}
           onRename={(folder, path) => setRenameTarget({ folder, path })}
@@ -2538,6 +2541,16 @@ export default function App() {
       {closePrompt && <CloseTabDialog path={closePrompt.path} onChoose={closePrompt.resolve} />}
       {fileAction && <FileActionDialog {...fileAction} onClose={() => setFileAction(null)} onSubmit={async destination => {
         const { folder, path: targetPath, action } = fileAction;
+        if (action === "folder") {
+          if (operation.current) throw new Error("Finish the current operation first.");
+          operation.current = true;
+          try {
+            await createFolder(folder.root, destination);
+            uploads.schedule(folder.root);
+            await refreshFolder(folder.root);
+          } finally { operation.current = false; }
+          return;
+        }
         if (action === "move") { await renameFile(folder, targetPath, destination, true); return; }
         if (operation.current || saveInFlight.current || voiceBusy.current) throw new Error("Finish the current operation before deleting.");
         operation.current = true;

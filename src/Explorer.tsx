@@ -168,6 +168,7 @@ type Props = {
   onRemove: (root: string) => void;
   onRefresh: (root: string) => void;
   onNew?: (folder: Workspace) => void;
+  onNewFolder?: (folder: Workspace) => void;
   onCloudMove?: (folder: Workspace, path: string) => void;
   onSync?: (folder: Workspace) => void;
   onToggleSync?: (folder: Workspace, path: string) => void;
@@ -188,7 +189,7 @@ export default function Explorer({
   onRemove,
   onRefresh,
   onAdd,
-  onSync, onCloudMove, onNew,
+  onSync, onCloudMove, onNew, onNewFolder,
   onToggleSync, syncBusy = false,
   externalDrag,
 }: Props) {
@@ -239,7 +240,7 @@ export default function Explorer({
     if (folder.cloudSpace) setCloudCollapsed(false);
     else setLocalCollapsed(false);
     onChange(folders.map(item => item.root === activeRoot ? revealFile(item, activePath) : item));
-    if (folder.directories) {
+    if (folder.directories && !folder.cloudSpace) {
       for (const directory of fileAncestors(activePath)) {
         if (!folder.expandedDirectories?.includes(directory)) onLoadDirectory?.(activeRoot, directory);
       }
@@ -358,6 +359,7 @@ export default function Explorer({
                 </summary>
                 <div>
                   {onNew && <button onClick={event => { event.currentTarget.closest("details")?.removeAttribute("open"); onNew(folder); }}><Plus size={13} />New note</button>}
+                  {onNewFolder && folder.cloudSpace && <button disabled={!!folder.error} onClick={event => { event.currentTarget.closest("details")?.removeAttribute("open"); onNewFolder(folder); }}><Folder size={13}/>New folder…</button>}
                   {onSync && folder.cloudSpace && <button onClick={event => { event.currentTarget.closest("details")?.removeAttribute("open"); onSync(folder); }}>Cloud settings…</button>}
                   <button onClick={() => onRefresh(folder.root)}>
                     <RefreshCw size={13} />

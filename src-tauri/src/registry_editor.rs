@@ -11,7 +11,7 @@ const MAX_REGISTRY: usize = 4 * 1024 * 1024;
 // another remote object. Keep them visible, but require the Cloud controls to change them.
 const MANAGED: &[&str] = &[
     "cloudSpace", "driveWorkspace", "driveRegistryVersion", "driveObjects",
-    "driveFolders", "driveFiles", "driveReceipts", "driveUnresolved",
+    "cloudPendingFolders", "driveFolders", "driveFiles", "driveReceipts", "driveUnresolved",
     "syncDeletedPaths", "mobileDriveKey",
 ];
 
