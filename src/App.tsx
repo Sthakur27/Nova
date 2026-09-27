@@ -2,7 +2,7 @@ import SyncAttention from "./SyncAttention";
 import FocusStateNav from "./FocusStateNav";
 import ReadPaneSurface from "./ReadPaneSurface";
 import SavedStatesPanel from "./SavedStatesPanel";
-import { parseSavedStates, savedStatesKey, savedStateShortcut, suggestedStateName, sameStateLayout, reorderSavedStates, type SavedState } from "./savedStates";
+import { parseSavedStates, savedStatesStorageKey, readSavedStates, savedStateShortcut, suggestedStateName, sameStateLayout, reorderSavedStates, type SavedState } from "./savedStates";
 import { LocalChangeRetry, prepareLocalReload } from "./localFileReload";
 import { useLocalChanges } from "./useLocalChanges";
 import { AppUpdateIndicator } from "./AppUpdate";
@@ -234,9 +234,7 @@ export default function App() {
   const [previousState, setPreviousState] = useState<SavedState | null>(null);
   const savedLayoutBaseline = useRef<SavedState | null>(null);
   const [savedStatesError, setSavedStatesError] = useState("");
-  const [savedStates, setSavedStates] = useState(() => {
-    try { return parseSavedStates(localStorage.getItem(savedStatesKey)); } catch { return parseSavedStates(null); }
-  });
+  const [savedStates, setSavedStates] = useState(() => parseSavedStates(null));
   const [restoredState, setRestoredState] = useState<{ generation: number; views: SavedState["views"] }>({ generation: 0, views: {} });
   const readSurfaces = useRef(new Map<string, HTMLDivElement>());
   const paneEditors = useRef(new Map<string, EditorHandle>());
@@ -288,6 +286,26 @@ export default function App() {
   const directoryRequests = useRef(new Map<string, symbol>());
   const localSwitchRequest = useRef(0);
   const [foldersReady, setFoldersReady] = useState(false);
+  const statesStorageKey = savedStatesStorageKey(folders);
+  const stateFolderIdentities = JSON.stringify(folders.map(folder => [folder.root, !!folder.cloudSpace]));
+  useEffect(() => {
+    setPreviousState(null);
+    savedLayoutBaseline.current = null;
+    setSavedStatesError("");
+  }, [statesStorageKey]);
+  useEffect(() => {
+    if (!foldersReady) return;
+    const refresh = () => {
+      try { setSavedStates(readSavedStates(localStorage, folders)); }
+      catch (error) { setSavedStates(parseSavedStates(null)); setSavedStatesError(`Unable to read saved states: ${String(error)}`); }
+    };
+    refresh();
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === statesStorageKey || event.key === null) refresh();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [foldersReady, statesStorageKey, stateFolderIdentities]);
   const [externalDrag, setExternalDrag] = useState(false);
   const [workspace, setWorkspace] = useState<Workspace>(demoWorkspace);
   const [path, setPath] = useState("Getting started.md");
@@ -543,12 +561,12 @@ export default function App() {
   const reportSavedStateError = (message: string) => { setSavedStatesError(message); setNotice(message); };
   const openSavedStates = () => {
     setSavedStatesError("");
-    try { setSavedStates(parseSavedStates(localStorage.getItem(savedStatesKey))); }
+    try { setSavedStates(readSavedStates(localStorage, folders)); }
     catch (error) { reportSavedStateError(`Unable to read saved states: ${String(error)}`); }
     setBookmarkView("states"); setRail(true); setFocusMode(false);
   };
   const persistSavedStates = (next: (SavedState | null)[]) => {
-    try { localStorage.setItem(savedStatesKey, JSON.stringify(next)); setSavedStates(parseSavedStates(JSON.stringify(next))); return true; }
+    try { localStorage.setItem(statesStorageKey, JSON.stringify(next)); setSavedStates(parseSavedStates(JSON.stringify(next))); return true; }
     catch (error) { reportSavedStateError(`Unable to save states: ${String(error)}`); return false; }
   };
   const captureCurrentState = (name: string): SavedState => {
@@ -570,7 +588,7 @@ export default function App() {
     if (!data || operation.current || saveInFlight.current || voiceBusy.current) { reportSavedStateError("Open a note and finish the current operation before saving a state."); return false; }
     const captured = captureCurrentState(name);
     let next: (SavedState | null)[];
-    try { next = parseSavedStates(localStorage.getItem(savedStatesKey)); } catch (error) { reportSavedStateError(String(error)); return false; }
+    try { next = readSavedStates(localStorage, folders); } catch (error) { reportSavedStateError(String(error)); return false; }
     if ((expected && JSON.stringify(next[slot]) !== JSON.stringify(expected)) || (!expected && next[slot])) {
       setSavedStates(next); reportSavedStateError("This slot changed. Review the latest state before saving over it."); return false;
     }
@@ -580,7 +598,7 @@ export default function App() {
   };
   const restoreSavedState = async (slot: number | "previous") => {
     let state: SavedState | null;
-    try { state = slot === "previous" ? previousState : parseSavedStates(localStorage.getItem(savedStatesKey))[slot]; }
+    try { state = slot === "previous" ? previousState : readSavedStates(localStorage, folders)[slot]; }
     catch (error) { reportSavedStateError(String(error)); return; }
     if (!state) { setNotice(slot === "previous" ? "There is no previous state to return to." : `Saved state ${slot + 1} is empty.`); return; }
     if (operation.current || saveInFlight.current || voiceBusy.current || !foldersReady) { reportSavedStateError("Finish the current operation before restoring a state."); return; }
@@ -2045,11 +2063,11 @@ export default function App() {
           </span>
         </button>
       )}
-      {!compact && focusModeActive && <FocusStateNav slots={savedStates} previousState={previousState}
+      {!compact && focusModeActive && <FocusStateNav key={statesStorageKey} slots={savedStates} previousState={previousState}
         suggestedName={suggestedStateName(tabs, paneLayout)} error={savedStatesError} onRestore={restoreSavedState}
         onQuickSave={() => {
           try {
-            const freeSlot = parseSavedStates(localStorage.getItem(savedStatesKey)).findIndex(state => !state);
+            const freeSlot = readSavedStates(localStorage, folders).findIndex(state => !state);
             if (freeSlot < 0) { reportSavedStateError("All nine slots are in use. Update or delete a state from the sidebar."); return false; }
             return saveCurrentState(freeSlot, suggestedStateName(tabsRef.current, paneLayoutRef.current));
           } catch (error) { reportSavedStateError(String(error)); return false; }
@@ -2387,9 +2405,9 @@ export default function App() {
               </button>}
             </div>
           </header>
-          {bookmarkView === "states" ? <SavedStatesPanel suggestedName={suggestedStateName(tabs, paneLayout)} previousState={previousState} onReturn={() => restoreSavedState("previous")} error={savedStatesError} slots={savedStates} onSave={saveCurrentState} onRestore={restoreSavedState}
+          {bookmarkView === "states" ? <SavedStatesPanel key={statesStorageKey} suggestedName={suggestedStateName(tabs, paneLayout)} previousState={previousState} onReturn={() => restoreSavedState("previous")} error={savedStatesError} slots={savedStates} onSave={saveCurrentState} onRestore={restoreSavedState}
             onRename={(slot, name, expected) => {
-              const latest = parseSavedStates(localStorage.getItem(savedStatesKey));
+              const latest = readSavedStates(localStorage, folders);
               if (JSON.stringify(latest[slot]) !== JSON.stringify(expected)) {
                 setSavedStates(latest);
                 throw new Error("This state changed in another window. Close this dialog and try again.");
@@ -2400,12 +2418,12 @@ export default function App() {
             }}
             onReorder={(from, before) => {
               try {
-                const latest = parseSavedStates(localStorage.getItem(savedStatesKey));
+                const latest = readSavedStates(localStorage, folders);
                 if (JSON.stringify(latest) !== JSON.stringify(savedStates)) { setSavedStates(latest); reportSavedStateError("Saved states changed in another window. Try reordering again."); return; }
                 if (persistSavedStates(reorderSavedStates(latest, from, before))) setSavedStatesError("");
               } catch (error) { reportSavedStateError(String(error)); }
             }}
-            onDelete={slot => { try { const next = parseSavedStates(localStorage.getItem(savedStatesKey)); next[slot] = null; if (persistSavedStates(next)) setSavedStatesError(""); } catch (error) { reportSavedStateError(String(error)); } }} /> : bookmarkView === "outline" ? <HeadingOutline text={preview} markdown={isMarkdown} hasDocument={!!data}
+            onDelete={slot => { try { const next = readSavedStates(localStorage, folders); next[slot] = null; if (persistSavedStates(next)) setSavedStatesError(""); } catch (error) { reportSavedStateError(String(error)); } }} /> : bookmarkView === "outline" ? <HeadingOutline text={preview} markdown={isMarkdown} hasDocument={!!data}
             onJump={from => { setMobileView("editor"); requestAnimationFrame(() => jump(from)); }} /> : bookmarkView === "files" ? <StarredFiles folders={folders} activeRoot={workspace.root} activePath={path}
             onOpen={(folder, file, pinned) => void openNote(file, undefined, folder, undefined, pinned)} onStar={starFile} /> : <>
           <ScopeToggle label="Bookmark scope" scope={bookmarkScope} onChange={setBookmarkScope} currentLabel="Current tab" allLabel="All bookmarks" />

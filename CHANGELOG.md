@@ -22,6 +22,8 @@ Entries describe source changes; availability in published installers has not be
 
 #### Fixed
 
+- Saved layouts and their shortcuts now belong to the open Local folder, with a separate nine-slot set for Cloud-only windows. Switching folders no longer shows layouts from a different folder; compatible older layouts are retained.
+
 - Desktop tab strips automatically reveal the active file when opening, creating, or switching notes, including in narrow split panes.
 
 - Refresh Cloud now syncs notes and folders inside existing spaces on desktop and iOS. Full sync requests wait behind focused-note checks instead of being skipped, and saves made during a running sync receive a follow-up pass.

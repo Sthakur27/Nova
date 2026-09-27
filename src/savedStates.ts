@@ -2,6 +2,28 @@ import { parsePaneLayout, paneLeaves, type PaneNode } from "./paneLayout";
 import { tabId, type NoteTab } from "./tabs";
 
 export const savedStatesKey = "nova:saved-states:v1";
+type StateFolder = { root: string; cloudSpace?: unknown };
+
+/** The open Local folder owns mixed layouts, even when a Cloud tab is active.
+ * Cloud-only and no-Local windows share their own independent slots. */
+export function savedStatesStorageKey(folders: StateFolder[]): string {
+  const roots = [...new Set(folders.filter(folder => !folder.cloudSpace).map(folder => folder.root))].sort();
+  return `nova:saved-states:v2:${JSON.stringify(roots.length ? ["local", ...roots] : ["cloud-only"])}`;
+}
+
+export function readSavedStates(storage: Pick<Storage, "getItem">, folders: StateFolder[]): (SavedState | null)[] {
+  const raw = storage.getItem(savedStatesStorageKey(folders));
+  if (raw !== null) return parseSavedStates(raw);
+  // Keep the legacy source intact so opening another folder can recover its slots.
+  // An explicit scoped write (including deletion of all slots) supersedes it.
+  const localRoots = folders.filter(folder => !folder.cloudSpace).map(folder => folder.root);
+  return parseSavedStates(storage.getItem(savedStatesKey)).map(state => {
+    if (!state || !state.tabs.every(tab => folders.some(folder => folder.root === tab.root))) return null;
+    if (localRoots.length && !localRoots.every(root => state.tabs.some(tab => tab.root === root))) return null;
+    return state;
+  });
+}
+
 export type SavedState = {
   name: string; tabs: NoteTab[]; layout: PaneNode; activePane: string;
   views: Record<string, { scrollTop: number }>;

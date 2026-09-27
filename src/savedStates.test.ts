@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { parseSavedStates, savedStateShortcut, sameStateLayout, suggestedStateName, reorderSavedStates, type SavedState } from "./savedStates";
+import { parseSavedStates, savedStatesKey, savedStatesStorageKey, readSavedStates, savedStateShortcut, sameStateLayout, suggestedStateName, reorderSavedStates, type SavedState } from "./savedStates";
 import { initialPane, movePaneTab, reconcilePanes } from "./paneLayout";
 import { tabId } from "./tabs";
 
@@ -66,4 +66,55 @@ it("reorders occupied slots while preserving holes and state data", () => {
   expect(reorderSavedStates(moved, 0, null)).toEqual(slots);
   expect(reorderSavedStates(slots, 1, 0)).toBe(slots);
   expect(reorderSavedStates(slots, 0, 1)).toBe(slots);
+});
+
+const cloudFolders = [{ root: "cloud-a", cloudSpace: {} }, { root: "cloud-b", cloudSpace: {} }];
+const folderA = [...cloudFolders, { root: "/notes/a" }];
+const folderB = [...cloudFolders, { root: "/notes/b" }];
+function memoryStorage() {
+  const values = new Map<string, string>();
+  return { getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => { values.set(key, value); } };
+}
+function localState(root: string): SavedState {
+  const tabs = [{ root, path: "note.md", pinned: true }];
+  return { name: root, tabs, layout: reconcilePanes(initialPane(), tabs.map(tabId), "main"), activePane: "main", views: {} };
+}
+it("keeps independent slots across folder switches, Cloud-only windows, and reloads", () => {
+  const storage = memoryStorage();
+  const a = localState("/notes/a"), b = localState("/notes/b");
+  for (const [folders, value] of [[folderA, a], [folderB, b], [cloudFolders, state]] as const)
+    storage.setItem(savedStatesStorageKey([...folders]), JSON.stringify([value]));
+  expect(readSavedStates(storage, folderA)[0]).toEqual(a);
+  expect(readSavedStates(storage, folderB)[0]).toEqual(b);
+  expect(readSavedStates(storage, cloudFolders)[0]).toEqual(state);
+  storage.setItem(savedStatesStorageKey(folderB), JSON.stringify([]));
+  expect(readSavedStates(storage, folderB).every(slot => slot === null)).toBe(true);
+  expect(readSavedStates(storage, folderA)[0]).toEqual(a);
+  expect(readSavedStates(storage, cloudFolders)[0]).toEqual(state);
+});
+it("keeps the folder scope stable across Cloud refreshes and folder ordering", () => {
+  expect(savedStatesStorageKey(folderA)).toBe(savedStatesStorageKey([{ root: "/notes/a" }]));
+  expect(savedStatesStorageKey(folderA)).toBe(savedStatesStorageKey([...folderA].reverse()));
+  expect(savedStatesStorageKey(cloudFolders)).toBe(savedStatesStorageKey([]));
+  expect(savedStatesStorageKey(folderA)).not.toBe(savedStatesStorageKey(folderB));
+});
+it("recovers compatible legacy slots without exposing other folders or resurrecting deleted states", () => {
+  const storage = memoryStorage();
+  const a = localState("/notes/a"), b = localState("/notes/b");
+  storage.setItem(savedStatesKey, JSON.stringify([a, state, b]));
+  expect(readSavedStates(storage, folderA).slice(0, 3)).toEqual([a, null, null]);
+  expect(readSavedStates(storage, folderB).slice(0, 3)).toEqual([null, null, b]);
+  expect(readSavedStates(storage, cloudFolders).slice(0, 3)).toEqual([null, state, null]);
+  storage.setItem(savedStatesStorageKey(folderA), JSON.stringify([]));
+  expect(readSavedStates(storage, folderA).every(slot => slot === null)).toBe(true);
+  expect(readSavedStates(storage, folderB)[2]).toEqual(b);
+  expect(JSON.parse(storage.getItem(savedStatesKey)!)).toEqual([a, state, b]);
+});
+it("keeps Cloud-only layouts saved in a Local context with that folder", () => {
+  const storage = memoryStorage();
+  storage.setItem(savedStatesStorageKey(folderA), JSON.stringify([state]));
+  expect(readSavedStates(storage, folderA)[0]).toEqual(state);
+  expect(readSavedStates(storage, folderB)[0]).toBeNull();
+  expect(readSavedStates(storage, cloudFolders)[0]).toBeNull();
 });
