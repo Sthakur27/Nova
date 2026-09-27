@@ -9,7 +9,7 @@ type Report = { root: string; folderUrl: string; items: UploadItem[]; changes?: 
 type SyncContext = { roots: string[]; focusedFile?: () => { root: string; path: string } | null; protectedPaths: (root: string) => string[]; onDeleted?: (root: string, path: string) => Promise<void>; onFolders?: (root: string) => Promise<void>; onComplete: (root: string, changes: SyncChange[]) => Promise<void> };
 export function useDriveUploads(connected: boolean) {
   const context = useRef<SyncContext | null>(null);
-  const queuedRoots = useRef(new Set<string>());
+  const queuedRoots = useRef(new Map<string, { onlyPath?: string; started: boolean; task: Promise<void> }>());
   const [activeRoot, setActiveRoot] = useState<string | null>(null);
   const [transferringRoot, setTransferringRoot] = useState<string | null>(null);
   const [items, setItems] = useState<Record<string, UploadItem>>({});
@@ -36,12 +36,17 @@ export function useDriveUploads(connected: boolean) {
   useEffect(() => () => { for (const timer of timers.current.values()) clearTimeout(timer); }, []);
   const upload = useCallback((root: string, onlyPath?: string) => {
     if (!driveSupported || root === "demo" || !root || !enabled.current) return Promise.resolve();
-    if (queuedRoots.current.has(root)) return queue.current;
-    queuedRoots.current.add(root);
+    const existing = queuedRoots.current.get(root);
+    // A focused check cannot satisfy a full discovery request. A running full
+    // pass also cannot cover changes saved after it took its snapshot.
+    if (existing && (onlyPath || (!existing.onlyPath && !existing.started))) return existing.task;
+    const entry = { onlyPath, started: false, task: Promise.resolve() };
+    queuedRoots.current.set(root, entry);
+    const release = () => { if (queuedRoots.current.get(root) === entry) queuedRoots.current.delete(root); };
     if (!onlyPath) { clearTimeout(timers.current.get(root)); timers.current.delete(root); }
     const task = queue.current.then(async () => {
-      if (!enabled.current || document.visibilityState === "hidden") { queuedRoots.current.delete(root); return; }
-      if (onlyPath && (!document.hasFocus() || context.current?.focusedFile?.()?.root !== root || context.current?.focusedFile?.()?.path !== onlyPath)) { queuedRoots.current.delete(root); return; }
+      if (!enabled.current || document.visibilityState === "hidden") { release(); return; }
+      if (onlyPath && (!document.hasFocus() || context.current?.focusedFile?.()?.root !== root || context.current?.focusedFile?.()?.path !== onlyPath)) { release(); return; }
       setActiveRoot(root);
       const version = versions.current[root] ?? 0;
       const protectedPaths = context.current?.protectedPaths(root) ?? [];
@@ -51,6 +56,7 @@ export function useDriveUploads(connected: boolean) {
           const protectedPaths = context.current?.protectedPaths(root) ?? [];
           if (!enabled.current || document.visibilityState === "hidden"
             || (onlyPath && (!document.hasFocus() || selected?.root !== root || selected.path !== onlyPath || protectedPaths.includes(onlyPath)))) return Promise.resolve(null);
+          entry.started = true;
           return invoke<Report>("drive_upload", {root, protectedPaths, ...(onlyPath ? {onlyPath} : {})});
         });
         if (!report) return;
@@ -76,8 +82,9 @@ export function useDriveUploads(connected: boolean) {
           setPending(old => old[root] ? {...old,[root]:false} : old);
         }
       } catch (error) { setErrors(old => ({...old,[root]:String(error)})); }
-      finally { queuedRoots.current.delete(root); setActiveRoot(null); setTransferringRoot(null); }
+      finally { release(); setActiveRoot(null); setTransferringRoot(null); }
     });
+    entry.task = task;
     queue.current = task;
     return task;
   }, []);

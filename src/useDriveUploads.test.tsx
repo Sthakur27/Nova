@@ -5,9 +5,86 @@ import { expect, it, vi } from "vitest";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { useDriveUploads, type DriveUploads } from "./useDriveUploads";
+import { driveTransfer } from "./driveTransfer";
 vi.mock("./platform", () => ({ driveSupported: true }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(async () => () => {}) }));
+
+it.each(["C:/Notes", "mobile-sync/stable-id"])("preserves full discovery behind a focused check for %s", async workspace => {
+  (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+  vi.useFakeTimers(); vi.mocked(invoke).mockReset();
+  const focus = vi.spyOn(document, "hasFocus").mockReturnValue(true);
+  let uploads!: DriveUploads;
+  const onComplete = vi.fn(async () => {});
+  function Harness() {
+    uploads = useDriveUploads(true);
+    uploads.configure({roots:[workspace], focusedFile:()=>({root:workspace,path:"open.md"}), protectedPaths:()=>["draft.md"], onComplete});
+    return null;
+  }
+  const root = createRoot(document.createElement("div"));
+  let finish!: (value: unknown) => void;
+  const report = {items:[],changes:[]};
+  try {
+    vi.mocked(invoke).mockResolvedValue(report);
+    await act(async () => root.render(<Harness />));
+    await act(async () => vi.advanceTimersByTimeAsync(2500));
+    vi.mocked(invoke).mockClear();
+    vi.mocked(invoke).mockImplementationOnce(() => new Promise(resolve => {finish = resolve;}));
+    await act(async () => vi.advanceTimersByTimeAsync(2500)); // Focused poll stays in flight.
+    await act(async () => vi.advanceTimersByTimeAsync(55000)); // Full minute check must wait.
+    expect(invoke).toHaveBeenCalledTimes(1);
+    vi.mocked(invoke).mockResolvedValueOnce({items:[],changes:[{path:"New from another device.md",previousPath:""}]});
+    let refresh!: Promise<void>;
+    await act(async () => { refresh = uploads.upload(workspace); }); // Coalesces with queued full pass.
+    await act(async () => { finish(report); await refresh; });
+    expect(invoke).toHaveBeenCalledTimes(2);
+    expect(invoke).toHaveBeenLastCalledWith("drive_upload", {root:workspace,protectedPaths:["draft.md"]});
+    expect(onComplete).toHaveBeenLastCalledWith(workspace,[{path:"New from another device.md",previousPath:""}]);
+  } finally { await act(async () => root.unmount()); focus.mockRestore(); vi.useRealTimers(); }
+});
+
+it("retains full requests while a focused check waits for discovery's transfer lock", async () => {
+  vi.mocked(invoke).mockReset();
+  const focus = vi.spyOn(document, "hasFocus").mockReturnValue(true);
+  let uploads!: DriveUploads;
+  function Harness() {
+    uploads = useDriveUploads(true);
+    uploads.configure({roots:[],focusedFile:()=>({root:"/notes",path:"open.md"}),protectedPaths:()=>[],onComplete:async()=>{}});
+    return null;
+  }
+  const root = createRoot(document.createElement("div"));
+  let release!: () => void;
+  const discovery = driveTransfer(() => new Promise<void>(resolve => {release=resolve;}));
+  try {
+    vi.mocked(invoke).mockResolvedValue({items:[]});
+    await act(async () => root.render(<Harness />));
+    let full!: Promise<void>;
+    await act(async () => { void uploads.upload("/notes","open.md"); full=uploads.upload("/notes"); });
+    expect(invoke).not.toHaveBeenCalled();
+    await act(async () => { release(); await discovery; await full; });
+    expect(invoke).toHaveBeenCalledTimes(2);
+    expect(invoke).toHaveBeenLastCalledWith("drive_upload",{root:"/notes",protectedPaths:[]});
+  } finally { await act(async () => root.unmount()); focus.mockRestore(); }
+});
+
+it("runs another full pass for a save whose debounce expires during sync", async () => {
+  vi.useFakeTimers(); vi.mocked(invoke).mockReset();
+  let uploads!: DriveUploads;
+  function Harness() { uploads=useDriveUploads(true); return null; }
+  const root=createRoot(document.createElement("div"));
+  let finish!: (value: unknown) => void;
+  try {
+    vi.mocked(invoke).mockImplementationOnce(() => new Promise(resolve => {finish=resolve;})).mockResolvedValue({items:[],uploaded:true});
+    await act(async () => root.render(<Harness />));
+    await act(async () => { void uploads.upload("/notes"); });
+    await act(async () => { uploads.schedule("/notes"); });
+    await act(async () => vi.advanceTimersByTimeAsync(1500));
+    let completed!: Promise<void>;
+    await act(async () => { completed=uploads.upload("/notes"); finish({items:[]}); await completed; });
+    expect(invoke).toHaveBeenCalledTimes(2);
+    expect(uploads.pending["/notes"]).toBe(false);
+  } finally { await act(async () => root.unmount()); vi.useRealTimers(); }
+});
 it("keeps untouched notes local and replaces their status after the first upload", async () => {
   vi.mocked(invoke).mockReset();
   (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;

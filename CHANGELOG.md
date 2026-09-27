@@ -10,6 +10,10 @@ Entries describe source changes; availability in published installers has not be
 
 ### 2026-09-27
 
+#### Fixed
+
+- Refresh Cloud now syncs notes and folders inside existing spaces on desktop and iOS. Full sync requests wait behind focused-note checks instead of being skipped, and saves made during a running sync receive a follow-up pass.
+
 #### Added
 
 - Create nested folders in Cloud spaces, including empty folders that sync across devices. Move notes between folders or back to the root using folder suggestions while retaining their Drive identity, bookmarks, stars, drafts, and open tabs.

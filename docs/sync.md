@@ -33,6 +33,11 @@ notes. They then upload automatically. The Save control remains for Local notes.
 Status distinguishes saving on this device, waiting to sync, syncing, up to date,
 and sync errors. Cloud settings expose retry and connection errors.
 
+**Refresh Cloud** discovers spaces and syncs the notes and folders inside each
+space, including spaces already on this device. This works on desktop and iOS.
+Full checks wait behind an active focused-note check, so new files are still
+discovered. A save made during a running sync queues a follow-up check.
+
 New empty Untitled notes stay on the device until their saved content changes or
 they are renamed. Deleting an untouched note therefore creates no Drive copy.
 Notes that already have a Drive identity continue syncing even when emptied.

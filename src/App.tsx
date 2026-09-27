@@ -1258,7 +1258,7 @@ export default function App() {
       const firstNote = spaces[0].files.find(file => file.path !== ".nova");
       if (firstNote) void openNote(firstNote.path, undefined, spaces[0]);
     }
-  });
+  }, uploads.upload);
   async function moveToCloud(folder: Workspace, notePath: string) {
     try {
       const target = current.current.folders.find(f => !!f.cloudSpace);
