@@ -27,7 +27,7 @@ Prefer a reading view? Turn on **Show Read mode** in Settings. You can then swit
 
 Star a note you return to often. It appears in **Starred files**, so you don’t have to remember its folder.
 
-Bookmark an important passage and give it a name. **Passages** brings you back to the part that mattered. Bookmarks stay separate from the words in your file.
+Bookmark an important passage and give it a name. **Passages** brings you back to the part that mattered. Bookmarks stay separate from the words in your file. In Cloud-only windows and on mobile, Starred files and Passages show your Cloud items directly. In windows with Local folders, use the Cloud and Local headings to expand or collapse each group.
 
 For a longer Markdown note, open **Heading outline** in the right panel to jump between sections.
 

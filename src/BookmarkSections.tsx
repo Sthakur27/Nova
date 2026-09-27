@@ -16,13 +16,20 @@ function Section({ cloud, view, children }: { cloud: boolean; view: string; chil
   </section>;
 }
 
-export default function BookmarkSections<T>({ items, isCloud, renderItem, view, emptyMessage }: {
+export default function BookmarkSections<T>({ items, isCloud, renderItem, view, emptyMessage, cloudOnly = false }: {
+  cloudOnly?: boolean;
   items: T[];
   isCloud: (item: T) => boolean;
   renderItem: (item: T, index: number) => ReactNode;
   view: "files" | "passages";
   emptyMessage: string;
 }) {
+  if (cloudOnly) {
+    const group = items.filter(isCloud);
+    return <div className="bookmark-section-content">
+      {group.length ? group.map(renderItem) : <div className="empty-bookmarks section-empty"><small>{emptyMessage}</small></div>}
+    </div>;
+  }
   return <>{[true, false].map(cloud => {
     const group = items.filter(item => isCloud(item) === cloud);
     return <Section key={String(cloud)} cloud={cloud} view={view}>

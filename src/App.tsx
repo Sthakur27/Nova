@@ -2426,14 +2426,14 @@ export default function App() {
               } catch (error) { reportSavedStateError(String(error)); }
             }}
             onDelete={slot => { try { const next = readSavedStates(localStorage, folders); next[slot] = null; if (persistSavedStates(next)) setSavedStatesError(""); } catch (error) { reportSavedStateError(String(error)); } }} /> : bookmarkView === "outline" ? <HeadingOutline text={preview} markdown={isMarkdown} hasDocument={!!data}
-            onJump={from => { setMobileView("editor"); requestAnimationFrame(() => jump(from)); }} /> : bookmarkView === "files" ? <StarredFiles folders={folders} activeRoot={workspace.root} activePath={path}
+            onJump={from => { setMobileView("editor"); requestAnimationFrame(() => jump(from)); }} /> : bookmarkView === "files" ? <StarredFiles cloudOnly={cloudOnly || mobile} folders={folders} activeRoot={workspace.root} activePath={path}
             onOpen={(folder, file, pinned) => void openNote(file, undefined, folder, undefined, pinned)} onStar={starFile} /> : <>
           <ScopeToggle label="Bookmark scope" scope={bookmarkScope} onChange={setBookmarkScope} currentLabel="Current tab" allLabel="All bookmarks" />
-          <div className="rail-intro">{bookmarkScope === "current" ? "Your way back to the good parts." : "Across all added folders."}</div>
+          <div className="rail-intro">{bookmarkScope === "current" ? "Your way back to the good parts." : cloudOnly || mobile ? "Across your notes." : "Across all added folders."}</div>
           {bookmarkScope === "everywhere" && bookmarksBusy && <div role="status" className="rail-intro">Loading bookmarks…</div>}
           {bookmarkScope === "everywhere" && bookmarksError && <div role="status" className="rail-intro">{bookmarksError}</div>}
           <div className="bookmark-list">
-            <BookmarkSections view="passages" items={visibleBookmarks}
+            <BookmarkSections cloudOnly={cloudOnly || mobile} view="passages" items={visibleBookmarks}
               isCloud={hit => !!folders.find(folder => folder.root === hit.root)?.cloudSpace}
               emptyMessage={bookmarksBusy ? "Loading bookmarks…" : bookmarkScope === "current" ? "No passages bookmarked here in the current tab." : "No passages bookmarked here yet."}
               renderItem={({ bookmark: b, root, path: bookmarkPath }, i) => {

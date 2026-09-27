@@ -48,3 +48,25 @@ it("navigates stars in unopened directories and distinguishes the same path acro
     vi.unstubAllGlobals();
   }
 });
+
+it("keeps Cloud-only stars actionable without Local content or location toggles", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const host = document.createElement("div"), root = createRoot(host);
+  const local: Workspace = {root:"/local",name:"Private",files:[],starred:["local.md"]};
+  const cloud: Workspace = {root:"/cloud",name:"Notes",files:[],starred:["nested/cloud.md"],
+    cloudSpace:{id:"cloud",name:"Notes",account:"account"}};
+  const onOpen = vi.fn(), onStar = vi.fn();
+  try {
+    await act(async () => root.render(<StarredFiles cloudOnly folders={[local,cloud]} activeRoot={cloud.root}
+      activePath="nested/cloud.md" onOpen={onOpen} onStar={onStar}/>));
+    expect(host.querySelector(".bookmark-section-toggle")).toBeNull();
+    expect(host.textContent).not.toContain("Private");
+    expect(host.querySelectorAll(".starred-file-open")).toHaveLength(1);
+    await act(async () => host.querySelector<HTMLButtonElement>(".starred-file-open")!.click());
+    expect(onOpen).toHaveBeenCalledExactlyOnceWith(cloud, "nested/cloud.md");
+    await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Unstar nested/cloud.md"]')!.click());
+    expect(onStar).toHaveBeenCalledExactlyOnceWith(cloud, "nested/cloud.md", false);
+  } finally {
+    await act(async () => root.unmount()); vi.unstubAllGlobals();
+  }
+});

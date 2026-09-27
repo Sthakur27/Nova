@@ -3,7 +3,8 @@ import NovaStar from "./NovaStar";
 import { FileText } from "lucide-react";
 import type { Workspace } from "./model";
 
-export default function StarredFiles({ folders, activeRoot, activePath, onOpen, onStar }: {
+export default function StarredFiles({ folders, activeRoot, activePath, onOpen, onStar, cloudOnly = false }: {
+  cloudOnly?: boolean;
   folders: Workspace[];
   activeRoot: string;
   activePath: string;
@@ -11,8 +12,8 @@ export default function StarredFiles({ folders, activeRoot, activePath, onOpen, 
   onStar: (folder: Workspace, path: string, starred: boolean) => void;
 }) {
   return <div className="starred-files" aria-label="Starred files">
-    <div className="rail-intro">Quick access across your folders.</div>
-    <BookmarkSections view="files" items={folders.filter(folder => folder.starred?.length || folder.starsError)}
+    <div className="rail-intro">{cloudOnly ? "Quick access to your notes." : "Quick access across your folders."}</div>
+    <BookmarkSections cloudOnly={cloudOnly} view="files" items={folders.filter(folder => folder.starred?.length || folder.starsError)}
       isCloud={folder => !!folder.cloudSpace} emptyMessage="No starred files here. Star a file in the breadcrumb bar to find it here."
       renderItem={folder => <section key={folder.root} aria-label={folder.name}>
       {folder.starsError && <p role="status" className="rail-intro">{folder.name}: {folder.starsError}</p>}
