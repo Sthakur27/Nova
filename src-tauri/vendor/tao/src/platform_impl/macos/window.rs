@@ -42,7 +42,7 @@ use crate::{
 };
 use core_graphics::{
   base::CGFloat,
-  display::{CGDisplay, CGDisplayMode},
+  display::CGDisplay,
   geometry::CGPoint,
 };
 use objc2::{
@@ -470,7 +470,6 @@ pub struct SharedState {
   /// bar in exclusive fullscreen but want to restore the original options when
   /// transitioning back to borderless fullscreen.
   save_presentation_opts: Option<NSApplicationPresentationOptions>,
-  pub saved_desktop_display_mode: Option<(CGDisplay, CGDisplayMode)>,
   pub current_theme: Theme,
 }
 
@@ -507,7 +506,6 @@ pub struct UnownedWindow {
   decorations: AtomicBool,
   cursor_state: Weak<Mutex<CursorState>>,
   transparent: bool,
-  pub inner_rect: Option<PhysicalSize<u32>>,
 }
 
 unsafe impl Send for UnownedWindow {}
@@ -589,9 +587,6 @@ impl UnownedWindow {
     let focused = win_attribs.focused;
     let decorations = win_attribs.decorations;
     let visible_on_all_workspaces = win_attribs.visible_on_all_workspaces;
-    let inner_rect = win_attribs
-      .inner_size
-      .map(|size| size.to_physical(scale_factor));
 
     let cloned_preferred_theme = win_attribs.preferred_theme;
 
@@ -602,7 +597,6 @@ impl UnownedWindow {
       shared_state: Arc::new(Mutex::new(win_attribs.into())),
       decorations: AtomicBool::new(decorations),
       cursor_state,
-      inner_rect,
       transparent,
     });
 
