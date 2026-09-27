@@ -10,6 +10,10 @@ Entries describe source changes; availability in published installers has not be
 
 ### 2026-09-27
 
+#### Changed
+
+- A single Cloud space shows its contents directly under Cloud, removing the redundant Notes row. Cloud and Local + buttons now open New file / New folder menus; Local supports nested folder creation too.
+
 #### Fixed
 
 - Refresh Cloud now syncs notes and folders inside existing spaces on desktop and iOS. Full sync requests wait behind focused-note checks instead of being skipped, and saves made during a running sync receive a follow-up pass.

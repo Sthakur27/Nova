@@ -12,7 +12,6 @@ import {
   FileText,
   Folder,
   FolderOpen,
-  Plus,
   Pencil,
   MoreHorizontal,
   RefreshCw,
@@ -20,6 +19,7 @@ import {
 } from "lucide-react";
 import { syncIncluded, type SyncPolicy } from "./syncPolicy";
 import type { Workspace } from "./model";
+import CreateMenu from "./CreateMenu";
 import RecentFolders from "./RecentFolders";
 import type { RecentFolder } from "./localFolders";
 import { revealFile, fileAncestors } from "./revealFile";
@@ -254,6 +254,29 @@ export default function Explorer({
     pendingScroll.current = false;
   }, [activeRoot, activePath, folders, cloudCollapsed, localCollapsed, syncOnly]);
 
+  const rootOptions = (folder: Workspace, label = folder.name) => (
+    <details className="root-menu">
+      <summary
+        className="icon-button"
+        aria-label={`Options for ${label}`}
+        title="Folder options"
+      >
+        <MoreHorizontal size={16} aria-hidden="true" />
+      </summary>
+      <div>
+        {onSync && folder.cloudSpace && <button onClick={event => { event.currentTarget.closest("details")?.removeAttribute("open"); onSync(folder); }}>Cloud settings…</button>}
+        <button onClick={() => onRefresh(folder.root)}>
+          <RefreshCw size={13} />
+          Refresh
+        </button>
+        <button hidden={mobile || !!folder.cloudSpace} onClick={() => onRemove(folder.root)}>
+          <X size={13} />
+          Close Folder
+        </button>
+      </div>
+    </details>
+  );
+
   return (
     <>
       <div className="workspace-label">
@@ -286,6 +309,7 @@ export default function Explorer({
           if ((isCloud && !ordered.length) || (!isCloud && mobile)) return null;
           const collapsed = isCloud ? cloudCollapsed : localCollapsed;
           const setCollapsed = isCloud ? setCloudCollapsed : setLocalCollapsed;
+          const flatCloud = isCloud && ordered.length === 1;
           const createTarget = ordered.find(folder => folder.root === activeRoot && !folder.error)
             ?? ordered.find(folder => !folder.error);
           return <section className="explorer-section" key={kind} aria-label={`${kind} notes`}>
@@ -299,11 +323,16 @@ export default function Explorer({
                 <RecentFolders folders={recents.filter(recent => !ordered.some(folder => folder.root === recent.root))} onOpen={onRecent} onClear={onForgetRecents}/>
                 <button className="icon-button explorer-open-local" aria-label="Open local folder in new window" title="Open Folder in New Window…" onClick={onAdd}><FolderOpen size={15}/></button>
               </div>}
-              {isCloud && onNew && <div className="explorer-section-actions"><button className="icon-button explorer-new-cloud" aria-label="New Cloud note" title={`New Cloud note${createTarget ? ` in ${createTarget.name}` : ""}`} disabled={!createTarget} onClick={() => { setCloudCollapsed(false); if (createTarget) onNew(createTarget); }}><Plus size={15}/></button></div>}
+              <div className="explorer-section-actions">
+                {onNew && <CreateMenu label={isCloud ? "Create in Cloud" : `Create in Local${createTarget ? `: ${createTarget.name}` : ""}`} disabled={!createTarget}
+                  onFile={() => { setCollapsed(false); if (createTarget) onNew(createTarget); }}
+                  onFolder={onNewFolder && createTarget && createTarget.root !== "demo" ? () => { setCollapsed(false); onNewFolder(createTarget); } : undefined}/>}
+                {flatCloud && rootOptions(ordered[0], "Cloud")}
+              </div>
             </div>
             <div id={`explorer-${kind.toLowerCase()}`} hidden={collapsed}>
         {ordered.map((folder) => {
-          const collapsed = folder.collapsed ?? true;
+          const collapsed = flatCloud ? false : folder.collapsed ?? true;
           const closed = closedDirectories(folder);
           // An open tab can point past a directory's loaded page.
           const available = folder.root === activeRoot && activePath && !folder.files.some(file => file.path === activePath)
@@ -316,9 +345,9 @@ export default function Explorer({
           <section
             key={folder.root}
             data-folder-root={folder.root}
-            className="explorer-root"
+            className={flatCloud ? "explorer-root flat-cloud" : "explorer-root"}
           >
-            <div className="root-header">
+            {!flatCloud && <div className="root-header">
               <button
                 className="root-title"
                 title={folder.cloudSpace ? `Cloud / ${folder.name}` : folder.root === "demo" ? "Sample notes" : folder.root}
@@ -342,36 +371,10 @@ export default function Explorer({
                 <FolderOpen size={15} />
                 <strong>{folder.name}</strong>
               </button>
-              {!folder.cloudSpace && onNew && <button
-                className="icon-button root-new-note"
-                aria-label={`New note in ${folder.name}`}
-                title={`New note in ${folder.name}`}
-                disabled={!!folder.error}
-                onClick={() => onNew(folder)}
-              ><Plus size={15} aria-hidden="true" /></button>}
-              <details className="root-menu">
-                <summary
-                  className="icon-button"
-                  aria-label={`Options for ${folder.name}`}
-                  title="Folder options"
-                >
-                  <MoreHorizontal size={16} aria-hidden="true" />
-                </summary>
-                <div>
-                  {onNew && <button onClick={event => { event.currentTarget.closest("details")?.removeAttribute("open"); onNew(folder); }}><Plus size={13} />New note</button>}
-                  {onNewFolder && folder.cloudSpace && <button disabled={!!folder.error} onClick={event => { event.currentTarget.closest("details")?.removeAttribute("open"); onNewFolder(folder); }}><Folder size={13}/>New folder…</button>}
-                  {onSync && folder.cloudSpace && <button onClick={event => { event.currentTarget.closest("details")?.removeAttribute("open"); onSync(folder); }}>Cloud settings…</button>}
-                  <button onClick={() => onRefresh(folder.root)}>
-                    <RefreshCw size={13} />
-                    Refresh
-                  </button>
-                  <button hidden={mobile || !!folder.cloudSpace} onClick={() => onRemove(folder.root)}>
-                    <X size={13} />
-                    Close Folder
-                  </button>
-                </div>
-              </details>
-            </div>
+              {ordered.length > 1 && onNew && <CreateMenu label={`Create in ${folder.name}`} disabled={!!folder.error}
+                onFile={() => onNew(folder)} onFolder={onNewFolder && folder.root !== "demo" ? () => onNewFolder(folder) : undefined}/>}
+              {rootOptions(folder)}
+            </div>}
             {!collapsed && (
               <div className="root-files">
                 {folder.warnings?.map(warning => <p className="folder-error" key={warning}>{warning}</p>)}

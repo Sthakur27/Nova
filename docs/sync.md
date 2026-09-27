@@ -88,7 +88,12 @@ in the managed Cloud sync loop.
 
 ## Organize Cloud notes
 
-Open a Cloud space’s **… → New folder…** and enter a name, or a nested path such as
+When there is one Cloud space, its files and folders appear directly under the
+Cloud section. The underlying Drive space (usually Notes) stays the same.
+Multiple spaces keep their named rows and separate creation menus. Cloud settings
+and Refresh are available from the section’s **…** menu for a single space.
+
+Choose **+ → New folder** beside Cloud and enter a name, or a nested path such as
 `Projects/Research`. Empty folders appear in Explorer and sync when connected.
 To move a note, use its **Move…** action, choose or enter an existing destination,
 or clear the destination to return it to the space’s root. On mobile, open the

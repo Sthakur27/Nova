@@ -3029,3 +3029,10 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 .saved-state-rename { flex-shrink: 0; width: 24px; height: 26px; }
 .saved-state-files { color: #96909f; font-size: 11px; line-height: 1.5; padding: 7px 12px 10px; overflow-wrap: anywhere; }
 .saved-state-card:has(.saved-state-drag) .saved-state-files { padding-left: 30px; }
+
+.flat-cloud > .root-files { padding-left: 0; }
+.explorer-section-actions .root-menu > summary { opacity: 1; pointer-events: auto; }
+
+.create-menu { width: min(190px, calc(100vw - 16px)); }
+.create-menu button { align-items: center; gap: 8px; }
+.create-menu button:disabled { opacity: .45; cursor: default; }

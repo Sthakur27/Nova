@@ -2545,9 +2545,12 @@ export default function App() {
           if (operation.current) throw new Error("Finish the current operation first.");
           operation.current = true;
           try {
-            await createFolder(folder.root, destination);
-            uploads.schedule(folder.root);
-            await refreshFolder(folder.root);
+            const created = await createFolder(folder.root, destination);
+            if (folder.cloudSpace) uploads.schedule(folder.root);
+            const parts = created.split("/");
+            const expanded = [...new Set([...(folder.expandedDirectories ?? []), ...parts.slice(0, -1).map((_, index) => parts.slice(0, index + 1).join("/"))])];
+            const refreshed = await openWorkspace(folder.root, expanded);
+            setFolders(old => old.map(f => f.root === folder.root ? { ...f, ...refreshed, collapsed: false } : f));
           } finally { operation.current = false; }
           return;
         }
