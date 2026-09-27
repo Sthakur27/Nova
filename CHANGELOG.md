@@ -12,6 +12,8 @@ Entries describe source changes; availability in published installers has not be
 
 #### Changed
 
+- The desktop note toolbar exposes file location and Cloud actions beside View. Cloud notes open directly in Google Drive; Local notes show a muted cloud button for a confirmed Move to Cloud. Background and frosted-panel controls remain in the sidebar and Settings instead of the top toolbar.
+
 - A single Cloud space shows its contents directly under Cloud, removing the redundant Notes row. Cloud and Local + buttons now open New file / New folder menus; Local supports nested folder creation too.
 
 #### Fixed

@@ -87,7 +87,7 @@ Keep two notes open side by side, with your desktop showing through the transluc
 
 Turn **Galaxy mode** on for translucent surfaces and glowing edges, or off for a simple, solid background. Your notes and bookmarks stay right where they are.
 
-With Galaxy mode enabled, the overlapping-circles **Background** button changes the page background. On Mac, choose Translucent, Black, or Frosted, and use **Frosted panels** to blur the surrounding panels independently. Windows offers Translucent or Black; Frosted is unavailable.
+With Galaxy mode enabled, the sidebar’s overlapping-circles **Editor background** button changes the page background. On Mac, choose Translucent, Black, or Frosted, and use **Frosted panels** to blur the surrounding panels independently. Windows offers Translucent or Black; Frosted is unavailable.
 
 In Settings, choose **High performance** for smoother Galaxy animation or **Saver** for fewer animation frames and effects that settle when you pause.
 

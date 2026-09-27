@@ -10,6 +10,7 @@ import { documentChanged } from "./documentChanged";
 import SettingDialog from "./SettingDialog";
 import { settingChoices, toggleSetting } from "./settingCommands";
 import ViewOptions from "./ViewOptions";
+import FileLocationControls from "./FileLocationControls";
 import { startEditorWindowDrag } from "./editorWindowDrag";
 import TabButton from "./TabButton";
 import FocusTabs from "./FocusTabs";
@@ -81,7 +82,6 @@ import {
   Code2,
   ListOrdered,
   ScanLine,
-  Blend,
   PanelsTopLeft,
   Plus,
   Search,
@@ -198,7 +198,6 @@ export default function App() {
   const [savedBackgroundMode, setBackgroundMode, translucencyError] = usePreference<typeof backgroundModes[number]>("translucent", "on", backgroundModes);
   const backgroundMode = !supportsFrosted && savedBackgroundMode === "frosted" ? "off" : savedBackgroundMode;
   const [frostedPanes, setFrostedPanes, frostedPanesError] = usePreference<boolean>("frosted-panes", false);
-  const nextBackgroundMode = availableBackgroundModes[(availableBackgroundModes.indexOf(backgroundMode) + 1) % availableBackgroundModes.length];
   const [showLineNumbers, setShowLineNumbers, numbersError] = usePreference<boolean>("line-numbers", true);
   const [showLineHighlight, setShowLineHighlight, highlightError] = usePreference<boolean>("line-highlight", false);
   const [wordWrap, setWordWrap, wrapError] = usePreference<boolean>("word-wrap", true);
@@ -2180,15 +2179,6 @@ export default function App() {
           <label className="view-option-row"><span>Text size</span><TextSizeControl value={fontSize} onChange={setFontSize} /></label>
           <label className="view-option-row"><span>Text width</span><TextWidthControl value={textWidth} onChange={setTextWidth} /></label>
           <label className="view-option-row"><span>Line spacing</span><LineSpacingControl value={lineSpacing} onChange={setLineSpacing} /></label>
-          {!mobile && <button
-            className="icon-button toolbar-icon"
-            aria-label="Open in File Location"
-            title={workspace.root === "demo" ? "Sample notes have no file location" : "Open in File Location"}
-            disabled={path === ".nova" || !desktop || !workspace.root || workspace.root === "demo" || !path}
-            onClick={() => void revealNote(workspace.root, path).catch(error => setNotice(String(error)))}
-          >
-            <FolderOpen size={17} aria-hidden="true" />
-          </button>}
           {toolbar.hasLineNumbers && (
             <button
               className="line-numbers-toggle"
@@ -2216,33 +2206,11 @@ export default function App() {
             </span>
           </button>
           </ViewOptions>
-          {!compact && galaxyMode && <button
-            className="icon-button toolbar-icon focus-toggle transparency-control"
-            aria-label={`Background: ${backgroundLabels[backgroundMode]}. Switch to ${backgroundLabels[nextBackgroundMode]}`}
-            aria-describedby="translucency-tooltip"
-            aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+e`}
-            onClick={() => setBackgroundMode(nextBackgroundMode)}
-          >
-            <Blend size={17} aria-hidden="true" />
-            <span className="focus-tooltip" id="translucency-tooltip" role="tooltip">
-              Background · {backgroundLabels[backgroundMode]} · {mod}E<br />
-              Click for {backgroundLabels[nextBackgroundMode].toLowerCase()}
-            </span>
-          </button>}
-          {!compact && galaxyMode && supportsFrosted && <button
-            className="icon-button toolbar-icon focus-toggle transparency-control"
-            aria-label="Frosted panels"
-            aria-pressed={frostedPanes}
-            aria-describedby="pane-background-tooltip"
-            aria-keyshortcuts={`${mod === "⌘" ? "Meta" : "Control"}+l`}
-            onClick={() => setFrostedPanes(!frostedPanes)}
-          >
-            <PanelsTopLeft size={17} aria-hidden="true" />
-            <span className="focus-tooltip" id="pane-background-tooltip" role="tooltip">
-              Panels · {frostedPanes ? "Frosted" : "Black"} · {mod}L<br />
-              Click for {frostedPanes ? "black" : "frosted"}
-            </span>
-          </button>}
+          {!mobile && <FileLocationControls root={workspace.root} path={path} cloud={!!workspace.cloudSpace}
+            desktop={desktop} busy={loading || saving || !data}
+            onReveal={() => void revealNote(workspace.root, path).catch(error => setNotice(String(error)))}
+            onOpenDrive={() => void driveTransfer(() => invoke("drive_open_file", { root: workspace.root, path })).catch(error => setNotice(String(error)))}
+            onMoveToCloud={() => { if (drive.status.connected) void moveToCloud(workspace, path); else showSync(workspace); }} />}
           {!compact && <button className="icon-button toolbar-icon" onClick={toggleTerminal}
             aria-label={terminalOpen && statusBar ? "Collapse terminal" : "Open terminal"} title="Toggle terminal"
             aria-expanded={terminalOpen && statusBar} aria-controls="terminal-panel"><TerminalSquare size={17} /></button>}

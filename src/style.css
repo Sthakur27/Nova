@@ -2074,6 +2074,8 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 .text-width-control button:focus-visible, .toolbar-icon:focus-visible { outline: 2px solid #bda0ed; outline-offset: 2px; }
 .document-toolbar .toolbar-icon { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 6px; color: #b8acc9; }
 .document-toolbar .toolbar-icon:hover, .document-toolbar .toolbar-icon[aria-pressed="true"] { background: #b296cf12; color: #d6bdf4; }
+.document-toolbar .toolbar-icon.cloud-location-local { color: #777180; }
+.document-toolbar .toolbar-icon.cloud-location-local:hover { color: #b8acc9; }
 .document-toolbar .toolbar-icon .focus-tooltip { display: flex; top: calc(100% + 9px); bottom: auto; left: auto; right: 0; }
 
 /* Keep view and width controls reachable when the side panels narrow the editor. */

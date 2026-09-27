@@ -18,7 +18,10 @@ These internal names are not the names shown in Explorer. On iOS the persisted
 root is `mobile-sync/<hash>`, independent of the app's container location.
 
 Nova stores managed files inside **.nova** in Google Drive. Use **Open in Drive**
-in Cloud settings or the top bar to open the current Cloud space in your browser.
+in Cloud settings to open the current Cloud space in your browser. The desktop
+note toolbar’s cloud icon opens the current Cloud file with **Open in Google Drive**.
+For Local notes, the icon stays gray but clickable and offers a confirmed
+**Move to Cloud** (or opens setup if disconnected).
 Each space's folder menu has **New note**. On desktop, a local note's context menu
 has **Move to Cloud…**: the confirmation names the destination, then Nova saves a
 complete Cloud copy on the device before removing the original. An existing note
