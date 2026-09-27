@@ -106,6 +106,7 @@ import WorkspaceSearch, { type SearchRequest } from "./WorkspaceSearch";
 import { installWorkspaceSearchShortcut } from "./workspaceSearchShortcut";
 import Explorer from "./Explorer";
 import RecentFolders from "./RecentFolders";
+import OpenWindowMenu from "./OpenWindowMenu";
 import { createFolder } from "./storage";
 import FileActionDialog from "./FileActionDialog";
 import RenameDialog from "./RenameDialog";
@@ -113,7 +114,7 @@ import FormatToolbar from "./FormatToolbar";
 import { FontControl, TextSizeControl, editorFonts, textSizes, type EditorFont } from "./TypographyControls";
 import type { FormatAction } from "./richMarkdown";
 import { type EditorMode } from "./folders";
-import { folderPreference, folderWindowPreferences, migrateLocalFolders, rememberFolder, type RecentFolder } from "./localFolders";
+import { folderPreference, folderWindowPreferences, cloudWindowPreferences, migrateLocalFolders, rememberFolder, type RecentFolder } from "./localFolders";
 import VoiceControl from "./VoiceControl";
 import NovaStar from "./NovaStar";
 import SignalBell from "./SignalBell";
@@ -126,7 +127,7 @@ import { RICH_DOCUMENT_LIMIT, supportsDocumentView } from "./documentLimits";
 import PlasmaEffects from "./PlasmaEffects";
 import { DEFAULT_GALAXY_PERFORMANCE, galaxyPerformanceModes, galaxyPerformanceLabels, type GalaxyPerformance } from "./galaxyPerformance";
 import {
-  chooseWorkspaces, openFolderWindow, listDirectory, refreshDirectory, loadedDirectoryEntries, mergeDirectory,
+  chooseWorkspaces, openFolderWindow, openCloudWindow, listDirectory, refreshDirectory, loadedDirectoryEntries, mergeDirectory,
   createNote,
   renameNote,
   moveNote,
@@ -136,7 +137,7 @@ import {
   setFileStar,
   loadFolders,
   loadExplorer,
-  saveExplorer,
+  saveExplorer as persistExplorer,
   openWorkspace,
   demoWorkspace,
   desktop,
@@ -274,6 +275,10 @@ export default function App() {
     },
     [updateTabs],
   );
+  const [cloudOnly, setCloudOnly] = useState(false);
+  const cloudOnlyRef = useRef(false);
+  const saveExplorer = useCallback((preferences: Parameters<typeof persistExplorer>[0]) =>
+    persistExplorer({ ...preferences, cloudOnly: cloudOnlyRef.current }), []);
   const [folders, setFolders] = useState<Workspace[]>([demoWorkspace]);
   const [recents, setRecents] = useState<RecentFolder[]>([]);
   const recentsRef = useRef<RecentFolder[]>([]);
@@ -667,11 +672,16 @@ export default function App() {
           : new URLSearchParams(window.location.search).get("new-window") === "true";
         const requestedFolder = (window as Window & { __NOVA_OPEN_FOLDER__?: string }).__NOVA_OPEN_FOLDER__
           ?? (!desktop ? new URLSearchParams(window.location.search).get("folder") : null);
-        const prefs = requestedFolder ? folderWindowPreferences(savedPrefs, requestedFolder) : freshWindow
+        const requestedCloud = (window as Window & { __NOVA_CLOUD_ONLY__?: boolean }).__NOVA_CLOUD_ONLY__
+          ?? (new URLSearchParams(window.location.search).has("cloud-only") ? new URLSearchParams(window.location.search).get("cloud-only") === "true" : undefined);
+        const onlyCloud = !requestedFolder && (requestedCloud ?? savedPrefs?.cloudOnly === true);
+        cloudOnlyRef.current = onlyCloud;
+        setCloudOnly(onlyCloud);
+        const prefs = onlyCloud ? cloudWindowPreferences(savedPrefs) : requestedFolder ? folderWindowPreferences(savedPrefs, requestedFolder) : freshWindow
           ? { ...savedPrefs, mode: savedPrefs?.mode ?? "edit", folders: savedPrefs?.folders ?? [demoWorkspace], active: null, tabs: [], panes: undefined }
           : savedPrefs;
         const loaded = prefs ? await loadFolders(prefs.folders) : mobile ? [] : [demoWorkspace];
-        const migrated = migrateLocalFolders(requestedFolder ? prefs : savedPrefs, loaded);
+        const migrated = migrateLocalFolders(requestedFolder || onlyCloud ? prefs : savedPrefs, loaded);
         const restored = mobile ? loaded.filter(folder => !!folder.cloudSpace) : migrated.folders;
         if (cancelled) return;
         setFolders(restored);
@@ -983,6 +993,7 @@ export default function App() {
     [applyMarks, jump, preserveDraft, pin, updateTabs, save],
   );
   const newTab = useCallback(async (requested?: Workspace) => {
+    if (cloudOnlyRef.current && !drive.status.connected) { setNotice("Connect Google Drive before creating a Cloud note."); return; }
     if (!current.current.foldersReady || operation.current || voiceBusy.current) return;
     operation.current = true;
     let nextPath: string | undefined;
@@ -1003,7 +1014,7 @@ export default function App() {
     if (nextPath && folder) {
       await openNote(nextPath, undefined, folder, undefined, true);
     }
-  }, [preserveDraft, openNote, defaultExtension, save]);
+  }, [preserveDraft, openNote, defaultExtension, save, drive.status.connected]);
   const renamePaneTab = (oldId: string, nextTab: NoteTab) => {
     const nextId = tabId(nextTab);
     if (oldId === nextId) return;
@@ -1276,6 +1287,10 @@ export default function App() {
       uploads.schedule(target.root);
     } catch(error) { setNotice(String(error)); }
   }
+  const launchCloud = async () => {
+    try { await openCloudWindow(); }
+    catch (error) { setNotice(`Could not open Cloud: ${String(error)}`); }
+  };
   const openFolder = async () => {
     const request = ++localSwitchRequest.current;
     try {
@@ -1610,10 +1625,12 @@ export default function App() {
         if (e.repeat) return;
         if (mobile) { void newTab(); }
         else if (e.key.toLowerCase() === "n") {
-          if (desktop) void invoke("new_window").catch(error => setNotice(String(error)));
+          if (desktop) void invoke("new_window", { cloudOnly: cloudOnlyRef.current }).catch(error => setNotice(String(error)));
           else {
             const url = new URL(window.location.href);
             url.searchParams.delete("folder");
+            if (cloudOnlyRef.current) url.searchParams.set("cloud-only", "true");
+            else url.searchParams.set("cloud-only", "false");
             url.searchParams.set("new-window", "true");
             window.open(url.href, "_blank", "noopener");
           }
@@ -1884,8 +1901,10 @@ export default function App() {
       const bookmarks = isActive ? marksRef.current : session?.data.bookmarks ?? [];
       const isMarkdown = /\.(md|markdown|mdx)$/i.test(path);
       const documentView = isMarkdown && !(mode === "read" && readingLayout === "pages") && supportsDocumentView(data?.text.length ?? 0, editorSnapshot?.state.doc.length ?? 0, preview.length);
-      return (
-        <div className="document-area" data-registry={path === ".nova"}>
+      const needsCloudSetup = cloudOnly && (!drive.status.connected || !folders.some(folder => folder.cloudSpace?.account === drive.status.account));
+      return <>
+        {needsCloudSetup && <div className="document-area"><CloudSetup drive={drive} loading={cloud.loading} error={cloud.error} retry={() => void cloud.refresh()} embedded/></div>}
+        <div className="document-area" style={needsCloudSetup ? { display: "none" } : undefined} data-registry={path === ".nova"}>
           {data && (mode === "read" || (mode === "edit" && documentView)) && <ReadFind
             key={JSON.stringify([workspace.root, path, data.revision])}
             text={preview}
@@ -1965,16 +1984,16 @@ export default function App() {
           )}
           {!data && !loading && (
             <div className="empty-editor">
-              <FolderOpen size={32} />
-              <h2>{mobile ? "A little space to think." : workspace.root ? workspace.name : "A folder is all you need."}</h2>
-              <p>{mobile ? "Create your first Cloud note. Edits save and sync automatically." : workspace.root ? "Choose a file in the explorer, or search this folder." : "Open a folder with Markdown or text files."}</p>
-              <button className="primary" onClick={mobile ? () => void newTab() : openFolder}>
-                {mobile ? "Create a note" : "Open folder"}
+              {cloudOnly ? <Cloud size={32}/> : <FolderOpen size={32} />}
+              <h2>{mobile || cloudOnly ? "A little space to think." : workspace.root ? workspace.name : "A folder is all you need."}</h2>
+              <p>{mobile || cloudOnly ? "Create your first Cloud note. Edits save and sync automatically." : workspace.root ? "Choose a file in the explorer, or search this folder." : "Open a folder with Markdown or text files."}</p>
+              <button className="primary" onClick={mobile || cloudOnly ? () => void newTab() : openFolder}>
+                {mobile || cloudOnly ? "Create a note" : "Open folder"}
               </button>
             </div>
           )}
         </div>
-      );
+      </>;
     }
   }
   const settingCommands = [
@@ -2073,9 +2092,9 @@ export default function App() {
           <button aria-label="Files" title="Files" aria-pressed={navigationView === "files"} onClick={() => setNavigationView("files")}><List size={18} aria-hidden="true"/></button>
           <button aria-label="Search across files" aria-pressed={navigationView === "search"} title={`Search across files (${mod} ⇧ F)`} onClick={() => openWorkspaceSearch()}><Search size={18} aria-hidden="true"/></button>
           {!mobile && <>
-            <button aria-label="Open local folder in new window" title="Open Folder in New Window…" onClick={() => void openFolder()}><FolderOpen size={18} aria-hidden="true"/></button>
+            <OpenWindowMenu onLocal={() => void openFolder()} onCloud={() => void launchCloud()}/>
             <RecentFolders folders={recents.filter(recent => !folders.some(folder => folder.root === recent.root))}
-              onOpen={recent => void openRecent(recent)} onClear={() => updateRecents([])}/>
+              onOpen={recent => void openRecent(recent)} onClear={() => updateRecents([])} onCloud={() => void launchCloud()}/>
           </>}
         </div>
         {workspaceSearchRequest.id > 0 && <div className="workspace-search-host" hidden={navigationView !== "search"}>
@@ -2087,7 +2106,7 @@ export default function App() {
             }}/>
         </div>}
         {navigationView === "files" && <Explorer
-          showHidden={showHidden}
+          showHidden={showHidden} cloudOnly={cloudOnly}
           folders={folders.filter(folder => !folder.cloudSpace || (drive.status.connected && folder.cloudSpace.account === drive.status.account))}
           activeRoot={workspace.root}
           activePath={path}

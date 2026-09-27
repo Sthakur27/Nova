@@ -3039,3 +3039,9 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 .sync-attention { display: inline-flex; align-items: center; gap: 5px; padding: 3px 7px; border: 1px solid #ef777780; border-radius: 5px; background: #7d25254d; color: #ffb0b0; font: inherit; font-weight: 600; white-space: nowrap; cursor: pointer; }
 .sync-attention:hover { background: #a1323266; color: #ffd2d2; }
 .sync-attention:focus-visible { outline: 2px solid #ffb0b0; outline-offset: 2px; }
+
+.cloud-setup-embedded { min-height: 0; width: 100%; padding: 40px 28px; }
+.recent-folders-menu button { align-items: center; gap: 8px; }
+.recent-folders-menu button > svg { flex-shrink: 0; }
+.recent-folders-menu hr { border: 0; border-top: 1px solid #ffffff20; margin: 5px 0; }
+.open-window-menu { width: min(250px, calc(100vw - 16px)); }

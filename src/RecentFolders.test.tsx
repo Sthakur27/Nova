@@ -38,3 +38,26 @@ it("hides empty recents, escapes sidebar clipping, and restores focus on Escape"
     expect(onClear).toHaveBeenCalledOnce();
   } finally { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); }
 });
+
+it("keeps Cloud available before and after clearing recent local folders", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const host = document.createElement("div"), root = createRoot(host);
+  document.body.append(host);
+  const onCloud = vi.fn();
+  const folder = { root: "/notes", name: "Notes", active: null, tabs: [], mode: "edit" as const };
+  const render = (folders: typeof folder[]) => <RecentFolders folders={folders} onCloud={onCloud} onClear={() => root.render(render([]))}/>;
+  try {
+    await act(async () => root.render(render([folder])));
+    const trigger = host.querySelector("button")!;
+    await act(async () => trigger.click());
+    expect(document.activeElement?.textContent).toBe("Open Cloud-only Window");
+    expect(document.querySelector('[role="separator"]')).not.toBeNull();
+    await act(async () => document.querySelector<HTMLButtonElement>('.recent-clear')!.click());
+    await act(async () => trigger.click());
+    expect(document.querySelectorAll('[role="menuitem"]')).toHaveLength(1);
+    expect(document.querySelector('.recent-clear')).toBeNull();
+    await act(async () => (document.activeElement as HTMLButtonElement).click());
+    expect(onCloud).toHaveBeenCalledOnce();
+    expect(document.activeElement).toBe(trigger);
+  } finally { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); }
+});

@@ -62,3 +62,20 @@ export function folderWindowPreferences(saved: ExplorerPreferences | null, root:
     panes: panes ? reconcilePanes(panes, tabs.map(tabId), "main") : undefined,
   };
 }
+
+/** Cloud windows never mount Local roots, but retain their sessions in Recents. */
+export function cloudWindowPreferences(saved: ExplorerPreferences | null): ExplorerPreferences {
+  const folders = saved?.folders.filter(folder => folder.cloudSpace) ?? [];
+  const tabs = (saved?.tabs ?? []).filter(tab => folders.some(folder => folder.root === tab.root));
+  let recents = saved?.recents ?? [];
+  for (const folder of [...(saved?.folders ?? [])].reverse()) {
+    if (!folder.cloudSpace) recents = rememberFolder(recents, { ...folder, files: [] }, saved?.tabs ?? [], saved?.active ?? null, saved?.mode ?? "edit", saved?.panes);
+  }
+  const active = saved?.active;
+  return {
+    cloudOnly: true, folders, recents, tabs,
+    active: active && tabs.some(tab => tab.root === active.root && tab.path === active.path) ? active : tabs[0] ?? null,
+    mode: saved?.mode ?? "edit",
+    panes: saved?.panes ? reconcilePanes(saved.panes, tabs.map(tabId), "main") : undefined,
+  };
+}

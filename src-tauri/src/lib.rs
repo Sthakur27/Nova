@@ -907,7 +907,7 @@ fn reveal_note(root: String, path: String, access: State<'_, Access>) -> Result<
 }
 #[cfg(desktop)]
 #[tauri::command]
-fn new_window(app: tauri::AppHandle, root: Option<String>) -> Result<(), String> {
+fn new_window(app: tauri::AppHandle, root: Option<String>, cloud_only: Option<bool>) -> Result<(), String> {
     let updating = app.state::<Access>();
     let guard = updating.updating.lock().map_err(err)?;
     if *guard { return Err("An update is being installed.".into()); }
@@ -915,6 +915,10 @@ fn new_window(app: tauri::AppHandle, root: Option<String>) -> Result<(), String>
     let mut config = app.config().app.windows[0].clone();
     config.label = format!("nova-{}", WINDOW_ID.fetch_add(1, Ordering::Relaxed));
     let mut builder = tauri::WebviewWindowBuilder::from_config(&app, &config).map_err(err)?;
+    if let Some(cloud_only) = cloud_only {
+        if cloud_only && root.is_some() { return Err("Choose Cloud or a local folder, not both.".into()); }
+        builder = builder.initialization_script(format!("window.__NOVA_CLOUD_ONLY__ = {cloud_only};"));
+    }
     if let Some(root) = root {
         let path = fs::canonicalize(root).map_err(err)?;
         if !path.is_dir() { return Err("Choose a folder.".into()); }

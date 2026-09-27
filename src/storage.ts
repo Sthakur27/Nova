@@ -100,7 +100,17 @@ export async function openFolderWindow(root: string): Promise<void> {
   if (desktop) { await invoke("new_window", { root }); return; }
   if (mobile) throw new Error("Mobile uses Cloud spaces.");
   const url = new URL(window.location.href);
+  url.searchParams.delete("cloud-only");
   url.searchParams.set("folder", root);
+  url.searchParams.set("new-window", "true");
+  window.open(url.href, "_blank", "noopener");
+}
+export async function openCloudWindow(): Promise<void> {
+  if (mobile) throw new Error("Mobile already uses Cloud spaces.");
+  if (desktop) { await invoke("new_window", { cloudOnly: true }); return; }
+  const url = new URL(window.location.href);
+  url.searchParams.delete("folder");
+  url.searchParams.set("cloud-only", "true");
   url.searchParams.set("new-window", "true");
   window.open(url.href, "_blank", "noopener");
 }

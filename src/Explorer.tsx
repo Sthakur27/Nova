@@ -149,6 +149,7 @@ function FileTree({
 type Props = {
   folders: Workspace[];
   showHidden?: boolean;
+  cloudOnly?: boolean;
   onLoadDirectory?: (root: string, path: string, more?: boolean) => void;
   onToggleDirectory?: (root: string, path: string) => void;
   loadingDirectories?: Record<string, string[]>;
@@ -176,7 +177,7 @@ export default function Explorer({
   activePath,
   onOpen,
   onRename,
-  showHidden = false,
+  showHidden = false, cloudOnly = false,
   onChange,
   onFileAction,
   onRemove,
@@ -299,7 +300,7 @@ export default function Explorer({
         {(["Cloud", "Local"] as const).map(kind => {
           const isCloud = kind === "Cloud";
           const ordered = folders.filter(folder => !!folder.cloudSpace === isCloud);
-          if ((isCloud && !ordered.length) || (!isCloud && mobile)) return null;
+          if ((isCloud && !ordered.length) || (!isCloud && (mobile || cloudOnly))) return null;
           const collapsed = isCloud ? cloudCollapsed : localCollapsed;
           const setCollapsed = isCloud ? setCloudCollapsed : setLocalCollapsed;
           const flatRoot = ordered.length === 1;
@@ -411,7 +412,7 @@ export default function Explorer({
             </div>
           </section>;
         })}
-        {!folders.length && (
+        {!folders.length && !cloudOnly && (
           <div className="explorer-empty">
             <FolderOpen size={24} />
             <p>A place for every project.</p>

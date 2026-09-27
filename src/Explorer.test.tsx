@@ -303,3 +303,18 @@ it("keeps multiple Cloud spaces distinct and exposes each creation target", asyn
     await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals();
   }
 });
+
+it("omits Local and its folder prompts in a Cloud-only window", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const host = document.createElement("div"), root = createRoot(host), noop = () => {};
+  const cloud: Workspace = { root: "/cloud", name: "Cloud", files: [], cloudSpace: { id: "id", name: "Cloud", account: "me" } };
+  const render = (folders: Workspace[]) => <Explorer cloudOnly folders={folders} activeRoot="" activePath="" onOpen={noop} onRename={noop} onFileAction={noop} onChange={noop} onRemove={noop} onRefresh={noop} onAdd={noop} externalDrag={false}/>;
+  try {
+    await act(async () => root.render(render([cloud])));
+    expect(host.querySelector('[aria-label="Cloud notes"]')).not.toBeNull();
+    expect(host.querySelector('[aria-label="Local notes"]')).toBeNull();
+    await act(async () => root.render(render([])));
+    expect(host.textContent).not.toContain("Open Folder");
+    expect(host.textContent).not.toContain("Open a folder");
+  } finally { await act(async () => root.unmount()); vi.unstubAllGlobals(); }
+});

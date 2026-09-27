@@ -5,6 +5,7 @@ import type { Workspace } from "./model";
 export type FolderPreference = Pick<Workspace, "root" | "name" | "collapsed" | "closedDirectories" | "expandedDirectories" | "cloudSpace">;
 export type EditorMode = "source" | "edit" | "read";
 export type ExplorerPreferences = {
+  cloudOnly?: boolean;
   folders: FolderPreference[];
   recents?: RecentFolder[];
   active: { root: string; path: string } | null;
@@ -46,6 +47,7 @@ export function parsePreferences(value: unknown): ExplorerPreferences | null {
       : null;
   return {
     folders: unique,
+    ...(v.cloudOnly === true ? { cloudOnly: true } : {}),
     ...(v.recents ? { recents: parseRecents(v.recents) } : {}),
     active,
     ...(Array.isArray(v.tabs) ? { tabs: v.tabs.filter((t): t is NoteTab =>

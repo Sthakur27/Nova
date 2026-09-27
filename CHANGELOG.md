@@ -28,6 +28,8 @@ Entries describe source changes; availability in published installers has not be
 
 #### Added
 
+- Open a Cloud-only window from the sidebar folder menu or Recents without selecting a local folder. Cloud-only sessions retain local folders in Recents, show Google Drive setup when needed, and keep the Local section out of the way.
+
 - Create nested folders in Cloud spaces, including empty folders that sync across devices. Move notes between folders or back to the root using folder suggestions while retaining their Drive identity, bookmarks, stars, drafts, and open tabs.
 
 ### 2026-09-26

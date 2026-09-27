@@ -217,3 +217,7 @@ open tabs. A note deleted only on this device returns if it still exists in Driv
 Changes that have not uploaded are discarded. Sign-in and appearance preferences
 are retained; Google Drive files are not modified. Saves and sync pause during
 recovery, and Nova reloads after success. A failed download leaves local data intact.
+
+### Using Cloud without a local folder
+
+On desktop, choose **Open Cloud-only Window** from the folder icon below Quick find or from **Recent**. Connect Google Drive if prompted. Cloud spaces work without selecting a local folder, including their existing offline copies, recovery drafts, and autosave behavior. Opening a local folder later creates a separate mixed window; it does not move Cloud notes into that folder.

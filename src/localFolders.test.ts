@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 import { parsePreferences } from "./folders";
-import { folderWindowPreferences, migrateLocalFolders, rememberFolder, parseRecents } from "./localFolders";
+import { cloudWindowPreferences, folderWindowPreferences, migrateLocalFolders, rememberFolder, parseRecents } from "./localFolders";
 import { initialPane } from "./paneLayout";
 import { tabId } from "./tabs";
 import type { Workspace } from "./model";
@@ -53,4 +53,28 @@ it("opens a never-seen folder without inheriting another window's tabs", () => {
   expect(next.folders).toEqual([{ root: "/new folder", name: "new folder", collapsed: false }]);
   expect(next.tabs).toEqual([]);
   expect(next.active).toBeNull();
+});
+
+it("opens Cloud without mounting local roots and preserves their sessions for reopening", () => {
+  const panes = { ...initialPane(), tabs: tabs.map(tabId), selected: tabId(tabs[0]) };
+  const saved = { folders: [a, b, cloud], tabs, active: tabs[0], mode: "source" as const, panes };
+  const before = JSON.stringify(saved);
+  const next = cloudWindowPreferences(saved);
+  expect(next.folders).toEqual([cloud]);
+  expect(next.tabs).toEqual([tabs[2]]);
+  expect(next.active).toEqual(tabs[2]);
+  expect(next.panes).toMatchObject({ tabs: [tabId(tabs[2])], selected: tabId(tabs[2]) });
+  expect(next.recents?.find(recent => recent.root === a.root)).toMatchObject({ tabs: [tabs[0]], active: tabs[0].path, expandedDirectories: ["nested"] });
+  expect(JSON.stringify(saved)).toBe(before);
+  const restored = parsePreferences(JSON.parse(JSON.stringify(next)))!;
+  expect(restored.cloudOnly).toBe(true);
+  expect(cloudWindowPreferences(restored).folders).toEqual(restored.folders);
+  const local = folderWindowPreferences(restored, a.root);
+  expect(local.cloudOnly).not.toBe(true);
+  expect(local.folders.map(folder => folder.root)).toEqual([cloud.root, a.root]);
+  expect(local.tabs).toEqual([tabs[0]]);
+});
+it("starts Cloud without sample notes or a required local folder", () => {
+  expect(cloudWindowPreferences(null)).toMatchObject({ cloudOnly: true, folders: [], tabs: [], active: null });
+  expect(cloudWindowPreferences({ folders: [a], active: null, mode: "edit" }).folders).toEqual([]);
 });
