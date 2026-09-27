@@ -3032,9 +3032,22 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 .saved-state-files { color: #96909f; font-size: 11px; line-height: 1.5; padding: 7px 12px 10px; overflow-wrap: anywhere; }
 .saved-state-card:has(.saved-state-drag) .saved-state-files { padding-left: 30px; }
 
-.flat-cloud > .root-files { padding-left: 0; }
+.flat-root > .root-files { padding-left: 0; }
 .explorer-section-actions .root-menu > summary { opacity: 1; pointer-events: auto; }
 
 .create-menu { width: min(190px, calc(100vw - 16px)); }
 .create-menu button { align-items: center; gap: 8px; }
 .create-menu button:disabled { opacity: .45; cursor: default; }
+
+.folder-section-label { position: relative; flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; }
+.folder-section-measure { position: absolute; visibility: hidden; width: max-content; pointer-events: none; }
+.explorer-section-toggle > svg { flex-shrink: 0; }
+.explorer-section-actions .explorer-create[data-prominent="true"] {
+  background: #bc97ed; color: #24172f; border: 1px solid #d9befa; box-shadow: 0 1px 5px #0003;
+}
+.explorer-section-actions .explorer-create[data-prominent="true"]:hover:not(:disabled),
+.explorer-section-actions .explorer-create[data-prominent="true"][aria-expanded="true"] { background: #d6b4ff; color: #1c1027; }
+.explorer-section-actions .explorer-create[data-prominent="true"]:disabled { opacity: .4; }
+.sync-attention { display: inline-flex; align-items: center; gap: 5px; padding: 3px 7px; border: 1px solid #ef777780; border-radius: 5px; background: #7d25254d; color: #ffb0b0; font: inherit; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.sync-attention:hover { background: #a1323266; color: #ffd2d2; }
+.sync-attention:focus-visible { outline: 2px solid #ffb0b0; outline-offset: 2px; }

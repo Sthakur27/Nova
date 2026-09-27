@@ -57,7 +57,8 @@ it("toggles Local and Cloud independently from their labels and remembers both s
     await act(async()=>root.render(render()));
     expect([...host.querySelectorAll('.explorer-section')].map(node=>node.getAttribute('aria-label'))).toEqual(['Cloud notes','Local notes']);
     expect(host.querySelectorAll('.explorer-section-toggle')).toHaveLength(2);
-    expect(toggle("local").textContent).toBe("Local");
+    expect(toggle("local").getAttribute("aria-label")).toBe("Local folder local folder");
+    expect(toggle("local").title).toBe("Local folder — /local");
     expect(toggle("cloud").textContent).toBe("Cloud");
     expect(toggle("local").getAttribute("aria-expanded")).toBe("false");
     expect(toggle("local").querySelector('.lucide-chevron-right')).not.toBeNull();
@@ -180,17 +181,14 @@ it.each(["Cloud", "Local"])("reveals a switched tab in a collapsed %s section an
     expect(scroll).toHaveBeenCalledExactlyOnceWith({ block: "nearest", inline: "nearest" });
     expect(host.querySelector(".nova-star, .file-star, .stars-toggle")).toBeNull();
     // A subsequent manual collapse stays collapsed until another tab is selected.
-    if (kind === "Local") {
-      await act(async () => host.querySelector<HTMLButtonElement>(`[aria-label="${kind} folder"]`)!.click());
-      expect(host.querySelector(`[aria-label="${kind} folder"]`)?.getAttribute("aria-expanded")).toBe("false");
-    } else expect(host.querySelector(".flat-cloud > .root-header")).toBeNull();
+    expect(host.querySelector(".flat-root > .root-header")).toBeNull();
     expect(onLoadDirectory).toHaveBeenCalledTimes(kind === "Cloud" ? 0 : 2);
     const sectionToggle = host.querySelector<HTMLButtonElement>(`[aria-controls="explorer-${kind.toLowerCase()}"]`)!;
     await act(async () => sectionToggle.click());
     expect(sectionToggle.getAttribute("aria-expanded")).toBe("false");
     await act(async () => root.render(<Harness activeRoot={targetRoot} activePath="deep/nested/other.md" />));
     expect(sectionToggle.getAttribute("aria-expanded")).toBe("true");
-    if (kind === "Local") expect(host.querySelector(`[aria-label="${kind} folder"]`)?.getAttribute("aria-expanded")).toBe("true");
+    expect(host.querySelector(".flat-root > .root-header")).toBeNull();
   } finally {
     await act(async () => root.unmount());
     HTMLElement.prototype.scrollIntoView = oldScroll;
@@ -253,7 +251,7 @@ it("creates in the collapsed local folder while Cloud is active without toggling
     expect(onNew).toHaveBeenCalledExactlyOnceWith(local);
     expect(onChange).not.toHaveBeenCalled();
     expect(onAdd).not.toHaveBeenCalled();
-    expect(host.querySelector('[aria-label="Local folder folder"]')?.getAttribute("aria-expanded")).toBe("false");
+    expect(host.querySelector('[aria-label="Local folder folder"]')).toBeNull();
     expect(host.querySelector('#explorer-cloud .root-new-note')).toBeNull();
     await act(async () => host.querySelector<HTMLButtonElement>('.explorer-open-local')!.click());
     expect(onAdd).toHaveBeenCalledOnce();
@@ -278,7 +276,7 @@ it.each(["Cloud", "Local"])("shows empty %s folders and exposes folder creation"
       onNew={noop} onNewFolder={onNewFolder} onLoadDirectory={onLoadDirectory} onOpen={noop} onRename={noop}
       onFileAction={noop} onChange={noop} onRemove={noop} onRefresh={noop} onAdd={noop} externalDrag={false}/>));
     expect(host.querySelector(".folder-row")?.textContent).toContain("Empty");
-    expect(host.querySelector(".flat-cloud > .root-header")).toBeNull();
+    expect(host.querySelector(".flat-root > .root-header")).toBeNull();
     await act(async () => host.querySelector<HTMLButtonElement>(kind === "Cloud" ? '[aria-label="Create in Cloud"]' : '[aria-label="Create in Local: Notes"]')!.click());
     const create = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(button => button.textContent === "New folder")!;
     await act(async () => create.click());
@@ -303,7 +301,7 @@ it("keeps multiple Cloud spaces distinct and exposes each creation target", asyn
       onNew={noop} onNewFolder={onNewFolder} onOpen={noop} onRename={noop} onFileAction={noop}
       onChange={noop} onRemove={noop} onRefresh={noop} onAdd={noop} externalDrag={false}/>));
     expect(host.querySelectorAll(".root-title")).toHaveLength(2);
-    expect(host.querySelector(".flat-cloud")).toBeNull();
+    expect(host.querySelector(".flat-root")).toBeNull();
     await act(async () => host.querySelector<HTMLButtonElement>('[aria-label="Create in Personal"]')!.click());
     await act(async () => [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(item => item.textContent === "New folder")!.click());
     expect(onNewFolder).toHaveBeenCalledExactlyOnceWith(folders[0]);

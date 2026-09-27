@@ -89,6 +89,11 @@ retains local and Drive files. Mobile returns to setup. It does not revoke Googl
 app authorization. Existing Local folders and legacy selections do not participate
 in the managed Cloud sync loop.
 
+The bottom panel shows a red **Sync needs attention · Review** button when the
+active Cloud note has a sync error. Click it to open sync settings and review
+the error and available recovery or retry controls. The error detail is also
+available by hovering over the button.
+
 ## Organize Cloud notes
 
 When there is one Cloud space, its files and folders appear directly under the

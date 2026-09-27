@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { syncIncluded, type SyncPolicy } from "./syncPolicy";
 import type { Workspace } from "./model";
+import FolderSectionLabel from "./FolderSectionLabel";
 import CreateMenu from "./CreateMenu";
 import RecentFolders from "./RecentFolders";
 import type { RecentFolder } from "./localFolders";
@@ -309,14 +310,15 @@ export default function Explorer({
           if ((isCloud && !ordered.length) || (!isCloud && mobile)) return null;
           const collapsed = isCloud ? cloudCollapsed : localCollapsed;
           const setCollapsed = isCloud ? setCloudCollapsed : setLocalCollapsed;
-          const flatCloud = isCloud && ordered.length === 1;
+          const flatRoot = ordered.length === 1;
+          const localFolder = !isCloud && flatRoot ? ordered[0] : undefined;
           const createTarget = ordered.find(folder => folder.root === activeRoot && !folder.error)
             ?? ordered.find(folder => !folder.error);
           return <section className="explorer-section" key={kind} aria-label={`${kind} notes`}>
             <div className="explorer-section-header">
-              <h2><button className="explorer-section-label explorer-section-toggle" aria-expanded={!collapsed} aria-controls={`explorer-${kind.toLowerCase()}`} onClick={() => setCollapsed(!collapsed)}>
+              <h2><button className="explorer-section-label explorer-section-toggle" title={localFolder ? `${localFolder.name} — ${localFolder.root === "demo" ? "Sample notes" : localFolder.root}` : undefined} aria-label={localFolder ? `${localFolder.name} local folder` : undefined} aria-expanded={!collapsed} aria-controls={`explorer-${kind.toLowerCase()}`} onClick={() => setCollapsed(!collapsed)}>
                 {collapsed ? <ChevronRight size={13} aria-hidden="true" /> : <ChevronDown size={13} aria-hidden="true" />}
-                {kind}
+                {localFolder ? <FolderSectionLabel name={localFolder.name}/> : kind}
               </button></h2>
               {!isCloud && <div className="explorer-section-actions">
                 {onShowHidden && <button className="icon-button hidden-files-toggle" aria-label={showHidden ? "Hide hidden files and folders" : "Show hidden files and folders"} title={showHidden ? "Hide hidden files and folders" : "Show hidden files and folders"} aria-pressed={showHidden} onClick={() => onShowHidden(!showHidden)}>{showHidden ? <Eye size={15}/> : <EyeOff size={15}/>}</button>}
@@ -324,15 +326,15 @@ export default function Explorer({
                 <button className="icon-button explorer-open-local" aria-label="Open local folder in new window" title="Open Folder in New Window…" onClick={onAdd}><FolderOpen size={15}/></button>
               </div>}
               <div className="explorer-section-actions">
-                {onNew && <CreateMenu label={isCloud ? "Create in Cloud" : `Create in Local${createTarget ? `: ${createTarget.name}` : ""}`} disabled={!createTarget}
+                {onNew && <CreateMenu prominent={isCloud} label={isCloud ? "Create in Cloud" : `Create in Local${createTarget ? `: ${createTarget.name}` : ""}`} disabled={!createTarget}
                   onFile={() => { setCollapsed(false); if (createTarget) onNew(createTarget); }}
                   onFolder={onNewFolder && createTarget && createTarget.root !== "demo" ? () => { setCollapsed(false); onNewFolder(createTarget); } : undefined}/>}
-                {flatCloud && rootOptions(ordered[0], "Cloud")}
+                {flatRoot && rootOptions(ordered[0], isCloud ? "Cloud" : ordered[0].name)}
               </div>
             </div>
             <div id={`explorer-${kind.toLowerCase()}`} hidden={collapsed}>
         {ordered.map((folder) => {
-          const collapsed = flatCloud ? false : folder.collapsed ?? true;
+          const collapsed = flatRoot ? false : folder.collapsed ?? true;
           const closed = closedDirectories(folder);
           // An open tab can point past a directory's loaded page.
           const available = folder.root === activeRoot && activePath && !folder.files.some(file => file.path === activePath)
@@ -345,9 +347,9 @@ export default function Explorer({
           <section
             key={folder.root}
             data-folder-root={folder.root}
-            className={flatCloud ? "explorer-root flat-cloud" : "explorer-root"}
+            className={flatRoot ? "explorer-root flat-root" : "explorer-root"}
           >
-            {!flatCloud && <div className="root-header">
+            {!flatRoot && <div className="root-header">
               <button
                 className="root-title"
                 title={folder.cloudSpace ? `Cloud / ${folder.name}` : folder.root === "demo" ? "Sample notes" : folder.root}

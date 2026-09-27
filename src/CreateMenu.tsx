@@ -3,8 +3,8 @@ import { createPortal } from "react-dom";
 import { FileText, Folder, Plus } from "lucide-react";
 import { recentMenuPosition } from "./RecentFolders";
 
-export default function CreateMenu({ label, disabled, onFile, onFolder }: {
-  label: string; disabled?: boolean; onFile: () => void; onFolder?: () => void;
+export default function CreateMenu({ label, disabled, onFile, onFolder, prominent = false }: {
+  prominent?: boolean; label: string; disabled?: boolean; onFile: () => void; onFolder?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ left: 8, top: 8 });
@@ -36,7 +36,7 @@ export default function CreateMenu({ label, disabled, onFile, onFolder }: {
     };
   }, [visible]);
   return <>
-    <button ref={trigger} className="icon-button explorer-create" aria-label={label} title={label} disabled={disabled}
+    <button ref={trigger} className="icon-button explorer-create" data-prominent={prominent} aria-label={label} title={`${label} — New file or folder`} disabled={disabled}
       aria-haspopup="menu" aria-expanded={visible} aria-controls={visible ? id : undefined} onClick={() => setOpen(value => !value)}>
       <Plus size={15} aria-hidden="true"/>
     </button>

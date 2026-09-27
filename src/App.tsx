@@ -1,3 +1,4 @@
+import SyncAttention from "./SyncAttention";
 import FocusStateNav from "./FocusStateNav";
 import ReadPaneSurface from "./ReadPaneSurface";
 import SavedStatesPanel from "./SavedStatesPanel";
@@ -1313,7 +1314,7 @@ export default function App() {
     targets: () => current.current.folders.filter(folder => folder.root !== "demo" && !folder.cloudSpace).map(folder => ({
       root: folder.root,
       files: tabsRef.current.filter(tab => tab.root === folder.root).map(tab => tab.path),
-      directories: ["", ...(folder.collapsed ? [] : (folder.expandedDirectories ?? []).filter(directory =>
+      directories: ["", ...(folder.collapsed && current.current.folders.filter(item => !item.cloudSpace).length > 1 ? [] : (folder.expandedDirectories ?? []).filter(directory =>
         directory.split("/").slice(0, -1).every((_, index, parts) => (folder.expandedDirectories ?? []).includes(parts.slice(0, index + 1).join("/")))))],
     })),
     busy: () => operation.current || !!saveInFlight.current || voiceBusy.current || localResetInProgress(),
@@ -2325,8 +2326,11 @@ export default function App() {
               ? "Saving…"
               : dirty
                 ? workspace.cloudSpace && path !== ".nova" ? "Saving on this device…" : draftStatus === "saving" ? "Saving draft…" : draftStatus === "error" ? "Draft not saved" : "Draft saved · Unsaved to file"
-                : workspace.cloudSpace && path !== ".nova" ? uploads.errors[workspace.root] ? "Saved on this device · Sync needs attention" : uploads.items[`${workspace.root}\n${path}`]?.state === "local" ? "Saved on this device · Edit or rename to sync" : uploads.transferringRoot === workspace.root ? "Syncing…" : uploads.completed[workspace.root] ? "Up to date" : "Saved on this device · Waiting to sync" : "All changes saved"}
+                : workspace.cloudSpace && path !== ".nova" ? (uploads.errors[workspace.root] || cloud.error || folders.find(folder => folder.root === workspace.root)?.syncError) ? "Saved on this device" : uploads.items[`${workspace.root}\n${path}`]?.state === "local" ? "Saved on this device · Edit or rename to sync" : uploads.transferringRoot === workspace.root ? "Syncing…" : uploads.completed[workspace.root] ? "Up to date" : "Saved on this device · Waiting to sync" : "All changes saved"}
           </span>
+          {workspace.cloudSpace && path && path !== ".nova" && <SyncAttention
+            error={uploads.errors[workspace.root] || cloud.error || folders.find(folder => folder.root === workspace.root)?.syncError}
+            onReview={() => showSync(workspace, path)}/>}
           <span>
             {mode !== "read"
               ? `Ln ${cursor[0]}, Col ${cursor[1]}`
