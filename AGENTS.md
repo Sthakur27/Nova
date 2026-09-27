@@ -19,14 +19,17 @@ For implementation and documentation tasks, the default definition of done is: i
 
 Decide which of these need updating based on the final behavior, and make the relevant changes in the same task. Do not mechanically edit every document for every change.
 
+For every feature, bug fix, or behavior change, explicitly review both the built-in Welcome and Changelog before committing. They are bundled into the app from `docs/welcome.md` and `CHANGELOG.md`; update these source files in the same task whenever the criteria below apply. Do not maintain separate copies of the in-app content.
+
 - **[README.md](README.md):** prominent features, first-run steps, defaults, shortcuts, platform support, or limitations. Promote substantial new capabilities with concise user-facing descriptions; keep detailed controls in the guides. Check existing claims for drift when behavior changes.
+- **[Built-in Welcome](docs/welcome.md):** keep the nontechnical introduction accurate and useful. Add handy features and everyday workflows worth discovering; revise affected instructions when controls, defaults, shortcuts, saving behavior, or platform availability change. Describe how to use the current app in plain language, not implementation details or a history of fixes. A bug fix needs a Welcome edit only when it changes or corrects its guidance; do not add an entry for every fix.
 - **[CHANGELOG.md](CHANGELOG.md):** user-visible features, behavior changes, fixes, meaningful performance improvements, and migration requirements. Add concise entries under **Unreleased**, following its date and Added/Changed/Fixed structure. Group related work; avoid a raw commit dump. Internal refactors, tests alone, and documentation-only edits usually do not need an entry unless they change something users need to know.
 - **[Reference guide](docs/user-guide.md):** detailed controls, settings, search, tabs, editing, and saving behavior.
 - **[Drive guide](docs/sync.md) / [mobile guide](docs/mobile.md):** sync, offline behavior, recovery, platform availability, and setup changes.
 - **[Developer guide](docs/development.md) / [update release guide](docs/app-updates.md):** build commands, prerequisites, architecture, CI, packaging, and release changes.
 - Update screenshots when changed UI makes them materially misleading and a representative capture is available. Do not invent screenshots or present browser-only behavior as verified native behavior.
 - Keep development dates separate from release dates. Move changelog entries out of Unreleased only after verifying installer publication and recording the build tag/source commit. A local version number, commit, or successful push alone is not proof of release.
-- If no documentation change is warranted, briefly state why in the final response.
+- In the final response, state whether Welcome and Changelog were updated, or briefly explain why each needed no change. If no documentation change is warranted, briefly state why.
 
 ## Verification
 
