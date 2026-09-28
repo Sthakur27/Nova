@@ -8,7 +8,7 @@ On desktop, use the folder button below **Quick find** to open a folder on your 
 
 **Local** is for files on your computer. Use **Save** or **Command-S / Ctrl-S** to write your changes to the file. Nova also keeps recovery drafts on this device to help you recover unsaved work.
 
-**Cloud** is for notes connected to Google Drive. Connect in Settings, then write in a Cloud space for automatic saving and syncing. Notes already downloaded remain available offline; syncing resumes when you reconnect. Local files stay local unless you choose to move or sync them.
+**Cloud** is for notes connected to Google Drive. Connect in Settings, then write in a Cloud space for automatic saving and syncing. If Google access expires, choose **Reconnect Google Drive** in Cloud settings and sign in again. Notes already downloaded remain available offline; syncing resumes when you reconnect. Local files stay local unless you choose to move or sync them.
 
 ## Write the way you like
 

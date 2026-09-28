@@ -29,6 +29,12 @@ with the same name blocks the move; it is never overwritten. Unsaved inactive
 local drafts must be opened and saved first. The current action uses the first
 Cloud space; dragging between Local and Cloud is not implemented.
 
+If Google access expires or is revoked, choose **Reconnect Google Drive** in Cloud
+settings on desktop, iPhone, or iPad. Sign in again with the same Google account;
+you do not need to disconnect first. Nova refreshes Cloud after successful sign-in.
+Cancelling sign-in leaves the saved account and offline notes in place. Reconnect
+is also available on the setup screen when a saved account cannot load its spaces.
+
 ## Autosave and status
 
 Cloud notes save on the device shortly after typing pauses and before switching

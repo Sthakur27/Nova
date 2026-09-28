@@ -55,7 +55,7 @@ fn cached_credential() -> Result<Option<Credential>, String> {
             Ok(value) => serde_json::from_str::<Credential>(&value).map(Some)
                 .map_err(|_| "Saved Google connection is invalid. Disconnect and reconnect.".to_string()),
             Err(keyring::Error::NoEntry) => Ok(None),
-            Err(_) => Err("Could not read the Google connection from the system credential store. Reconnect in Sync settings to try again.".into()),
+            Err(_) => Err("Could not read the Google connection from the system credential store. Reconnect in Cloud settings to try again.".into()),
         }
     })
 }
@@ -243,7 +243,7 @@ pub(crate) fn access_token() -> Result<String, String> {
     let response = client.post("https://oauth2.googleapis.com/token").form(&token_form(vec![
         ("refresh_token", credential.refresh_token.as_str()), ("grant_type", "refresh_token"),
     ])?).send().map_err(|_| "Google Drive is offline. Check your connection and retry.".to_string())?;
-    if !response.status().is_success() { return Err("Google access expired or was revoked. Disconnect and reconnect in Sync settings.".into()); }
+    if !response.status().is_success() { return Err("Google access expired or was revoked. Choose Reconnect Google Drive in Cloud settings.".into()); }
     let value: serde_json::Value = response.json().map_err(|_| "Invalid response from Google.".to_string())?;
     value["access_token"].as_str().map(str::to_owned).ok_or("Google did not return access. Reconnect Google Drive.".into())
 }

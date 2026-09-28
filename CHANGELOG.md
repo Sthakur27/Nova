@@ -26,6 +26,8 @@ Entries describe source changes; availability in published installers has not be
 
 #### Fixed
 
+- Cloud settings on desktop and mobile now offer Reconnect Google Drive for expired access without disconnecting first. Successful sign-in refreshes Cloud; the mobile setup screen also offers reconnect for saved accounts.
+
 - Saved layouts and their shortcuts now belong to the open Local folder, with a separate nine-slot set for Cloud-only windows. Switching folders no longer shows layouts from a different folder; compatible older layouts are retained.
 
 - Desktop tab strips automatically reveal the active file when opening, creating, or switching notes, including in narrow split panes.

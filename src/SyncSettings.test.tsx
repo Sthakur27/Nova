@@ -39,3 +39,31 @@ it("offers resolution only for missing files and requires confirmation before de
     expect(button("Acknowledge & delete…").disabled).toBe(true);
   } finally { await act(async()=>root.unmount()); host.remove(); }
 });
+
+it.each([false, true])("reconnects an expired account without disconnecting (mobile: %s)", async mobile => {
+  vi.mocked(await import("./platform")).mobile = mobile;
+  (globalThis as Record<string, unknown>).IS_REACT_ACT_ENVIRONMENT = true;
+  HTMLDialogElement.prototype.showModal = vi.fn();
+  HTMLDialogElement.prototype.close = vi.fn();
+  const host = document.createElement("div"), root = createRoot(host);
+  const connect = vi.fn().mockResolvedValue(true), disconnect = vi.fn(), cancel = vi.fn(), refresh = vi.fn();
+  const drive = {status:{connected:true, configured:true, email:"user@example.com"}, supported:true, busy:false, checking:false, error:"", connect, disconnect, cancel};
+  const props = {folders:[], drive, uploads:{items:{}, errors:{}, completed:{}}, onRefreshCloud:refresh, cloudError:"Google access expired or was revoked."} as unknown as ComponentProps<typeof SyncSettings>;
+  const button = (label:string) => [...host.querySelectorAll("button")].find(b => b.textContent === label)!;
+  try {
+    await act(async()=>root.render(<SyncSettings {...props}/>));
+    expect(host.textContent).toContain("Google access expired");
+    await act(async()=>button("Reconnect Google Drive").click());
+    expect(connect).toHaveBeenCalledOnce();
+    expect(disconnect).not.toHaveBeenCalled();
+    expect(refresh).toHaveBeenCalledOnce();
+    refresh.mockClear(); connect.mockResolvedValue(false);
+    await act(async()=>button("Reconnect Google Drive").click());
+    expect(refresh).not.toHaveBeenCalled();
+    await act(async()=>root.render(<SyncSettings {...props} drive={{...drive, busy:true}}/>));
+    expect(button("Waiting for Google…").disabled).toBe(true);
+    expect(button("Disconnect").disabled).toBe(true);
+    await act(async()=>button("Cancel sign-in").click());
+    expect(cancel).toHaveBeenCalledOnce();
+  } finally { await act(async()=>root.unmount()); }
+});

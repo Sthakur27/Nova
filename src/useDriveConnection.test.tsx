@@ -18,7 +18,7 @@ it("tracks browser sign-in, blocks duplicate requests, and updates connected acc
     expect(drive.checking).toBe(false);
     let finish!: (value: unknown) => void;
     vi.mocked(invoke).mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
-    let request!: Promise<void>;
+    let request!: Promise<boolean>;
     await act(async () => { request = drive.connect(); void drive.connect(); });
     expect(drive.busy).toBe(true);
     expect(vi.mocked(invoke).mock.calls.filter(([name]) => name === "drive_connect")).toHaveLength(1);
@@ -45,5 +45,25 @@ it("keeps reconnect available when secure credential storage reports an error", 
     expect(drive.status.configured).toBe(true);
     expect(drive.error).toContain("Could not read");
     expect(drive.busy).toBe(false);
+  } finally { await act(async()=>root.unmount()); }
+});
+
+it("preserves the saved account when reconnect fails or is cancelled", async () => {
+  vi.mocked(invoke).mockReset();
+  const saved = {connected:true, configured:true, email:"test@example.com", account:"a"};
+  vi.mocked(invoke).mockResolvedValueOnce(saved);
+  let drive!: DriveConnection;
+  function Harness() { drive = useDriveConnection(); return null; }
+  const root = createRoot(document.createElement("div"));
+  try {
+    await act(async()=>root.render(<Harness/>));
+    vi.mocked(invoke).mockRejectedValueOnce("Google sign-in cancelled.");
+    await act(async()=>{ expect(await drive.connect()).toBe(false); });
+    expect(drive.status).toEqual(saved);
+    expect(drive.error).toContain("cancelled");
+    vi.mocked(invoke).mockResolvedValueOnce(saved);
+    await act(async()=>{ expect(await drive.connect()).toBe(true); });
+    expect(drive.error).toBe("");
+    expect(vi.mocked(invoke).mock.calls.map(([command])=>command)).toEqual(["drive_status", "drive_connect", "drive_connect"]);
   } finally { await act(async()=>root.unmount()); }
 });

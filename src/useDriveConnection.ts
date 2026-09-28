@@ -16,11 +16,11 @@ export function useDriveConnection() {
     return () => { active = false; };
   }, []);
   async function run(command: "drive_connect" | "drive_disconnect") {
-    if (pending.current) return;
+    if (pending.current) return false;
     pending.current = true;
     setBusy(true); setError("");
-    try { setStatus(await invoke<DriveStatus>(command)); }
-    catch (error) { setError(String(error)); }
+    try { setStatus(await invoke<DriveStatus>(command)); return true; }
+    catch (error) { setError(String(error)); return false; }
     finally { pending.current = false; setBusy(false); }
   }
   return { status, busy, checking, error, supported: driveSupported,

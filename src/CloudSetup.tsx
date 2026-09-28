@@ -9,7 +9,11 @@ export default function CloudSetup({drive, loading, error, retry, embedded = fal
       <button disabled={!drive.supported || !drive.status.configured || drive.busy} onClick={()=>void drive.connect()}>{drive.busy ? "Waiting for Google…" : "Connect Google Drive"}</button>
       {drive.busy && <button onClick={()=>void drive.cancel()}>Cancel sign-in</button>}
       {!drive.status.configured && <p>This build needs Google sign-in configuration.</p>}
-    </> : <><p role="status">{loading ? "Bringing your Cloud notes to this device…" : "Preparing Cloud…"}</p>{!loading && <button onClick={retry}>Try again</button>}</>}
+    </> : <><p role="status">{loading ? "Bringing your Cloud notes to this device…" : "Preparing Cloud…"}</p>{!loading && <button disabled={drive.busy} onClick={retry}>Try again</button>}</>}
+    {!drive.checking && drive.status.connected && <>
+      <button disabled={!drive.supported || !drive.status.configured || drive.busy || loading} onClick={async()=>{if(await drive.connect()) retry();}}>{drive.busy ? "Waiting for Google…" : "Reconnect Google Drive"}</button>
+      {drive.busy && <button onClick={()=>void drive.cancel()}>Cancel sign-in</button>}
+    </>}
     {(drive.error || error) && <p role="alert">{drive.error || error}</p>}
   </Container>;
 }

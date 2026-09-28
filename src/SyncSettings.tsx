@@ -43,10 +43,12 @@ export default function SyncSettings({drive, uploads, folders, onClose, cloudLoa
         {drive.status.connected && <button className="settings-action" disabled={!!resolving || drive.busy || !!uploads.activeRoot || cloudLoading} onClick={async()=>{if(await confirmSyncOff("this device")) await drive.disconnect();}}>Disconnect</button>}</div>
         {!drive.status.connected && <>
           <p>Your Cloud spaces appear automatically after connecting. Local folders stay on this computer.</p>
-          <button className="settings-action" disabled={!drive.supported || !drive.status.configured || drive.checking || drive.busy} onClick={()=>void drive.connect()}>{drive.busy ? "Waiting for Google…" : "Connect Google Drive"}</button>
-          {drive.busy && <button className="settings-action" onClick={()=>void drive.cancel()}>Cancel sign-in</button>}
           {!drive.status.configured && !drive.checking && <p>This build needs Google sign-in configuration.</p>}
         </>}
+        <div className="cloud-space-actions">
+          <button className="settings-action" disabled={!drive.supported || !drive.status.configured || drive.checking || drive.busy || !!resolving || !!uploads.activeRoot || cloudLoading} onClick={async()=>{if(await drive.connect() && drive.status.connected) onRefreshCloud?.();}}>{drive.busy ? "Waiting for Google…" : drive.status.connected ? "Reconnect Google Drive" : "Connect Google Drive"}</button>
+          {drive.busy && <button className="settings-action" onClick={()=>void drive.cancel()}>Cancel sign-in</button>}
+        </div>
         {drive.error && <p role="alert">{drive.error}</p>}
       </div>
       {drive.status.connected && <>
