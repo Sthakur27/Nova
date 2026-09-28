@@ -58,7 +58,7 @@ For development on a paired physical device, keep the Tauri dev process running 
 npm run ios:dev -- --open --host
 ```
 
-`./runios.sh` is a shortcut for this command that first stops existing desktop or iOS development sessions in this checkout. Additional arguments are passed through to the iOS launcher.
+`./runios.sh --live` is a shortcut for this command that first stops existing desktop or iOS development sessions in this checkout. Additional arguments are passed through to the iOS launcher.
 
 Choose your personal/development team under **Signing & Capabilities**, select your iPhone as the run destination, and click Run. Keep the phone and Mac on the same network for live updates. The checked-in Xcode build phase uses `scripts/ios-xcode.sh` to find Rust and Node even when Xcode was launched outside a terminal; it supports standard Cargo, Homebrew, and nvm installations. If `ios:init` regenerates the Xcode project, restore that build-phase wrapper if the generator replaces it.
 
@@ -67,10 +67,10 @@ Choose your personal/development team under **Signing & Capabilities**, select y
 For an everyday test install on your iPhone, run:
 
 ```sh
-./runios.sh --standalone
+./runios.sh
 ```
 
-This builds the frontend and opens Xcode in Tauri build mode, using a debug native build with bundled assets.
+This builds the frontend and opens Xcode in Tauri build mode, using a debug native build with bundled assets. Standalone is the default; `./runios.sh --standalone` does the same thing.
 
 1. Keep the terminal command running while Xcode builds.
 2. Select your iPhone as the run destination and choose your signing team.
@@ -83,9 +83,9 @@ The equivalent command is `npm run ios:build -- --debug --open`. The shortcut st
 
 ### Blank screen in a live development build
 
-**Running `./runios.sh` and then clicking Build or Run in Xcode still produces a live-development app.** Xcode does not automatically switch it to a standalone install. To remove the server dependency, rerun the launcher with `--standalone` and install that build using **Run (▶)**.
+**Older installs made with plain `./runios.sh`, and current installs made with `./runios.sh --live`, depend on the Mac’s development server.** They can work initially, then go blank away from the Mac when the app relaunches or iOS reloads its web interface. Updating the repository does not change an already installed app. Run the current `./runios.sh` and install the standalone build using **Run (▶)**. Keep the existing app installed to preserve its private notes and recovery drafts.
 
-Live development (`./runios.sh`) loads its interface from the Mac on every launch. Killing and restarting Nova does not turn that install into a bundled app. If the page request cannot finish, the native window can stay blank even though the app process is running.
+Live development (`./runios.sh --live`) loads its interface from the Mac on every launch. Killing and restarting Nova does not turn that install into a bundled app. If the page request cannot finish, the native window can stay blank even though the app process is running.
 
 - Keep the development command running and both devices on a network that allows device-to-device traffic. Some shared Wi-Fi networks isolate clients despite having the same network name.
 - Open the exact server URL printed by Vite in Safari on the phone. If it cannot connect, resolve the network route, firewall, or VPN issue, or use the standalone build above.

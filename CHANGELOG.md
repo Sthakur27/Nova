@@ -12,6 +12,8 @@ Entries describe source changes; availability in published installers has not be
 
 #### Changed
 
+- `./runios.sh` now defaults to a standalone iPhone install with a bundled interface, preventing dependence on the Mac’s development server when away. Use `--live` for live development; existing development installs need to be reinstalled through Xcode Run.
+
 - Saved layouts now remember each note’s Source, Edit, or Read mode, including Previous state. Older layouts without recorded modes retain current view preferences.
 
 ### 2026-09-27
