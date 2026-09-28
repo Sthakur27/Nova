@@ -573,10 +573,15 @@ export default function App() {
   const captureCurrentState = (name: string): SavedState => {
     capturePane();
     const views: SavedState["views"] = {};
+    for (const tab of tabsRef.current) {
+      const id = tabId(tab), session = paneSessions.current.get(id);
+      views[id] = { scrollTop: snapshots.current.get(id)?.scrollTop ?? 0,
+        mode: session ? sessionMode(session) : sharedViewMode.current ?? readFileMode(tab.path) };
+    }
     for (const pane of paneLeaves(paneLayoutRef.current)) {
       if (!pane.selected) continue;
       const session = paneSessions.current.get(pane.selected);
-      if (session) views[pane.selected] = { scrollTop: readSurfaces.current.get(pane.selected)?.scrollTop ?? paneEditors.current.get(pane.selected)?.snapshot().scrollTop ?? 0 };
+      if (session) views[pane.selected] = { mode: sessionMode(session), scrollTop: readSurfaces.current.get(pane.selected)?.scrollTop ?? paneEditors.current.get(pane.selected)?.snapshot().scrollTop ?? 0 };
     }
     return { name, tabs: tabsRef.current.map(t => ({ ...t, pinned: true })), layout: paneLayoutRef.current, activePane: activePaneRef.current, views };
   };
@@ -618,7 +623,7 @@ export default function App() {
         const { note, recovered } = await readRecoverableNote(tab.root, tab.path);
         const id = tabId(tab), cached = paneEditors.current.get(id)?.snapshot() ?? snapshots.current.get(id);
         sessions.set(id, { workspace: folder, path: tab.path, data: note, dirty: recovered,
-          mode: availablePaneMode(paneSessions.current.get(id)?.mode ?? sharedViewMode.current ?? readFileMode(tab.path), tab.path, note.text.length, showReadMode),
+          mode: availablePaneMode(state.views[id]?.mode ?? paneSessions.current.get(id)?.mode ?? sharedViewMode.current ?? readFileMode(tab.path), tab.path, note.text.length, showReadMode),
           snapshot: cached?.state.doc.toString() === note.text ? cached : undefined,
           cursor: [1, 1], preview: note.text });
       }
@@ -627,7 +632,9 @@ export default function App() {
       const session = sessions.get(pane.selected!)!;
       if (slot === "previous") setPreviousState(null);
       else if (outgoing && !sameStateLayout(outgoing, savedLayoutBaseline.current)) setPreviousState(outgoing);
-      savedLayoutBaseline.current = slot === "previous" ? null : state;
+      savedLayoutBaseline.current = slot === "previous" ? null : { ...state,
+        views: Object.fromEntries([...sessions].map(([id, session]) => [id, { ...state.views[id], scrollTop: state.views[id]?.scrollTop ?? 0, mode: session.mode }])),
+      };
       updateTabs(state.tabs);
       paneSessions.current = sessions;
       updatePaneLayout(state.layout); focusPane(pane.id);
@@ -977,7 +984,7 @@ export default function App() {
         applyMarks(note.bookmarks);
         setActiveMark(null);
         setCursor([1, 1]);
-        setMode(nextPath === ".nova" ? "source" : sharedViewMode.current ? paneMode(sharedViewMode.current, nextPath) : readFileMode(nextPath));
+        setMode(nextPath === ".nova" ? "source" : paneSessions.current.get(id)?.mode ?? (sharedViewMode.current ? paneMode(sharedViewMode.current, nextPath) : readFileMode(nextPath)));
         if (bookmarkId) {
           const mark = note.bookmarks.find((b) => b.id === bookmarkId);
           if (mark && !mark.unresolved) {

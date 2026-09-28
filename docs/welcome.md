@@ -35,7 +35,7 @@ For a longer Markdown note, open **Heading outline** in the right panel to jump 
 
 On desktop, clicking a file opens a preview tab; double-clicking keeps it open. Drag tabs to reorder them, or drag a tab toward an editor edge to see notes side by side. You can also drag files directly from the explorer into a pane.
 
-Found a useful arrangement? Open **Saved states** in the right panel and save it with a name. Return to its tabs, split panes, and reading positions later. Saved states live on this device and load the current notes—they aren’t copies of old note contents.
+Found a useful arrangement? Open **Saved states** in the right panel and save it with a name. Return to its tabs, split panes, Source/Edit/Read modes, and reading positions later. Saved states live on this device and load the current notes—they aren’t copies of old note contents.
 
 ## Make it feel like your space
 

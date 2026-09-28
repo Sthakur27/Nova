@@ -1,5 +1,6 @@
 import { parsePaneLayout, paneLeaves, type PaneNode } from "./paneLayout";
 import { tabId, type NoteTab } from "./tabs";
+import type { EditorMode } from "./folders";
 
 export const savedStatesKey = "nova:saved-states:v1";
 type StateFolder = { root: string; cloudSpace?: unknown };
@@ -26,7 +27,7 @@ export function readSavedStates(storage: Pick<Storage, "getItem">, folders: Stat
 
 export type SavedState = {
   name: string; tabs: NoteTab[]; layout: PaneNode; activePane: string;
-  views: Record<string, { scrollTop: number }>;
+  views: Record<string, { scrollTop: number; mode?: EditorMode }>;
 };
 export function parseSavedStates(raw: string | null): (SavedState | null)[] {
   const slots: (SavedState | null)[] = Array(9).fill(null);
@@ -47,6 +48,7 @@ export function parseSavedStates(raw: string | null): (SavedState | null)[] {
         const id = tabId(t), view = s.views?.[id];
         if (view && typeof view === "object") views[id] = {
           scrollTop: Number.isFinite(view.scrollTop) ? Math.max(0, view.scrollTop) : 0,
+          ...(["source", "edit", "read"].includes(view.mode ?? "") ? { mode: view.mode } : {}),
         };
       }
       slots[i] = { name: s.name.slice(0, 100), tabs, layout, views,
@@ -64,11 +66,12 @@ export function savedStateShortcut(event: KeyboardEvent): number | "manager" | "
 }
 
 /** Scrolling/typing within a saved layout does not replace the unsaved return point.
- * Navigation and pane changes create a new flex layout. */
+ * Navigation, pane changes, and view-mode changes create a new flex layout. */
 export function sameStateLayout(current: SavedState, saved: SavedState | null): boolean {
   if (!saved) return false;
   return JSON.stringify(current.layout) === JSON.stringify(saved.layout)
     && current.activePane === saved.activePane
+    && current.tabs.every(tab => current.views[tabId(tab)]?.mode === saved.views[tabId(tab)]?.mode)
     && JSON.stringify(current.tabs.map(tabId)) === JSON.stringify(saved.tabs.map(tabId));
 }
 

@@ -42,13 +42,24 @@ it("keeps the flex return point while browsing saved layouts, but detects naviga
   expect(savedStateShortcut({ metaKey: true, altKey: true, code: "Digit0" } as KeyboardEvent)).toBe("previous");
 });
 
-it("ignores appearance and view-mode settings from older saved states", () => {
-  const legacy = { ...state, appearance: { focusMode: true, rail: false, backgroundMode: "off" },
-    views: { [ids[0]]: { mode: "read", scrollTop: 820 }, [ids[1]]: { mode: "source", scrollTop: 1430 } } };
-  const restored = parseSavedStates(JSON.stringify([legacy]))[0]!;
+it("round-trips per-note view modes while ignoring appearance", () => {
+  for (const mode of ["source", "edit", "read"] as const) {
+    const withModes = { ...state, views: { [ids[0]]: { mode, scrollTop: 820 }, [ids[1]]: { mode: "read" as const, scrollTop: 1430 } } };
+    const restored = parseSavedStates(JSON.stringify([{ ...withModes, appearance: { focusMode: true } }]))[0]!;
+    expect(restored).toEqual(withModes);
+    expect(restored).not.toHaveProperty("appearance");
+  }
+});
+it("leaves old or invalid view modes unspecified for the current-mode fallback", () => {
+  const restored = parseSavedStates(JSON.stringify([{ ...state, views: {
+    [ids[0]]: { mode: "invalid", scrollTop: 820 }, [ids[1]]: { scrollTop: 1430 },
+  } }]))[0]!;
   expect(restored).toEqual(state);
-  expect(restored).not.toHaveProperty("appearance");
-  expect(restored.views[ids[0]]).not.toHaveProperty("mode");
+});
+it("detects mode changes as a new flex layout while ignoring scroll changes", () => {
+  const saved = { ...state, views: { [ids[0]]: { mode: "source" as const, scrollTop: 820 } } };
+  expect(sameStateLayout({ ...saved, views: { [ids[0]]: { mode: "source", scrollTop: 10 } } }, saved)).toBe(true);
+  expect(sameStateLayout({ ...saved, views: { [ids[0]]: { mode: "read", scrollTop: 820 } } }, saved)).toBe(false);
 });
 
 it("suggests a name from visible notes rather than hidden tabs", () => {

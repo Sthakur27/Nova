@@ -8,6 +8,12 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 Entries describe source changes; availability in published installers has not been verified. The initial backfill covers commits through `7d47fbe`.
 
+### 2026-09-28
+
+#### Changed
+
+- Saved layouts now remember each note’s Source, Edit, or Read mode, including Previous state. Older layouts without recorded modes retain current view preferences.
+
 ### 2026-09-27
 
 #### Changed
