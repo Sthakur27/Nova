@@ -1,12 +1,18 @@
 # Changelog
 
-User-facing changes to Nova, grouped by development date. This history starts after the September 20, 2026 README feature update (`0469ec0`); it is not a complete history of earlier versions. Dates below are commit dates, not installer release dates.
+User-facing changes to Nova, grouped by development date. This history starts after the September 20, 2026 README feature update (`0469ec0`); it is not a complete history of earlier versions. Development dates below are commit dates; release headings separately identify verified installer publication.
 
 See [available builds](https://github.com/Sthakur27/Nova/releases) for published installers and their source commits, or [the README](README.md) for an introduction.
 
 ## Unreleased
 
-Entries describe source changes; availability in published installers has not been verified. The initial backfill covers commits through `7d47fbe`.
+No pending entries.
+
+## 0.2.132 — released 2026-09-29
+
+Installer publication verified for [build-36618104410-1](https://github.com/Sthakur27/Nova/releases/tag/build-36618104410-1), built from source commit [`2115b16`](https://github.com/Sthakur27/Nova/commit/2115b16d81b9d6afe740f8e080073e0c7cbb6375). Signed updates and installers are available for Apple Silicon Mac, Intel Mac, and Windows x64.
+
+The development history below is included in this build; some earlier changes also appeared in previous releases. The initial backfill covers commits through `7d47fbe`.
 
 ### 2026-09-29
 
