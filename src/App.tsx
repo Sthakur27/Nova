@@ -2295,12 +2295,12 @@ export default function App() {
                 className={toolbar.source ? "selected" : ""}
                 aria-label="Source"
                 aria-pressed={toolbar.source}
-                title="Show source in all panes"
+                title={toolbar.hasEdit ? "Show source in all panes" : "Edit source · Formatted editing is unavailable for Markdown notes over 500,000 characters"}
               >
                 <Code2 size={14} />
               </button>
             )}
-            <button
+            {toolbar.hasEdit && <button
               onClick={() => switchMode("edit")}
               className={toolbar.edit ? "selected" : ""}
               aria-label="Edit"
@@ -2308,7 +2308,7 @@ export default function App() {
               title="Edit all panes · Formatted Markdown and plain text"
             >
               <Pencil size={13} />
-            </button>
+            </button>}
             {readAvailable && <button
               onClick={() => switchMode("read")}
               className={toolbar.read ? "selected" : ""}

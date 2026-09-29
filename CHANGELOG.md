@@ -12,6 +12,8 @@ Entries describe source changes; availability in published installers has not be
 
 #### Fixed
 
+- Large Markdown notes now show Source and Read without a redundant Edit button. Restored Edit views select Source, and its tooltip explains the formatted-editing size limit. Split layouts retain Edit when another visible Markdown note supports it.
+
 - Right-panel view icons stay centered in their buttons, including at narrow panel widths.
 
 ### 2026-09-28

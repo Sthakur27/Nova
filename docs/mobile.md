@@ -7,7 +7,7 @@ Nova now builds and runs as an installed iPhone/iPad app: a Tauri native shell w
 - Native mobile entry point and iOS window configuration.
 - **Reconnect Google Drive** in Cloud settings renews expired access without disconnecting first. The setup screen also offers Reconnect when a saved account cannot load its spaces.
 - A Cloud-only setup gate and automatically discovered Google Drive spaces, with offline copies in private app storage.
-- **Show Read mode** in Settings defaults off, just as on desktop. Enable it to add Read to the view switch; large Markdown notes retain the reading fallback.
+- **Show Read mode** in Settings defaults off, just as on desktop. Enable it to add Read to the view switch; Markdown notes over 500,000 characters offer Source and Read only, retaining the reading fallback even with the setting off.
 - Editing, reading, search, stars, bookmarks, rename, Cloud folder creation and note moves, device-only deletion, Cloud autosave, and native recovery drafts using the existing note engine.
 - **Focus mode:** tap the expand icon beside Open files to show only the note panel. Typing and swiping between open notes remain available. Tap the small top-right icon to restore the controls. The adjacent **Galaxy mode** button stays available while focused and replaces the desktop translucency controls on mobile.
 - Cloud shows a single space directly, without an extra Notes row. Its **+** menu offers **New file** and **New folder**; settings and refresh are in the Cloud header’s **…** menu.
