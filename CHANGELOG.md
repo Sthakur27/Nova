@@ -8,6 +8,12 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 Entries describe source changes; availability in published installers has not been verified. The initial backfill covers commits through `7d47fbe`.
 
+### 2026-09-29
+
+#### Fixed
+
+- Right-panel view icons stay centered in their buttons, including at narrow panel widths.
+
 ### 2026-09-28
 
 #### Changed

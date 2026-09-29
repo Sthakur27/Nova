@@ -1690,7 +1690,7 @@ kbd {
 }
 .bookmark-rail > .scope-toggle { margin-bottom: 12px; }
 .bookmark-view-toggle { width: 100%; }
-.bookmark-view-toggle button { display: grid; place-items: center; min-width: 0; min-height: 44px; padding: 12px 16px; }
+.bookmark-view-toggle button { display: grid; place-items: center; min-width: 0; min-height: 44px; padding: 12px 0; }
 .bookmark-view-toggle button[aria-pressed="true"] .nova-star { fill: #b580ff30; }
 .bookmark-source {
   display: block;
