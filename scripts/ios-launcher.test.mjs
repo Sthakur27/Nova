@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { existsSync, mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join, resolve } from 'node:path';
@@ -17,25 +17,29 @@ function launch(args) {
       encoding: 'utf8',
       env: { ...process.env, PATH: `${dir}${delimiter}${process.env.PATH}`, NOVA_LAUNCH_TEST_LOG: log },
     });
+    expect(result.error, result.stderr).toBeUndefined();
     expect(result.status, result.stderr).toBe(0);
     return { output: result.stdout, calls: existsSync(log) ? readFileSync(log, 'utf8') : '' };
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
-it.each([[], ['--standalone']])('bundles the default and explicit standalone installs (%j)', (...args) => {
-  const { calls, output } = launch([...args, '--target', 'aarch64-sim']);
-  expect(calls).toBe('node\nscripts/stop-dev.mjs\n\nnpm\nrun\nios:build\n--\n--debug\n--open\n--target\naarch64-sim\n\n');
-  expect(output).toContain('click Run');
-});
+// runios.sh launches Xcode on macOS; its POSIX executable fixtures do not run on Windows.
+describe.runIf(process.platform === 'darwin')('macOS iPhone launcher', () => {
+  it.each([[], ['--standalone']])('bundles the default and explicit standalone installs (%j)', (...args) => {
+    const { calls, output } = launch([...args, '--target', 'aarch64-sim']);
+    expect(calls).toBe('node\nscripts/stop-dev.mjs\n\nnpm\nrun\nios:build\n--\n--debug\n--open\n--target\naarch64-sim\n\n');
+    expect(output).toContain('click Run');
+  });
 
-it('requires explicit live mode and preserves arguments including spaces', () => {
-  const { calls, output } = launch(['--live', '--config', 'a path/config.json']);
-  expect(calls).toBe('node\nscripts/stop-dev.mjs\n\nnpm\nrun\nios:dev\n--\n--open\n--host\n--config\na path/config.json\n\n');
-  expect(output).toContain('must be able to reach this Mac');
-});
+  it('requires explicit live mode and preserves arguments including spaces', () => {
+    const { calls, output } = launch(['--live', '--config', 'a path/config.json']);
+    expect(calls).toBe('node\nscripts/stop-dev.mjs\n\nnpm\nrun\nios:dev\n--\n--open\n--host\n--config\na path/config.json\n\n');
+    expect(output).toContain('must be able to reach this Mac');
+  });
 
-it('explains the modes without invoking build tools', () => {
-  const { output, calls } = launch(['--help']);
-  expect(output).toContain('Default: bundle the interface');
-  expect(calls).toBe('');
+  it('explains the modes without invoking build tools', () => {
+    const { output, calls } = launch(['--help']);
+    expect(output).toContain('Default: bundle the interface');
+    expect(calls).toBe('');
+  });
 });
