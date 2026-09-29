@@ -81,6 +81,7 @@ import {
   ChevronDown,
   FileText,
   FolderOpen,
+  History,
   Code2,
   ListOrdered,
   List,
@@ -106,7 +107,8 @@ import Palette from "./Palette";
 import WorkspaceSearch, { type SearchRequest } from "./WorkspaceSearch";
 import { installWorkspaceSearchShortcut } from "./workspaceSearchShortcut";
 import Explorer from "./Explorer";
-import RecentFolders from "./RecentFolders";
+import RecentFiles from "./RecentFiles";
+import { useRecentFiles, visibleRecentFiles } from "./recentFileHistory";
 import OpenWindowMenu from "./OpenWindowMenu";
 import { createFolder } from "./storage";
 import FileActionDialog from "./FileActionDialog";
@@ -358,7 +360,14 @@ export default function App() {
   });
   const [searchScope,setSearchScope]=useState<SearchScope>("everywhere");
   const [palette, setPalette] = useState<false | "All" | "Files">(false);
-  const [navigationView, setNavigationView] = useState<"files" | "search">("files");
+  const [navigationView, setNavigationView] = useState<"files" | "search" | "recent">("files");
+  const recentFiles = useRecentFiles();
+  const recentFileFolders = folders.filter(folder => !folder.cloudSpace || (drive.status.connected && folder.cloudSpace.account === drive.status.account));
+  const { remember: rememberRecentFile, remove: removeRecentFile, relocate: relocateRecentFile } = recentFiles;
+  const hasRecentDocument = !!data;
+  useEffect(() => {
+    if (foldersReady && hasRecentDocument) rememberRecentFile({ root: workspace.root, path });
+  }, [foldersReady, hasRecentDocument, workspace.root, path, rememberRecentFile]);
   const [workspaceSearchRequest, setWorkspaceSearchRequest] = useState<SearchRequest>({id: 0, replace: false});
   const [terminalOpen, setTerminalOpen] = useState(false);
   const [terminalStarted, setTerminalStarted] = useState(false);
@@ -931,6 +940,7 @@ export default function App() {
       ) {
         const owner = paneLeaves(paneLayoutRef.current).find(p => p.tabs.includes(tabId({ root: requested.root, path: nextPath })));
         if (owner) { updatePaneLayout(selectPaneTab(paneLayoutRef.current, owner.id, tabId({ root: requested.root, path: nextPath }))); focusPane(owner.id); }
+        rememberRecentFile({ root: requested.root, path: nextPath });
         return true;
       }
       if (voiceBusy.current) {
@@ -1007,6 +1017,7 @@ export default function App() {
             );
           }, 50);
         }
+        rememberRecentFile({ root: ws.root, path: nextPath });
         return true;
       } catch (e) {
         if (reportError) setNotice(String(e));
@@ -1016,7 +1027,7 @@ export default function App() {
         operation.current = false;
       }
     },
-    [applyMarks, jump, preserveDraft, pin, updateTabs, save],
+    [applyMarks, jump, preserveDraft, pin, updateTabs, save, rememberRecentFile],
   );
   const newTab = useCallback(async (requested?: Workspace) => {
     if (cloudOnlyRef.current && !drive.status.connected) { setNotice("Connect Google Drive before creating a Cloud note."); return; }
@@ -1061,6 +1072,7 @@ export default function App() {
       if (!(await preserveDraft())) throw new Error("Could not preserve your draft before renaming.");
       await starQueue.current;
       const nextPath = await (moving ? moveNote(folder.root, oldPath, name) : renameNote(folder.root, oldPath, name));
+      relocateRecentFile({ root: folder.root, path: oldPath }, { root: folder.root, path: nextPath });
       await moveDraft(folder.root, oldPath, nextPath);
       if (folder.cloudSpace) uploads.schedule(folder.root);
       if (nextPath !== oldPath) createdNotes.current.delete(tabId({ root: folder.root, path: oldPath }));
@@ -1088,6 +1100,7 @@ export default function App() {
     if (!createdNotes.current.has(id) || await loadDraft(note.root, note.path)) return;
     await starQueue.current;
     if (await discardEmptyUntitled(note.root, note.path)) {
+      removeRecentFile(note);
       const withoutNote = (folder: Workspace): Workspace => folder.root === note.root
         ? { ...folder, files: folder.files.filter(file => file.path !== note.path), starred: folder.starred?.filter(path => path !== note.path) }
         : folder;
@@ -1096,7 +1109,7 @@ export default function App() {
       snapshots.current.delete(id);
     }
     createdNotes.current.delete(id);
-  }, []);
+  }, [removeRecentFile]);
   const closeTab = async (tab: NoteTab) => {
     if (saveInFlight.current || closingTab.current) return;
     if (voiceBusy.current || operation.current) {
@@ -1306,6 +1319,7 @@ export default function App() {
       if (!await confirmCloudMove(notePath, target.name)) return;
       if (current.current.workspace.root === folder.root && current.current.path === notePath && !await save()) return;
       const nextPath = await invoke<string>("cloud_move_in", {source:folder.root,path:notePath,target:target.root});
+      relocateRecentFile({ root: folder.root, path: notePath }, { root: target.root, path: nextPath });
       await refreshFolder(folder.root); await refreshFolder(target.root);
       updateTabs(tabsRef.current.filter(tab => !(tab.root === folder.root && tab.path === notePath)));
       const updated = await openWorkspace(target.root);
@@ -2118,9 +2132,10 @@ export default function App() {
           <button aria-label="Files" title="Files" aria-pressed={navigationView === "files"} onClick={() => setNavigationView("files")}><List size={18} aria-hidden="true"/></button>
           <button aria-label="Search across files" aria-pressed={navigationView === "search"} title={`Search across files (${mod} ⇧ F)`} onClick={() => openWorkspaceSearch()}><Search size={18} aria-hidden="true"/></button>
           {!mobile && <>
-            <OpenWindowMenu onLocal={() => void openFolder()} onCloud={() => void launchCloud()}/>
-            <RecentFolders folders={recents.filter(recent => !folders.some(folder => folder.root === recent.root))}
-              onOpen={recent => void openRecent(recent)} onClear={() => updateRecents([])} onCloud={() => void launchCloud()}/>
+            <OpenWindowMenu onLocal={() => void openFolder()} onCloud={() => void launchCloud()}
+              folders={recents.filter(recent => !folders.some(folder => folder.root === recent.root))}
+              onRecent={recent => void openRecent(recent)} onClear={() => updateRecents([])}/>
+            <button aria-label="Recent files" title="Recent files" aria-pressed={navigationView === "recent"} onClick={() => setNavigationView("recent")}><History size={18} aria-hidden="true"/></button>
           </>}
           <BuiltinDocs />
         </div>
@@ -2132,6 +2147,10 @@ export default function App() {
               if (folder) void openNote(path, line, folder);
             }}/>
         </div>}
+        {navigationView === "recent" && <RecentFiles files={visibleRecentFiles(recentFiles.files, recentFileFolders)} folders={recentFileFolders}
+          active={data ? { root: workspace.root, path } : null} error={recentFiles.error}
+          onOpen={file => { const folder = recentFileFolders.find(folder => folder.root === file.root); if (folder) void openNote(file.path, undefined, folder); }}
+          onRemove={removeRecentFile} onClear={() => recentFiles.clear(recentFileFolders)}/>}
         {navigationView === "files" && <Explorer
           showHidden={showHidden} cloudOnly={cloudOnly}
           folders={folders.filter(folder => !folder.cloudSpace || (drive.status.connected && folder.cloudSpace.account === drive.status.account))}
@@ -2586,6 +2605,7 @@ export default function App() {
           if (!(await preserveDraft())) throw new Error("Could not preserve your draft before deleting.");
           await starQueue.current;
           await deleteNote(folder.root, targetPath);
+          removeRecentFile({ root: folder.root, path: targetPath });
           createdNotes.current.delete(tabId({ root: folder.root, path: targetPath }));
           const updated = { ...folder, files: folder.files.filter(f => f.path !== targetPath), starred: (folder.starred ?? []).filter(p => p !== targetPath) };
           setFolders(old => old.map(f => f.root === folder.root ? { ...f, files: updated.files, starred: (f.starred ?? []).filter(p => p !== targetPath) } : f));

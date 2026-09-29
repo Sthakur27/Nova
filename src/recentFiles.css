@@ -1,0 +1,14 @@
+.recent-files { flex: 1; min-height: 0; overflow: auto; padding: 16px 0; }
+.recent-files header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.recent-files h2 { margin: 0; font-size: 12px; font-weight: 600; }
+.recent-files header button { font-size: 10px; color: #b9a3d2; }
+.recent-files p { color: #9995a5; font-size: 11px; line-height: 1.5; }
+.recent-files ul { list-style: none; padding: 0; margin: 12px 0 0; }
+.recent-files li { display: flex; align-items: center; border-radius: 5px; }
+.recent-files li:hover, .recent-files li:focus-within { background: #ffffff08; }
+.recent-file-open { min-width: 0; flex: 1; text-align: left; padding: 9px 6px; border-radius: 5px; }
+.recent-file-open[aria-current="page"] { background: #b497dc18; }
+.recent-file-open strong, .recent-file-open small { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.recent-file-open strong { font-size: 12px; font-weight: 500; }
+.recent-file-open small { margin-top: 4px; font-size: 10px; color: #9995a5; }
+.recent-file-remove { flex: 0 0 24px; height: 28px; padding: 0; color: #9995a5; border-radius: 4px; }

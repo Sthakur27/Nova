@@ -10,6 +10,14 @@ Entries describe source changes; availability in published installers has not be
 
 ### 2026-09-29
 
+#### Added
+
+- Recent files in the left sidebar lists notes opened in the current Local folder and Cloud, with device-local history, location labels, and controls to remove entries or clear workspace history. Recent folders now lives in the folder menu alongside the Local and Cloud window actions.
+
+#### Changed
+
+- Navigation icons beneath Quick find are smaller and centered.
+
 #### Fixed
 
 - Large Markdown notes now show Source and Read without a redundant Edit button. Restored Edit views select Source, and its tooltip explains the formatted-editing size limit. Split layouts retain Edit when another visible Markdown note supports it.

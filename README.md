@@ -56,7 +56,7 @@ See [all releases and release notes](https://github.com/Sthakur27/Nova/releases/
 
 ### A workspace for each folder
 
-Open a folder you already use and give it its own window. **Recent** brings you back to its tabs and recovery drafts, while opening another folder leaves your current work in place. Folders load as you expand them, so you can start browsing without waiting for the whole tree to scan.
+Open a folder you already use and give it its own window. **Recent folders** in the folder menu brings you back to its tabs and recovery drafts, while opening another folder leaves your current work in place. Folders load as you expand them, so you can start browsing without waiting for the whole tree to scan.
 
 ### Find a note, or the thought inside it
 
@@ -130,7 +130,7 @@ Nova for **iPhone and iPad is in development**. The same quiet writing space is 
 
 ## Your first few minutes
 
-1. **Choose Cloud or a folder.** The folder icon below Quick find offers **Open Cloud-only Window** and **Open Local Folder…**. Cloud-only opens your Google Drive notes without choosing a local folder; connect Google Drive if prompted. For Local, choose where you keep your notes. Each window can focus one local folder. Opening another folder creates a new window; **Recent** reopens a folder with its saved tabs and drafts.
+1. **Choose Cloud or a folder.** The folder icon below Quick find offers **Open Cloud-only Window** and **Open Local Folder…**. Cloud-only opens your Google Drive notes without choosing a local folder; connect Google Drive if prompted. For Local, choose where you keep your notes. Each window can focus one local folder. Opening another folder creates a new window; **Recent folders** in that menu reopens a folder with its saved tabs and drafts. The history icon opens **Recent files** from the current Local folder and Cloud.
 2. **Start a note.** Open a file from the sidebar, or click **+** beside the tabs or at the bottom-left of navigation to create one. New installations default to Markdown (`.md`) for headings, lists, and formatting. Choose another default file extension in Settings; existing preferences are preserved.
 3. **Choose your view.** For Markdown notes, **Edit** lets you write with formatting, **Source** shows the underlying text, and optional **Read** gives you a reading view. Enable **Settings → Show Read mode** to add Read; it defaults off on desktop and mobile. Large Markdown notes offer **Source** and **Read**, with formatted Edit unavailable for performance. In Edit, type `-` + Space for bullets or `1` + Space for numbering; [Markdown typing shortcuts](docs/user-guide.md#workspace-and-formatting) also cover headings, tasks, quotes, and inline formatting. Use **Code block** in the toolbar for multiline code, or type three backticks and Enter.
 4. **Mark a good passage.** Select some text and use **Add bookmark** in the bookmarks panel. Give it a name so you can find it again.

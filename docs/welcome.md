@@ -4,7 +4,7 @@ Welcome to Nova. Start with a thought, a list, or a folder full of notes. You do
 
 ## Start with a note
 
-On desktop, use the folder button below **Quick find** to open a folder on your computer. Your notes stay ordinary files you can use in other apps. Choose **+ → New file** in the explorer to begin; **New folder** helps keep related notes together.
+On desktop, use the folder button below **Quick find** to open a folder on your computer. That menu also lists **Recent folders**, so you can reopen a workspace with its tabs. Your notes stay ordinary files you can use in other apps. Choose **+ → New file** in the explorer to begin; **New folder** helps keep related notes together.
 
 **Local** is for files on your computer. Use **Save** or **Command-S / Ctrl-S** to write your changes to the file. Nova also keeps recovery drafts on this device to help you recover unsaved work.
 
@@ -19,6 +19,7 @@ Prefer a reading view? Turn on **Show Read mode** in Settings. You can then swit
 ## Find the thought you’re looking for
 
 - **Quick find** opens a shortcut to files, passages, text, and settings. On desktop, press **Command-K / Ctrl-K**.
+- On desktop, the history icon below **Quick find** opens **Recent files** from your current Local folder and Cloud, with the most recently opened first.
 - Remember the filename? Press **Command-P / Ctrl-P** on desktop.
 - Looking inside the current note? Use **Command-F / Ctrl-F**.
 - Looking across your notes? Choose the **Search** button below Quick find, or press **Command-Shift-F / Ctrl-Shift-F** on desktop. Search across files uses saved text, so save Local edits first.

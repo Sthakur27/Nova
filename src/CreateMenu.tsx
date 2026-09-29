@@ -1,7 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { FileText, Folder, Plus } from "lucide-react";
-import { recentMenuPosition } from "./RecentFolders";
+import { recentMenuPosition } from "./recentMenuPosition";
 
 export default function CreateMenu({ label, disabled, onFile, onFolder }: {
   label: string; disabled?: boolean; onFile: () => void; onFolder?: () => void;

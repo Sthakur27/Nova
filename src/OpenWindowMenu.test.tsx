@@ -37,3 +37,28 @@ it("navigates window destinations, dismisses with Escape or outside clicks, and 
     await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals();
   }
 });
+
+it("opens recent folders, keeps long lists scrollable, and clears only folder history", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  const host = document.createElement("div"), root = createRoot(host); document.body.append(host);
+  const folder = { root: "/notes", name: "Notes", tabs: [], active: null, mode: "edit" as const };
+  const onRecent = vi.fn(), onLocal = vi.fn(), onCloud = vi.fn();
+  const render = (folders: typeof folder[]) => <OpenWindowMenu folders={folders} onLocal={onLocal} onCloud={onCloud} onRecent={onRecent} onClear={() => root.render(render([]))}/>;
+  try {
+    await act(async () => root.render(render([folder])));
+    const trigger = host.querySelector("button")!;
+    await act(async () => trigger.click());
+    const menu = document.querySelector('[role="menu"]')!;
+    await act(async () => menu.dispatchEvent(new Event("scroll")));
+    expect(document.querySelector('[role="menu"]')).not.toBeNull();
+    await act(async () => document.querySelector<HTMLButtonElement>('button[title="/notes"]')!.click());
+    expect(onRecent).toHaveBeenCalledWith(folder);
+    expect(document.activeElement).toBe(trigger);
+    await act(async () => trigger.click());
+    await act(async () => document.querySelector<HTMLButtonElement>('.recent-clear')!.click());
+    await act(async () => trigger.click());
+    expect(document.querySelector('.recent-clear')).toBeNull();
+    expect(document.querySelector('[role="menu"]')?.textContent).toContain("Open Local Folder…");
+    expect(document.querySelector('[role="menu"]')?.textContent).toContain("Open Cloud-only Window");
+  } finally { await act(async () => root.unmount()); host.remove(); vi.unstubAllGlobals(); }
+});
