@@ -522,3 +522,99 @@ it("adds and removes bookmarks from formatted list controls in Edit and Read wit
   expect(editor.source).toBe(source);
   expect(change).not.toHaveBeenCalled();
 });
+
+it.each([
+  "*   first\n\n*   second\n*   third\n",
+  "3) first\n\n4) second\n5) third\n",
+  "- [X] first\r\n \t\r\n- [ ] second\r\n- [ ] third\r\n",
+  "- parent\n  - first\n\n  - second\n  - third\n",
+])("removes a Markdown list gap before removing the item: %j", source => {
+  const { editor, change } = create(source);
+  const offset = source.indexOf("second");
+  editor.select(offset, undefined, false);
+  const doc = editor.editor.state.doc.toJSON();
+  pressKey(editor, "Backspace");
+  const expected = source.replace(/(\r?\n)[ \t]*\r?\n/, "$1");
+  expect(editor.source).toBe(expected);
+  expect(editor.editor.state.doc.toJSON()).toEqual(doc);
+  expect(editor.sourceSelection()).toEqual({ anchor: expected.indexOf("second"), head: expected.indexOf("second") });
+  expect(change).toHaveBeenCalledTimes(1);
+  // Reloading the original source leaves the same repair available.
+  editor.setSource(source, offset);
+  pressKey(editor, "Backspace");
+  expect(editor.source).toBe(expected);
+  editor.editor.commands.insertContent("new ");
+  expect(editor.source).toContain("new second");
+  expect(editor.editor.state.doc.textContent).toContain("third");
+});
+
+it.each(["- first\n- second\n- third", "- [ ] first\n- [x] second\n- [ ] third"])("deletes an empty paragraph in the preceding item without cascading it: %j", source => {
+  const { editor } = create(source);
+  const list = editor.editor.state.doc.firstChild!;
+  const end = 1 + list.firstChild!.nodeSize - 1;
+  editor.editor.view.dispatch(editor.editor.state.tr.insert(end, editor.editor.schema.nodes.paragraph.create()));
+  let second = 0;
+  editor.editor.state.doc.descendants((node, pos) => { if (node.isText && node.text === "second") second = pos; });
+  editor.editor.commands.setTextSelection(second);
+  pressKey(editor, "Backspace");
+  expect(editor.editor.state.doc.firstChild!.childCount).toBe(3);
+  expect(editor.editor.state.doc.firstChild!.firstChild!.childCount).toBe(1);
+  expect(editor.editor.state.selection.$from.parent.textContent).toBe("second");
+  expect(editor.editor.state.selection.$from.parentOffset).toBe(0);
+  pressKey(editor, "Enter");
+  expect(editor.editor.state.doc.firstChild!.lastChild!.textContent).toBe("third");
+  const reloaded = create(editor.source).editor;
+  expect(reloaded.editor.state.doc.firstChild!.firstChild!.childCount).toBe(1);
+});
+
+it("keeps ordinary Backspace behavior for a tight list and ignores gaps in Read", () => {
+  const { editor } = create("- first\n\n- second");
+  editor.select(editor.source.indexOf("second"), undefined, false);
+  editor.setEditable(false, false);
+  pressKey(editor, "Backspace");
+  expect(editor.source).toBe("- first\n\n- second");
+  editor.setEditable(true, false);
+  editor.setSource("- first\n- second", 10);
+  pressKey(editor, "Backspace");
+  expect(editor.editor.state.doc.childCount).toBe(2);
+  expect(editor.editor.state.doc.lastChild!.type.name).toBe("paragraph");
+});
+
+it("removes a trailing soft line break before the next bullet without joining their text", () => {
+  const { editor } = create("- first\n- second\n- third");
+  editor.select(editor.source.indexOf("first") + 5, undefined, false);
+  editor.editor.commands.setHardBreak();
+  let second = 0;
+  editor.editor.state.doc.descendants((node, pos) => { if (node.isText && node.text === "second") second = pos; });
+  editor.editor.commands.setTextSelection(second);
+  pressKey(editor, "Backspace");
+  expect(editor.editor.state.doc.firstChild!.childCount).toBe(3);
+  expect(editor.editor.state.doc.firstChild!.firstChild!.firstChild!.lastChild!.type.name).toBe("text");
+  expect(editor.editor.state.selection.$from.parent.textContent).toBe("second");
+  expect(editor.source).toBe("- first\n- second\n- third");
+});
+
+it("undoes and redoes list-gap removal through the source buffer", () => {
+  const source = "Intro\n\n* first\n\n* second\n* third\n\nUntouched **ending**.\n";
+  const offset = source.indexOf("second");
+  const { editor, change } = create(source);
+  let state = EditorState.create({ doc: source, selection: { anchor: offset }, extensions: [history()] });
+  change.mockImplementation((next, selection) => {
+    state = state.update({ changes: textChanges(state.doc.toString(), next), selection,
+      annotations: isolateHistory.of("full"), userEvent: "input" }).state;
+  });
+  editor.select(offset, undefined, false);
+  pressKey(editor, "Backspace");
+  const repaired = source.replace("first\n\n", "first\n");
+  expect(state.doc.toString()).toBe(repaired);
+  const dispatch = (tr: Transaction) => {
+    state = tr.state;
+    editor.setSource(state.doc.toString(), state.selection.main.anchor, state.selection.main.head);
+  };
+  expect(undo({ state, dispatch })).toBe(true);
+  expect(editor.source).toBe(source);
+  expect(editor.sourceSelection()).toEqual({ anchor: offset, head: offset });
+  expect(redo({ state, dispatch })).toBe(true);
+  expect(editor.source).toBe(repaired);
+  expect(editor.editor.state.selection.$from.parent.textContent).toBe("second");
+});

@@ -7,9 +7,10 @@ import Image from "@tiptap/extension-image";
 import { AllSelection, Plugin, TextSelection } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
 import type { Node as DocumentNode } from "@tiptap/pm/model";
+import type { Nodes } from "mdast";
 import { createRoot } from "react-dom/client";
 import Markdown from "./Markdown";
-import { documentPositions, parseDocument, taskOffsets } from "./documentMarkdown";
+import { documentPositions, markdownTree, parseDocument, taskOffsets } from "./documentMarkdown";
 import { formatShortcuts, type FormatAction } from "./richMarkdown";
 import type { Bookmark } from "./model";
 
@@ -133,6 +134,7 @@ export class DocumentEditor {
           "Mod-Shift-z": () => { if (!owner.editor.isEditable) return false; callbacks.redo(); return true; },
           "Mod-y": () => { if (!owner.editor.isEditable) return false; callbacks.redo(); return true; },
           "Mod-Shift-b": () => { callbacks.bookmark(); return true; },
+          Backspace: () => owner.removeListGap(),
           Enter: () => {
             const { empty, $from } = owner.editor.state.selection;
             if (!owner.editor.isEditable || !empty || $from.parent.type.name !== "paragraph"
@@ -283,6 +285,59 @@ export class DocumentEditor {
       this.highlightObserver = new ResizeObserver(() => this.scheduleLineHighlight());
       this.highlightObserver.observe(this.editor.view.dom);
     }
+  }
+
+  private removeListGap() {
+    const { empty, $from } = this.editor.state.selection;
+    if (!this.editor.isEditable || !empty || $from.parentOffset !== 0
+      || $from.parent.type.name !== "paragraph" || $from.depth < 3
+      || !["listItem", "taskItem"].includes($from.node(-1).type.name)
+      || $from.index($from.depth - 1) !== 0) return false;
+    const listDepth = $from.depth - 2;
+    const index = $from.index(listDepth);
+    if (index === 0) return false;
+    const previous = $from.node(listDepth).child(index - 1);
+    const last = previous.lastChild;
+    // Enter can leave a real empty paragraph inside the preceding item. Remove
+    // that block before the default list keymap lifts or joins the current item.
+    if (previous.childCount > 1 && last?.type.name === "paragraph" && !last.content.size) {
+      const end = $from.before(listDepth + 1) - 1;
+      this.editor.view.dispatch(this.editor.state.tr.delete(end - last.nodeSize, end));
+      return true;
+    }
+    if (last?.type.name === "paragraph" && last.lastChild?.type.name === "hardBreak") {
+      const end = $from.before(listDepth + 1) - 2;
+      this.editor.view.dispatch(this.editor.state.tr.delete(end - last.lastChild.nodeSize, end));
+      return true;
+    }
+    // Markdown blank separators have no ProseMirror node. Edit just their source
+    // bytes through the usual buffer callback, preserving markers and undo history.
+    // Live edits can temporarily have a different tree from their Markdown
+    // (for example, mixed task/bullet runs). Do not address source by that path.
+    const parsed = this.editor.schema.nodeFromJSON(parseDocument(this.source).content);
+    if (!parsed.eq(this.editor.state.doc)) return false;
+    let list: Nodes = markdownTree(this.source);
+    for (let depth = 0; depth < listDepth; depth++) {
+      if (!("children" in list)) return false;
+      const child: Nodes | undefined = list.children[$from.index(depth)];
+      if (!child) return false;
+      list = child;
+    }
+    if (list.type !== "list") return false;
+    const before = list.children[index - 1]?.position?.end.offset;
+    const after = list.children[index]?.position?.start.offset;
+    if (before === undefined || after === undefined) return false;
+    const gap = this.source.slice(before, after);
+    const match = /^([ \t]*\r?\n)(?:[ \t]*\r?\n)+([ \t]*)$/.exec(gap);
+    if (!match) return false;
+    const replacement = match[1] + match[2];
+    const selection = this.sourceSelection();
+    const source = this.source.slice(0, before) + replacement + this.source.slice(after);
+    const anchor = selection.anchor - (gap.length - replacement.length);
+    this.setSource(source, anchor, anchor);
+    this.callbacks.change(source, { anchor, head: anchor });
+    this.reportSelection();
+    return true;
   }
 
   private rememberParts(doc: DocumentNode, parsed: ReturnType<typeof parseDocument>) {

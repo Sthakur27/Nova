@@ -6,7 +6,11 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 ## Unreleased
 
-No pending entries.
+### 2026-10-04
+
+#### Fixed
+
+- In formatted Edit, Backspace at the start of a list item removes extra blank space before it before removing the bullet, number, or checkbox. Empty paragraphs and trailing line breaks in the preceding item no longer have to be moved through the list to clear them.
 
 ## 0.2.132 — released 2026-09-29
 
