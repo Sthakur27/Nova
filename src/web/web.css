@@ -74,3 +74,7 @@ body { background: #17181c; }
 .web-filename-dialog label { display: grid; gap: 8px; }
 .web-filename-dialog input { width: 100%; box-sizing: border-box; font-size: 16px; }
 .web-filename-dialog p { font-size: 12px; line-height: 1.6; }
+.web-filename-dialog input { padding: 10px 12px; border: 1px solid #ffffff30; border-radius: 8px; background: #121318; color: #f0edf5; }
+.web-filename-dialog input:focus { outline: 2px solid #b8a0d8; outline-offset: 2px; }
+.web-filename-dialog .primary { background: #b8a0d8; color: #19151f; }
+.web-filename-dialog .primary:disabled { opacity: .5; }
