@@ -54,7 +54,7 @@ Use **Open files** to choose a note, **New note** to start one, and swipe left o
 
 ## In the web preview
 
-The web preview uses Cloud notes only. Connect Google Drive from the top bar, then choose a downloaded note or use **+** to create one. Use **Edit** or **Source**, search downloaded notes from the sidebar, and use **Export** to keep an extra copy. Its controls are simpler than the desktop app's.
+The web preview uses Cloud notes only. Connect Google Drive from the top bar, then choose a downloaded note or use **+** to create one. Use **Edit** or **Source**, search downloaded notes from the sidebar, and use **Export** to keep an extra copy. When creating or renaming a note, enter its filename in the dialog, then press Enter to save or Escape to cancel. Its controls are simpler than the desktop app's.
 
 Downloaded notes remain editable offline. **Saved on this device** means the browser has your edits; **synced** means that version reached Drive. Reconnect after Google access expires or the page reloads, and keep the app open to finish uploading. A conflict keeps your local text available for review and export. Export important pending edits before clearing browser data.
 

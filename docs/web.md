@@ -9,7 +9,7 @@ This is an implementation preview, not a published web release. Automated tests 
 ## What is included
 
 - Existing Nova Cloud spaces and text notes, including notes inside existing subfolders.
-- Source and formatted Edit, new notes, rename, search across downloaded filenames and text, and text export.
+- Source and formatted Edit, new notes, rename, search across downloaded filenames and text, and text export. Creation and rename use in-app dialogs: Enter submits, Escape cancels, and validation errors stay beside the filename.
 - Immediate device saves, queued uploads, offline editing, and cached application assets for offline launch after the first successful online load.
 - Reconnect without removing downloaded notes. Google access tokens stay in memory and must be renewed through the Reconnect button after expiration or a page reload.
 - Conflict review with the Drive text visible alongside the retained local copy. **Use Drive copy · keep local recovery** adopts the downloaded version and retains the previous local text for export. **Save local text as a new note** creates a separate note without changing the conflicted original.

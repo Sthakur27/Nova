@@ -1,5 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
 import { Cloud, FileText, Plus, RefreshCw, ArrowLeft } from "lucide-react";
+import FilenameDialog from "./FilenameDialog";
 import BuiltinDocs from "../BuiltinDocs";
 import { loadIdentity, WebAuth } from "./auth";
 import { BrowserDrive, DriveError } from "./drive";
@@ -41,6 +42,7 @@ function Workspace() {
   const [notes, setNotes] = useState<WebNote[]>([]);
   const [selected, setSelected] = useState("");
   const [space, setSpace] = useState("");
+  const [creating, setCreating] = useState<{ account: string; space: string; name: string; text: string }>();
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -121,10 +123,7 @@ function Workspace() {
       await editor.current?.flush();
       const destination = copy?.space ?? space;
       if (!account || !destination) throw new Error("Connect Drive and open a Cloud space first.");
-      const name = window.prompt("New note filename", copy ? `Copy of ${copy.name}` : "Untitled.md");
-      if (name === null) return;
-      const note = await createNote(store, account.id, destination, name, copy?.text ?? "");
-      await refresh(); setSelected(note.key); setShowNote(true); saved();
+      setCreating({ account: account.id, space: destination, name: copy ? `Copy of ${copy.name}` : "Untitled.md", text: copy?.text ?? "" });
     } catch (error) { setError(String(error)); }
   }
   const note = notes.find(note => note.key === selected);
@@ -132,6 +131,11 @@ function Workspace() {
   const search = useDeferredValue(query.toLocaleLowerCase());
   const visible = notes.filter(note => (!space || note.space === space) && (!search || `${note.directory}/${note.name}\n${note.text}`.toLocaleLowerCase().includes(search))).sort((a, b) => `${a.directory}/${a.name}`.localeCompare(`${b.directory}/${b.name}`));
   return <div className="web-app" data-note-open={showNote}>
+    {creating && <FilenameDialog title="New note" initialName={creating.name} action="Create note" onClose={() => setCreating(undefined)} onSubmit={async name => {
+      if (accountRef.current?.id !== creating.account) throw new Error("The connected account changed. Close this dialog and try again.");
+      const note = await createNote(store, creating.account, creating.space, name, creating.text);
+      await refresh(); setSelected(note.key); setShowNote(true); saved();
+    }} />}
     <header className="web-header"><div className="web-brand"><Cloud size={23}/><span>Nova <small>WEB PREVIEW</small></span></div>
       <div className="web-connection"><span title={account?.email}>{!online ? "Offline · device copies" : connecting ? "Connecting…" : syncing ? "Syncing…" : connected ? account?.email : account ? "Reconnect to sync" : "Cloud notes"}</span>
         <button disabled={connecting || syncing || saving || !auth.clientId || !identityReady || !online} onClick={connect}>{connected || account ? "Reconnect" : "Connect Google Drive"}</button>

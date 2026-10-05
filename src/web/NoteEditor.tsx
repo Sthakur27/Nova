@@ -2,7 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "re
 import Editor, { type EditorHandle } from "../Editor";
 import { supportsDocumentView } from "../documentLimits";
 import type { Bookmark } from "../model";
-import { validName } from "./drive";
+import FilenameDialog from "./FilenameDialog";
 import { pendingNote, type WebNote, type WebStore } from "./store";
 
 export function exportText(name: string, text: string) {
@@ -17,6 +17,7 @@ export default forwardRef<NoteEditorHandle, { note: WebNote; store: WebStore; on
   const queue = useRef(Promise.resolve());
   const count = useRef(0);
   const failed = useRef(false);
+  const [renaming, setRenaming] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [version, setVersion] = useState(0);
@@ -52,13 +53,12 @@ export default forwardRef<NoteEditorHandle, { note: WebNote; store: WebStore; on
       } catch (error) { failed.current = true; setError(String(error)); }
     }).finally(() => { count.current--; if (!count.current) { setSaving(false); onSaving(false); } });
   }
-  async function rename() {
-    const name = window.prompt("Note filename (include .md or .txt)", saved.current.name);
-    if (name === null || name === saved.current.name) return;
-    if (!validName(name)) { setError("Choose a filename without slashes or reserved characters."); return; }
+  async function rename(name: string) {
+    await flush();
+    if (name === saved.current.name) return;
     const existing = await store.notes(note.account);
     if (existing.some(other => other.key !== note.key && other.parent === note.parent && other.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
-      setError("A note with that name already exists in this folder."); return;
+      throw new Error("A note with that name already exists in this folder.");
     }
     persist(name); await flush();
     setInitial(saved.current); setVersion(value => value + 1);
@@ -66,13 +66,14 @@ export default forwardRef<NoteEditorHandle, { note: WebNote; store: WebStore; on
   const markdown = /\.(md|markdown)$/i.test(note.name);
   const rich = markdown && supportsDocumentView(note.text.length);
   return <section className="web-writing" aria-label="Note">
+    {renaming && <FilenameDialog title="Rename note" initialName={saved.current.name} action="Rename" onSubmit={rename} onClose={() => setRenaming(false)} />}
     <div className="web-note-toolbar">
       <strong title={note.name}>{note.name}</strong>
       <div role="group" aria-label="Editing mode">
         {rich && <button aria-pressed={mode === "edit"} onClick={() => setMode("edit")}>Edit</button>}
         <button aria-pressed={!rich || mode === "source"} onClick={() => setMode("source")}>Source</button>
       </div>
-      <button onClick={() => void rename().catch(error => setError(String(error)))}>Rename</button>
+      <button onClick={() => setRenaming(true)}>Rename</button>
       <button onClick={() => exportText(saved.current.name, editor.current?.text() ?? saved.current.text)}>Export</button>
     </div>
     <div className="web-save-state" role="status">{failed.current ? "Not saved — export your edits before closing" : saving ? "Saving on this device…" : note.error ? "Saved on this device · sync needs attention" : pendingNote(note) ? "Saved on this device · waiting to sync" : "Saved on this device · synced"}</div>
@@ -80,7 +81,7 @@ export default forwardRef<NoteEditorHandle, { note: WebNote; store: WebStore; on
     <div className="document-area"><Editor key={version} ref={editor} initial={initial.text} bookmarks={initial.bookmarks}
       onChange={() => persist()} onBookmarks={marks => persist(undefined, marks)} onCursor={() => {}}
       onBookmark={() => {}} onSave={() => persist()} isMarkdown={markdown} filePath={note.name}
-      onRequestRename={() => void rename().catch(error => setError(String(error)))}
+      onRequestRename={() => setRenaming(true)}
       documentMode={rich && mode === "edit" ? "edit" : undefined}
       showLineNumbers={false} showLineHighlight={false} wordWrap spellcheck /></div>
   </section>;
