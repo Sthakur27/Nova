@@ -1,7 +1,7 @@
 import { Editor, Extension, InputRule, Node, textInputRule, wrappingInputRule, type JSONContent } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown as MarkdownExtension } from "@tiptap/markdown";
-import { TaskList, TaskItem, BulletList, OrderedList } from "@tiptap/extension-list";
+import { TaskList, TaskItem, BulletList, OrderedList, ListItem } from "@tiptap/extension-list";
 import { TableKit } from "@tiptap/extension-table";
 import Image from "@tiptap/extension-image";
 import { AllSelection, Plugin, TextSelection } from "@tiptap/pm/state";
@@ -34,7 +34,29 @@ const RawMarkdown = Node.create<{ toggle?: (node: DocumentNode, offset: number, 
 const DocumentImage = Image.extend({
   renderHTML: ({ node }) => ["span", { class: "image-placeholder", "data-image-src": node.attrs.src }, `Image: ${node.attrs.alt || "attachment"} (image preview is not enabled yet)`],
 }).configure({ inline: true, allowBase64: false });
+// Blank separators belong to the following item, so splitting it with Enter
+// retains its existing leading space without copying it to the new item.
+const ListSpacing = Extension.create({
+  name: "listSpacing",
+  addGlobalAttributes: () => [{
+    types: ["listItem", "taskItem"],
+    attributes: { blankLinesBefore: {
+      default: 0, keepOnSplit: false,
+      parseHTML: element => Number(element.getAttribute("data-blank-lines-before")) || 0,
+      renderHTML: attrs => attrs.blankLinesBefore ? {
+        "data-blank-lines-before": attrs.blankLinesBefore,
+        style: `padding-top: calc(${attrs.blankLinesBefore}em * var(--editor-line-height, 1.95))`,
+      } : {},
+    } },
+  }],
+});
+const DocumentListItem = ListItem.extend({
+  renderMarkdown: (node, helpers, context) => "\n".repeat(node.attrs?.blankLinesBefore ?? 0)
+    + ListItem.config.renderMarkdown!(node, helpers, context),
+});
 const DocumentTask = TaskItem.extend({
+  renderMarkdown: (node, helpers, context) => "\n".repeat(node.attrs?.blankLinesBefore ?? 0)
+    + TaskItem.config.renderMarkdown!(node, helpers, context),
   addInputRules() {
     return [new InputRule({
       find: /^\[([ xX]?)\] $/,
@@ -44,7 +66,7 @@ const DocumentTask = TaskItem.extend({
         // Convert only the current bullet/numbered item; retain its siblings.
         if ($from.depth >= 2 && $from.node(-1).type.name === "listItem") {
           state.tr.delete(range.from, range.to)
-            .setNodeMarkup($from.before($from.depth - 1), this.type, { checked });
+            .setNodeMarkup($from.before($from.depth - 1), this.type, { ...$from.node(-1).attrs, checked });
         } else if ($from.depth === 1) {
           chain().deleteRange(range).wrapIn("taskList")
             .updateAttributes("taskItem", { checked }).run();
@@ -70,6 +92,8 @@ const DocumentTask = TaskItem.extend({
         input.checked = next.attrs.checked;
         input.setAttribute("aria-label", `Task: ${next.textContent || "empty task"}`);
         dom.dataset.checked = String(next.attrs.checked);
+        dom.style.paddingTop = next.attrs.blankLinesBefore ? `calc(${next.attrs.blankLinesBefore}em * var(--editor-line-height, 1.95))` : "";
+        dom.dataset.blankLinesBefore = String(next.attrs.blankLinesBefore);
         return true;
       };
       update(node);
@@ -212,7 +236,7 @@ export class DocumentEditor {
     this.editor = new Editor({
       element,
       extensions: [
-        StarterKit.configure({ undoRedo: false, underline: false, trailingNode: false, bulletList: false, orderedList: false, link: { openOnClick: false, autolink: false } }),
+        StarterKit.configure({ undoRedo: false, underline: false, trailingNode: false, bulletList: false, orderedList: false, listItem: false, link: { openOnClick: false, autolink: false } }),
         BulletList.extend({ content: "(listItem | taskItem)+" }), OrderedList.extend({
           content: "(listItem | taskItem)+",
           addInputRules() {
@@ -225,7 +249,7 @@ export class DocumentEditor {
             })];
           },
         }),
-        TaskList, DocumentTask,
+        TaskList, DocumentTask, DocumentListItem, ListSpacing,
         TableKit.configure({ table: { resizable: false } }), DocumentImage, RawMarkdown.configure({ toggle: (node, relative, checked) => {
           let offset = this.prefix.length;
           this.editor.state.doc.forEach(block => {
@@ -328,7 +352,7 @@ export class DocumentEditor {
     const after = list.children[index]?.position?.start.offset;
     if (before === undefined || after === undefined) return false;
     const gap = this.source.slice(before, after);
-    const match = /^([ \t]*\r?\n)(?:[ \t]*\r?\n)+([ \t]*)$/.exec(gap);
+    const match = /^([ \t]*\r?\n)(?:[ \t>]*\r?\n)+([ \t>]*)$/.exec(gap);
     if (!match) return false;
     const replacement = match[1] + match[2];
     const selection = this.sourceSelection();

@@ -22,6 +22,8 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 #### Fixed
 
+- Intentional blank lines between Markdown list items now stay visible after reopening and survive edits within the list, including spacing added in formatted Edit.
+
 - Desktop Cloud sync no longer shows “Sync needs attention” while edits are waiting to save or newer changes are queued during an upload. Actual sync failures still show the warning.
 
 - Fixed an illegal browser `fetch` invocation that prevented web Google sign-in and Drive requests.

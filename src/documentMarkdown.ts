@@ -64,7 +64,15 @@ export function parseDocument(source: string) {
       case "list": {
         const tasks = node.children.every(item => typeof item.checked === "boolean");
         return { type: tasks ? "taskList" : node.ordered ? "orderedList" : "bulletList", attrs: node.ordered ? { start: node.start ?? 1 } : undefined,
-          content: node.children.map(item => ({ type: typeof item.checked === "boolean" ? "taskItem" : "listItem", attrs: typeof item.checked === "boolean" ? { checked: item.checked } : undefined, content: item.children.map(block) })) };
+          content: node.children.map((item, index) => {
+            const before = node.children[index - 1]?.position?.end.offset;
+            const after = item.position?.start.offset;
+            const gap = before !== undefined && after !== undefined ? source.slice(before, after) : "";
+            const blankLinesBefore = /^[\s>]*$/.test(gap) ? Math.max(0, (gap.match(/\n/g)?.length ?? 0) - 1) : 0;
+            return { type: typeof item.checked === "boolean" ? "taskItem" : "listItem",
+              attrs: { blankLinesBefore, ...(typeof item.checked === "boolean" ? { checked: item.checked } : {}) },
+              content: item.children.map(block) };
+          }) };
       }
       case "table": return { type: "table", content: node.children.map((row, i) => ({ type: "tableRow", content: row.children.map((cell, col) => ({ type: i === 0 ? "tableHeader" : "tableCell", attrs: { align: node.align?.[col] ?? null }, content: [{ type: "paragraph", content: inline(cell.children) }] })) })) };
       default: return { type: "rawMarkdown", attrs: { source: source.slice(node.position?.start.offset, node.position?.end.offset) } };

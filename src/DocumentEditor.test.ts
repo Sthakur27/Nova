@@ -525,6 +525,7 @@ it("adds and removes bookmarks from formatted list controls in Edit and Read wit
 
 it.each([
   "*   first\n\n*   second\n*   third\n",
+  "> - first\n>\n> - second\n> - third",
   "3) first\n\n4) second\n5) third\n",
   "- [X] first\r\n \t\r\n- [ ] second\r\n- [ ] third\r\n",
   "- parent\n  - first\n\n  - second\n  - third\n",
@@ -532,11 +533,10 @@ it.each([
   const { editor, change } = create(source);
   const offset = source.indexOf("second");
   editor.select(offset, undefined, false);
-  const doc = editor.editor.state.doc.toJSON();
   pressKey(editor, "Backspace");
-  const expected = source.replace(/(\r?\n)[ \t]*\r?\n/, "$1");
+  const expected = source.replace(/(\r?\n)[ \t>]*\r?\n/, "$1");
   expect(editor.source).toBe(expected);
-  expect(editor.editor.state.doc.toJSON()).toEqual(doc);
+  expect(editor.editor.state.doc.toJSON()).toEqual(create(expected).editor.editor.state.doc.toJSON());
   expect(editor.sourceSelection()).toEqual({ anchor: expected.indexOf("second"), head: expected.indexOf("second") });
   expect(change).toHaveBeenCalledTimes(1);
   // Reloading the original source leaves the same repair available.
@@ -617,4 +617,73 @@ it("undoes and redoes list-gap removal through the source buffer", () => {
   expect(redo({ state, dispatch })).toBe(true);
   expect(editor.source).toBe(repaired);
   expect(editor.editor.state.selection.$from.parent.textContent).toBe("second");
+});
+
+function listGaps(editor: DocumentEditor) {
+  const gaps: number[] = [];
+  editor.editor.state.doc.descendants(node => {
+    if (node.type.name === "listItem" || node.type.name === "taskItem") gaps.push(node.attrs.blankLinesBefore);
+  });
+  return gaps;
+}
+
+it.each([
+  "- first\n\n- second\n\n\n- third",
+  "3. first\n\n4. second\n\n\n5. third",
+  "- [ ] first\r\n\r\n- [x] second\r\n\r\n\r\n- [ ] third",
+  "- parent\n  - first\n\n  - second\n\n\n  - third",
+  "> - first\n>\n> - second\n>\n>\n> - third",
+])("preserves and displays intentional list gaps after editing and reopening: %j", source => {
+  const { editor, mount, change } = create(source);
+  const gaps = listGaps(editor);
+  expect(gaps.slice(-3)).toEqual([0, 1, 2]);
+  expect(mount.querySelectorAll('[data-blank-lines-before="1"]')).toHaveLength(1);
+  expect(mount.querySelectorAll('[data-blank-lines-before="2"]')).toHaveLength(1);
+  expect(change).not.toHaveBeenCalled();
+  expect(editor.source).toBe(source);
+  editor.select(source.indexOf("second") + 6, undefined, false);
+  editor.editor.commands.insertContent(" edited");
+  const saved = editor.source;
+  const reloaded = create(saved).editor;
+  expect(listGaps(reloaded)).toEqual(gaps);
+  expect(reloaded.editor.state.doc.textContent).toContain("second edited");
+  reloaded.select(saved.indexOf("third") + 5, undefined, false);
+  reloaded.editor.commands.insertContent(" again");
+  expect(listGaps(create(reloaded.source).editor)).toEqual(gaps);
+  const beforeRead = reloaded.source;
+  reloaded.setEditable(false, false);
+  expect(listGaps(reloaded)).toEqual(gaps);
+  expect(reloaded.source).toBe(beforeRead);
+});
+
+it.each(["break", "paragraph"])("keeps a %s added between bullets after reopening", kind => {
+  const { editor } = create("- first\n- second");
+  editor.select(7, undefined, false);
+  if (kind === "break") editor.editor.commands.setHardBreak();
+  else {
+    const end = editor.editor.state.doc.firstChild!.firstChild!.nodeSize;
+    editor.editor.view.dispatch(editor.editor.state.tr.insert(end, editor.editor.schema.nodes.paragraph.create()));
+  }
+  const reloaded = create(editor.source).editor;
+  expect(listGaps(reloaded).at(-1)).toBeGreaterThan(0);
+  reloaded.select(reloaded.source.indexOf("second") + 6, undefined, false);
+  reloaded.editor.commands.insertContent(" edited");
+  expect(listGaps(create(reloaded.source).editor)).toEqual(listGaps(reloaded));
+});
+
+it("does not duplicate leading blank space when Enter splits a spaced item", () => {
+  const { editor } = create("- first\n\n- second");
+  editor.select(editor.source.length, undefined, false);
+  pressKey(editor, "Enter");
+  editor.editor.commands.insertContent("third");
+  expect(listGaps(editor)).toEqual([0, 1, 0]);
+  expect(listGaps(create(editor.source).editor)).toEqual([0, 1, 0]);
+});
+
+it("keeps intentional spacing when converting a bullet to a task", () => {
+  const { editor } = create("- first\n\n- second");
+  editor.select(editor.source.indexOf("second"), undefined, false);
+  typeText(editor, "[ ] ");
+  expect(editor.editor.state.doc.firstChild!.child(1).attrs.blankLinesBefore).toBe(1);
+  expect(editor.source).toContain("first\n\n- [ ] second");
 });
