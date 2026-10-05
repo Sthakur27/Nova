@@ -10,7 +10,7 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 #### Added
 
-- A separate Cloud-only web preview with Nova's shared Source/Edit editor, browser-local offline copies, note creation/rename/search/export, and direct Google Drive sync. Conflicts and missing Drive files preserve local text; expired access prompts reconnection without blocking cached editing. Includes an installable offline shell and Vercel build configuration. Hosting and a Google Web OAuth client must be configured; local Chrome sign-in and Drive create/update are verified; hosted and physical iPhone verification are pending.
+- A separate Cloud-only web preview with Nova's shared Source/Edit editor, browser-local offline copies, note creation/rename/search/export, and direct Google Drive sync. Conflicts and missing Drive files preserve local text; expired access prompts reconnection without blocking cached editing. Includes an installable offline shell and Vercel build configuration. The [hosted preview](https://nova-indol-pi.vercel.app) deploys automatically from GitHub main. Local Chrome sign-in and Drive create/update are verified; hosted Google origin authorization and physical iPhone verification are pending.
 
 #### Changed
 

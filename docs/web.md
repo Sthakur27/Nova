@@ -4,7 +4,7 @@
 
 Nova has a separate Cloud-only browser build that can be hosted as static files on Vercel. It uses the shared Markdown editor, browser storage for offline copies, and direct Google Drive requests. No Nova backend or Apple developer signing is needed.
 
-This is an implementation preview, not a published web release. Automated tests cover storage, authorization, and sync behavior with simulated Drive responses. Local Chrome verification with a configured Web OAuth client covers Google authorization, downloading existing Cloud notes, creating a dedicated test note, and uploading edits after disconnect/reload/reconnect. Cross-device Drive interoperability and physical iPhone Home Screen behavior still need verification.
+Open the [hosted web preview](https://nova-indol-pi.vercel.app). This remains a preview; physical iPhone verification is pending. Automated tests cover storage, authorization, and sync behavior with simulated Drive responses. Local Chrome verification with a configured Web OAuth client covers Google authorization, downloading existing Cloud notes, creating a dedicated test note, and uploading edits after disconnect/reload/reconnect. Cross-device Drive interoperability and physical iPhone Home Screen behavior still need verification.
 
 ## What is included
 
@@ -57,7 +57,7 @@ Import this repository as a Vercel project. The checked-in `vercel.json` selects
 
 The service worker caches only this site's built shell assets. It does not cache Google requests, account tokens, or Drive responses. Notes live in IndexedDB. Updates wait until the previous app windows close; Nova does not forcibly reload an editor with unsaved work.
 
-Before considering a deployment usable, test sign-in on its actual hostname and use a dedicated test note to verify browser → Drive → native and native → Drive → browser. Also test disconnected editing, reconnect, concurrent edits, and remote removal. No hosted deployment has been recorded for this preview yet.
+Before considering a deployment usable, test sign-in on its actual hostname and use a dedicated test note to verify browser → Drive → native and native → Drive → browser. Also test disconnected editing, reconnect, concurrent edits, and remote removal. The first production deployment was verified Ready on October 5, 2026, from `ccbfbfb`, in Vercel project `sid-thakurs-projects/nova` at `https://nova-indol-pi.vercel.app`. GitHub `Sthakur27/Nova` is connected, and pushes to `main` deploy automatically. The public Web OAuth client ID is configured in Vercel; hosted Google sign-in verification is pending origin authorization.
 
 ## On iPhone
 
