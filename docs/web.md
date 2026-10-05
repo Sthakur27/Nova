@@ -57,7 +57,7 @@ Import this repository as a Vercel project. The checked-in `vercel.json` selects
 
 The service worker caches only this site's built shell assets. It does not cache Google requests, account tokens, or Drive responses. Notes live in IndexedDB. Updates wait until the previous app windows close; Nova does not forcibly reload an editor with unsaved work.
 
-Before considering a deployment usable, test sign-in on its actual hostname and use a dedicated test note to verify browser → Drive → native and native → Drive → browser. Also test disconnected editing, reconnect, concurrent edits, and remote removal. The first production deployment was verified Ready on October 5, 2026, from `ccbfbfb`, in Vercel project `sid-thakurs-projects/nova` at `https://nova-indol-pi.vercel.app`. GitHub `Sthakur27/Nova` is connected, and pushes to `main` deploy automatically. The public Web OAuth client ID is configured in Vercel; hosted Google sign-in verification is pending origin authorization.
+Before considering a deployment usable, test sign-in on its actual hostname and use a dedicated test note to verify browser → Drive → native and native → Drive → browser. Also test disconnected editing, reconnect, concurrent edits, and remote removal. The first production deployment was verified Ready on October 5, 2026, from `ccbfbfb`, in Vercel project `sid-thakurs-projects/nova` at `https://nova-indol-pi.vercel.app`. GitHub `Sthakur27/Nova` is connected, and pushes to `main` deploy automatically. The public Web OAuth client ID is configured in Vercel; the production origin is authorized in Google. Hosted Chrome sign-in was verified on October 5, downloading all 16 Cloud notes and opening the previously uploaded test note.
 
 ## On iPhone
 
