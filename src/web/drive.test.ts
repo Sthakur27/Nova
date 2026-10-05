@@ -1,4 +1,4 @@
-import { expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { BrowserDrive, MAX_NOTE_BYTES, validName } from "./drive";
 const session = () => ({ account: { id: "alice", email: "alice@test" }, token: "token", expires: Date.now() + 100000, signal: new AbortController().signal });
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
@@ -40,4 +40,13 @@ it.each(["../note", ".nova", ".nova.backup", "a/b.md", "a\\b.md", "bad\n.md", ""
 it("rejects absent reserved IDs instead of treating undefined as an identity", async () => {
   const fetcher = vi.fn(async () => json({ ids: [] }));
   await expect(new BrowserDrive(session(), fetcher).reserve()).rejects.toThrow("invalid file identity");
+});
+
+afterEach(() => vi.unstubAllGlobals());
+it("calls browser fetch with its global receiver for Drive requests", async () => {
+  vi.stubGlobal("fetch", function (this: unknown) {
+    expect(this).toBe(globalThis);
+    return Promise.resolve(json({ ids: ["reserved"] }));
+  });
+  expect(await new BrowserDrive(session()).reserve()).toBe("reserved");
 });

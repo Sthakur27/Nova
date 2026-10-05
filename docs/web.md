@@ -4,7 +4,7 @@
 
 Nova has a separate Cloud-only browser build that can be hosted as static files on Vercel. It uses the shared Markdown editor, browser storage for offline copies, and direct Google Drive requests. No Nova backend or Apple developer signing is needed.
 
-This is an implementation preview, not a published web release. Automated tests cover storage, authorization, and sync behavior with simulated Drive responses. Browser checks use synthetic notes. Live Google authorization, cross-device Drive interoperability, and physical iPhone Home Screen behavior still need verification with the configured Web OAuth client.
+This is an implementation preview, not a published web release. Automated tests cover storage, authorization, and sync behavior with simulated Drive responses. Local Chrome verification with a configured Web OAuth client covers Google authorization, downloading existing Cloud notes, creating a dedicated test note, and uploading edits after disconnect/reload/reconnect. Cross-device Drive interoperability and physical iPhone Home Screen behavior still need verification.
 
 ## What is included
 

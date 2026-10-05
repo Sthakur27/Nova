@@ -8,7 +8,7 @@ function setup() {
   const fetcher = vi.fn(async () => new Response(JSON.stringify({ user: { permissionId: "alice", emailAddress: "alice@example.test" } })));
   return { request, fetcher, auth: new WebAuth("web-client", fetcher) };
 }
-afterEach(() => { delete window.google; localStorage.clear(); vi.restoreAllMocks(); });
+afterEach(() => { delete window.google; localStorage.clear(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 it("opens the Google popup synchronously and keeps tokens out of persistent storage", async () => {
   const { auth, request, fetcher } = setup(); const connection = auth.connect();
   expect(request).toHaveBeenCalledWith({ prompt: "select_account" });
@@ -35,4 +35,15 @@ it("expires authorization while leaving cached account data untouched", async ()
   localStorage.setItem("cached-note", "offline edit");
   vi.spyOn(Date, "now").mockReturnValue(session.expires + 1);
   expect(auth.current()).toBeUndefined(); expect(session.signal.aborted).toBe(true); expect(localStorage.getItem("cached-note")).toBe("offline edit");
+});
+
+it("calls browser fetch with its global receiver during account verification", async () => {
+  setup();
+  vi.stubGlobal("fetch", function (this: unknown) {
+    expect(this).toBe(globalThis);
+    return Promise.resolve(new Response(JSON.stringify({ user: { permissionId: "alice" } })));
+  });
+  const connection = new WebAuth("web-client").connect();
+  options.callback({ access_token: "token", expires_in: 3600, scope: DRIVE_SCOPE });
+  expect((await connection).account.id).toBe("alice");
 });

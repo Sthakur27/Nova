@@ -28,7 +28,7 @@ const textFile = (file: File) => !file.mimeType.startsWith("application/vnd.goog
 
 export class BrowserDrive {
   private downloaded = 0;
-  constructor(readonly session: Session, private fetcher: typeof fetch = fetch) {}
+  constructor(readonly session: Session, private fetcher: typeof fetch = (...args) => globalThis.fetch(...args)) {}
   private async request(url: string, init: RequestInit = {}): Promise<Response> {
     if (this.session.signal.aborted) throw new Error("Google connection changed. Retry with the current account.");
     if (this.session.expires <= Date.now()) throw new DriveError(401);

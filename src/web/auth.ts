@@ -27,7 +27,7 @@ export class WebAuth {
   private controller = new AbortController();
   private generation = 0;
   private cancelPending?: () => void;
-  constructor(readonly clientId: string, private fetcher: typeof fetch = fetch) {}
+  constructor(readonly clientId: string, private fetcher: typeof fetch = (...args) => globalThis.fetch(...args)) {}
   current(): Session | undefined {
     if (this.session && this.session.expires <= Date.now()) this.disconnect();
     return this.session;

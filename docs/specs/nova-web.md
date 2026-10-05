@@ -63,7 +63,9 @@ No deployment or live Drive verification is implied by a successful local build.
 
 October 5, 2026: the first preview is implemented in `src/web`, with separate Vite build commands and Vercel configuration. All 603 frontend tests pass, including 36 web/storage/auth/sync/shell checks. Both the ordinary production build and web production build pass; Vite reports large-bundle warnings. Local Chromium checks with synthetic notes confirm phone-width layout, an offline edit surviving reload, the installed offline shell, and the second-tab edit guard. Documentation links and whitespace checks pass.
 
-No real Google account was connected and no Vercel deployment was performed in this implementation task. Cross-device compatibility, live CORS/conditional Drive writes, OAuth in Safari/Home Screen mode, and physical iPhone keyboard/background behavior remain release gates. Native Rust integration was not changed or reverified.
+Follow-up live Chrome verification on October 5 configured a Web OAuth client in the existing Nova Google project for `http://127.0.0.1:1422`. Real Google sign-in downloaded 15 existing Cloud notes. A dedicated synthetic test note was created and its content verified in Google Drive. An edit made while disconnected survived page reload and uploaded after reconnection, exercising the conditional update path. The live test exposed an illegal `fetch` receiver in account verification and Drive requests; both now call through the global receiver, with regression tests. All 605 frontend tests and both production builds pass.
+
+No Vercel deployment was performed. Cross-device round trips, live concurrent-conflict rejection, OAuth in Safari/Home Screen mode, and physical iPhone keyboard/background behavior remain release gates. The existing native app reported sync attention during inspection, so no native round-trip result is claimed. Native Rust integration was not changed. Welcome was reviewed and remains accurate; this fix does not change its instructions.
 
 ## Later milestones
 
