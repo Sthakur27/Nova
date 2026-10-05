@@ -4,6 +4,8 @@
 
 Detailed controls, file behavior, voice typing, and current limits. For a quick introduction, start with [Your first few minutes](../README.md#your-first-few-minutes).
 
+The separate Cloud-only browser preview has a smaller interface and browser-specific saving and authorization behavior. See the [web guide](web.md) for its controls and limits; the detailed controls below describe the native app.
+
 ## Use
 
 - **Open Folder** (Command-O / Ctrl-O): open an ordinary local folder in a new window and browse Markdown (`.md`, `.markdown`, and `.mdx`, without JSX) and UTF-8 text files, including custom extensions and extensionless files. No vault is required. Custom file types are screened for text content before appearing in the explorer. Local directories load as you expand them, in pages of 300 entries; use **Load more** for additional entries. Opening a large folder does not scan its entire tree.

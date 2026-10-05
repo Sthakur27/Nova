@@ -52,6 +52,12 @@ On desktop, **Dictate** turns spoken English into text. Download the speech mode
 
 Use **Open files** to choose a note, **New note** to start one, and swipe left or right across the editor to move between open notes. The focus button hides the surrounding controls; the small top-right button brings them back. Mobile uses Cloud notes; desktop features such as split panes and saved states aren’t available there.
 
+## In the web preview
+
+The web preview uses Cloud notes only. Connect Google Drive from the top bar, then choose a downloaded note or use **+** to create one. Use **Edit** or **Source**, search downloaded notes from the sidebar, and use **Export** to keep an extra copy. Its controls are simpler than the desktop app's.
+
+Downloaded notes remain editable offline. **Saved on this device** means the browser has your edits; **synced** means that version reached Drive. Reconnect after Google access expires or the page reloads, and keep the app open to finish uploading. A conflict keeps your local text available for review and export. Export important pending edits before clearing browser data.
+
 ## Come back whenever you like
 
 The **About Nova** book icon below Quick find, beside Files and Search, opens this Welcome page directly. Switch to **Changelog** using the buttons at the top. Both are included with the app and readable offline. The changelog records changes by development date; it does not promise that every listed change has reached a published installer.

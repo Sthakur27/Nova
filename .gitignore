@@ -8,3 +8,6 @@ artifacts/
 .env.*
 !.env.example
 src-tauri/gen/schemas/
+
+dist-web/
+.vercel/

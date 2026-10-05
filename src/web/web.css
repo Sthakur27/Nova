@@ -1,0 +1,71 @@
+body { background: #17181c; }
+.web-app { height: 100dvh; display: flex; flex-direction: column; --text-width: 760px; --editor-font-family: "Lora", Georgia, serif; --editor-visual-size: 17px; --editor-line-height: 1.7; }
+.web-app button, .web-setup button { min-height: 36px; padding: 7px 11px; border-radius: 7px; }
+.web-app button:hover, .web-setup button:hover { background: #ffffff0b; }
+.web-app button[aria-pressed="true"] { background: #bca2ea20; color: #d5beff; }
+.web-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: max(15px, env(safe-area-inset-top)) 22px 15px; border-bottom: 1px solid #ffffff12; }
+.web-brand { display: flex; align-items: center; gap: 10px; font-size: 20px; color: #e9e1f4; white-space: nowrap; }
+.web-brand small { display: block; font-size: 9px; letter-spacing: .14em; color: #9f91b3; margin-top: 2px; }
+.web-connection { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12px; }
+.web-connection > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; color: #a7a2b3; }
+.web-connection > button:first-of-type { border: 1px solid #ffffff23; }
+.web-notices { font-size: 12px; background: #24212c; }
+.web-notices p { margin: 0; padding: 9px 22px; }
+.web-error { color: #ffb5b2; }
+.web-body { display: flex; flex: 1; min-height: 0; }
+.web-library { flex: 0 0 290px; display: flex; flex-direction: column; gap: 14px; padding: 18px; border-right: 1px solid #ffffff12; min-height: 0; }
+.web-library-heading { display: flex; align-items: center; gap: 4px; }
+.web-library-heading h1 { margin: 0 auto 0 0; font-size: 16px; font-weight: 500; }
+.web-space { display: flex; align-items: center; gap: 12px; color: #a29bab; font-size: 12px; }
+.web-space select { min-width: 0; width: 100%; padding: 8px; background: #202127; border: 1px solid #ffffff16; border-radius: 7px; color: #dfd9e9; font: inherit; }
+.web-library input { min-width: 0; border: 1px solid #ffffff14; border-radius: 7px; padding: 10px; background: #ffffff04; color: inherit; }
+.web-files { overflow: auto; flex: 1; }
+.web-files > button { display: flex; width: 100%; text-align: left; gap: 9px; align-items: center; margin-bottom: 4px; }
+.web-files svg { flex-shrink: 0; color: #8a8197; }
+.web-files span { overflow: hidden; text-overflow: ellipsis; }
+.web-files small { display: block; font-size: 10px; color: #a49aaf; margin-top: 4px; }
+.web-files button[aria-current] { background: #baa0e616; color: #e2cdfd; }
+.web-library footer { color: #a098ab; font-size: 11px; line-height: 1.6; }
+.web-library footer p { font-size: 10px; color: #8d8598; margin-bottom: 0; }
+.web-main { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+.web-writing { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.web-note-toolbar { display: flex; gap: 5px; align-items: center; padding: 12px 18px; border-bottom: 1px solid #ffffff0c; flex-wrap: wrap; }
+.web-note-toolbar strong { font-weight: 500; margin-right: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40%; }
+.web-note-toolbar > div { display: flex; }
+.web-note-toolbar button { font-size: 12px; }
+.web-save-state { padding: 7px 20px; font-size: 11px; color: #9b92a7; }
+.web-writing > .web-error { margin: 7px 20px; }
+.web-writing .line-bookmark-button { display: none; }
+.web-writing .editor-mount { flex: 1; min-height: 0; }
+.web-writing .document-pane, .web-writing .source-editor-mount { height: 100%; overflow: auto; }
+.web-writing .cm-editor { height: 100%; }
+.web-writing .document-prose { max-width: 800px; margin: auto; }
+.web-setup { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; padding: 40px 25px; text-align: center; flex: 1; min-height: 280px; }
+.web-setup > svg { color: #b8a0d8; }
+.web-setup h1 { font: 400 29px "Lora", Georgia, serif; margin: 18px 0 5px; }
+.web-setup p { color: #aaa1b7; line-height: 1.7; max-width: 460px; margin: 0; }
+.web-setup > button { margin-top: 12px; background: #baa0e622; }
+.web-empty { color: #a69eb1; font-size: 12px; line-height: 1.8; }
+.web-back { display: none; }
+.web-conflict { padding: 12px 20px; background: #403224; color: #f1d4b3; font-size: 12px; max-height: 35vh; overflow: auto; }
+.web-conflict p { margin: 0 0 8px; }
+.web-conflict pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 180px; overflow: auto; }
+.web-conflict button { border: 1px solid #ffffff24; margin: 8px 8px 0 0; }
+.web-recovery { padding: 6px 20px; font-size: 11px; color: #b8a5d2; }
+.web-offline-warning { position: fixed; bottom: 0; padding: 12px; background: #4d3427; width: 100%; z-index: 100; margin: 0; }
+@media (max-width: 700px) {
+  .web-header { gap: 10px; padding-left: 14px; padding-right: 14px; }
+  .web-connection { gap: 3px; flex-wrap: wrap; justify-content: flex-end; }
+  .web-connection > span { flex-basis: 100%; text-align: right; font-size: 10px; }
+  .web-connection button { padding: 5px 8px; min-height: 36px; }
+  .web-library { flex-basis: 100%; border: 0; padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+  .web-main { display: none; }
+  .web-app[data-note-open="true"] .web-library { display: none; }
+  .web-app[data-note-open="true"] .web-main { display: flex; }
+  .web-back { display: flex; align-items: center; gap: 8px; align-self: flex-start; margin: 4px 8px; color: #bda7d9; }
+  .web-note-toolbar { padding: 4px 10px; gap: 2px; }
+  .web-note-toolbar strong { max-width: 100%; width: 100%; padding: 5px 8px; }
+  .web-notices p { padding: 8px 14px; }
+  .web-writing .document-prose { padding: 12px 22px 70px; }
+  .web-app input, .web-app select { font-size: 16px; }
+}

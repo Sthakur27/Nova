@@ -15,6 +15,12 @@ npm run desktop
 
 For direct `cargo` commands and packaging on a newly configured Mac, run `source "$HOME/.cargo/env"` first if Cargo is not on your PATH. `npm run dev` starts a browser-only preview with editable sample notes; local-folder access requires the desktop app. Sample notes persist in local storage and are explicitly labeled.
 
+### Cloud-only web preview
+
+`npm run dev:web` runs the separate browser app on port 1422. `npm run build:web` produces `dist-web/` with an installable manifest and versioned offline shell; `npm run preview:web` serves it locally. Native builds and the ordinary browser demo retain their existing entry point. Web modules live in `src/web`, share `Editor`, and use IndexedDB plus direct Drive APIs instead of Tauri commands. Tests use fake IndexedDB and simulated Google responses.
+
+Set only the public `VITE_GOOGLE_WEB_CLIENT_ID` for the web build. Do not expose native secrets through Vite environment variables. The checked-in Vercel configuration builds this static target. See [web setup and verification](web.md) and the [implementation specification](specs/nova-web.md).
+
 ### Fast iteration
 
 On macOS, run `node scripts/setup-dev-signing.mjs` once before starting desktop

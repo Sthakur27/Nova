@@ -125,7 +125,7 @@ Folder rename, folder deletion, and moving whole folders are not yet available.
   are not available.
 - External filesystem renames are not inferred from file contents.
 - Other backup applications can still upload files in their own watched folders.
-- Browser previews and Android cannot connect to Drive.
+- The ordinary browser demo and Android cannot connect to Drive. The separate [Cloud-only web preview](web.md) implements direct browser Drive access with Web OAuth configuration; live interoperability verification is pending.
 
 ## Windows and macOS configuration
 

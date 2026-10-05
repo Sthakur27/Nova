@@ -6,6 +6,12 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 ## Unreleased
 
+### 2026-10-05
+
+#### Added
+
+- A separate Cloud-only web preview with Nova's shared Source/Edit editor, browser-local offline copies, note creation/rename/search/export, and direct Google Drive sync. Conflicts and missing Drive files preserve local text; expired access prompts reconnection without blocking cached editing. Includes an installable offline shell and Vercel build configuration. Hosting and a Google Web OAuth client must be configured; live Drive and physical iPhone verification are pending.
+
 ### 2026-10-04
 
 #### Fixed

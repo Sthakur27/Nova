@@ -27,6 +27,10 @@ Desktop terminal, desktop voice engine, new windows, folder pickers, and file-lo
 
 These controls also appear in the narrow browser preview. Browser checks do not verify iOS keyboard or touch behavior; repeat the native checklist below on an iPhone/iPad.
 
+## Browser alternative
+
+A separate [Cloud-only web preview](web.md) can be hosted on Vercel and added to the iPhone Home Screen without Xcode signing. It shares the editor but has fewer controls than the native app. It needs its own Google Web OAuth configuration, and physical iPhone/Home Screen behavior is not yet verified. See the web guide for setup and limits.
+
 ## Updating the installed iOS app
 
 The current Xcode-installed development app does not update itself. Install a new native build from Xcode; live frontend changes are available only while the development server is running and reachable. The desktop updater does not support iOS ([Tauri supported platforms](https://v2.tauri.app/plugin/updater/)).
