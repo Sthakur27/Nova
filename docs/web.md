@@ -11,7 +11,8 @@ Open the [hosted web preview](https://nova-indol-pi.vercel.app). This remains a 
 - Existing Nova Cloud spaces and text notes, including notes inside existing subfolders.
 - Source and formatted Edit, new notes, rename, search across downloaded filenames and text, and text export. Creation and rename use in-app dialogs: Enter submits, Escape cancels, and validation errors stay beside the filename.
 - Immediate device saves, queued uploads, offline editing, and cached application assets for offline launch after the first successful online load.
-- Open the cloud icon at the top right for account details, sync status, and Connect/Reconnect/Disconnect controls. Reconnect without removing downloaded notes. Google access tokens stay in memory and must be renewed through the Reconnect button after expiration or a page reload.
+- Use the panel button beside the note title to hide/show the sidebar (or return to notes on a phone). The bottom-left orbital controls offer New note, Appearance, Google Drive, and About Nova. Appearance changes the writing width for the current session. Routine sync details live in the Drive modal; save failures and conflicts remain visible in the workspace.
+- Open the cloud icon in the bottom-left corner controls for account details, sync status, and Connect/Reconnect/Disconnect controls. Reconnect without removing downloaded notes. Google access tokens stay in memory and must be renewed through the Reconnect button after expiration or a page reload.
 - Conflict review with the Drive text visible alongside the retained local copy. **Use Drive copy · keep local recovery** adopts the downloaded version and retains the previous local text for export. **Save local text as a new note** creates a separate note without changing the conflicted original.
 - A missing Drive note stays on this device. It is never silently deleted or automatically recreated. Export it or explicitly save a separate new copy.
 
@@ -29,7 +30,7 @@ The preview accepts supported text/code extensions, with a 2 MB note limit and a
 2. Create an OAuth client of type **Web application**. Native client IDs cannot be reused for this browser flow.
 3. Add the exact site origin under **Authorized JavaScript origins**, such as `https://your-nova-site.vercel.app`. For local development, add `http://localhost:1422` (or `http://127.0.0.1:1422` if that is the address you use). Origins do not include paths. Each preview origin needs its own authorization.
 4. Set `VITE_GOOGLE_WEB_CLIENT_ID` to that client's ID in your ignored `.env.local` file or the Vercel project's environment settings. This is a public client ID; **never put a client secret or refresh token in a `VITE_` variable**.
-5. Rebuild, open the page, then use the top-right cloud icon and click **Connect Google Drive**. Allow Nova's `drive.file` access. It discovers the existing Nova `.nova` folder by its app property; a first-time account gets the same standard `.nova/Notes` structure used by native Nova.
+5. Rebuild, open the page, then use the corner cloud icon and click **Connect Google Drive**. Allow Nova's `drive.file` access. It discovers the existing Nova `.nova` folder by its app property; a first-time account gets the same standard `.nova/Notes` structure used by native Nova.
 
 No redirect endpoint or token-exchange server is required by this popup/token flow. The browser calls Google directly. See [Google's token model](https://developers.google.com/identity/oauth2/web/guides/use-token-model).
 

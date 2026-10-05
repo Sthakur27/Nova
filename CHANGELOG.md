@@ -14,7 +14,7 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 #### Changed
 
-- The web header uses a top-right cloud icon for a Google Drive settings modal, keeping account and connection controls inside it. Removed the Web Preview header label.
+- The web workspace now has a compact desktop-style sidebar, orbital corner controls, a collapsible notes panel, and Focused/Wide writing widths. Removed the full-width header, repeated Cloud labels, and routine sync banners; connection controls and sync guidance live in the cloud modal. Save status sits below the editor.
 
 - Web note creation, recovery copies, and renaming use in-app filename dialogs with inline errors and keyboard controls.
 

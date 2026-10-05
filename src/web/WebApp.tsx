@@ -1,5 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
-import { Cloud, FileText, Plus, RefreshCw, ArrowLeft } from "lucide-react";
+import { Cloud, FileText, Plus, RefreshCw, PanelLeft, Orbit, Settings2, Search } from "lucide-react";
+import AppearanceDialog from "./AppearanceDialog";
 import CloudDialog from "./CloudDialog";
 import FilenameDialog from "./FilenameDialog";
 import BuiltinDocs from "../BuiltinDocs";
@@ -54,6 +55,9 @@ function Workspace() {
   const [saving, setSaving] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
   const [showCloud, setShowCloud] = useState(false);
+  const [showAppearance, setShowAppearance] = useState(false);
+  const [sidebar, setSidebar] = useState(true);
+  const [wide, setWide] = useState(false);
   const [showNote, setShowNote] = useState(false);
   const editor = useRef<NoteEditorHandle>(null);
   const syncingRef = useRef(false);
@@ -132,22 +136,22 @@ function Workspace() {
   const pending = notes.filter(pendingNote).length;
   const search = useDeferredValue(query.toLocaleLowerCase());
   const visible = notes.filter(note => (!space || note.space === space) && (!search || `${note.directory}/${note.name}\n${note.text}`.toLocaleLowerCase().includes(search))).sort((a, b) => `${a.directory}/${a.name}`.localeCompare(`${b.directory}/${b.name}`));
-  return <div className="web-app" data-note-open={showNote}>
+  const status = error ? "Sync needs attention" : !online ? "Offline" : connecting ? "Connecting…" : syncing ? "Syncing…" : !connected ? account ? "Reconnect to sync" : "Connect Google Drive" : pending ? `${pending} pending` : "Up to date";
+  const panelControl = <>
+    <button className="web-panel-toggle" title={sidebar ? "Hide sidebar" : "Show sidebar"} aria-label={sidebar ? "Hide sidebar" : "Show sidebar"} aria-expanded={sidebar} onClick={() => setSidebar(value => !value)}><PanelLeft size={18}/></button>
+    <button className="web-mobile-back" title="Show notes" aria-label="Show notes" onClick={() => setShowNote(false)}><PanelLeft size={18}/></button>
+  </>;
+  return <div className="web-app" data-note-open={showNote} data-sidebar={sidebar} data-wide={wide}>
+    {showAppearance && <AppearanceDialog wide={wide} onWideChange={setWide} onClose={() => setShowAppearance(false)} />}
     {creating && <FilenameDialog title="New note" initialName={creating.name} action="Create note" onClose={() => setCreating(undefined)} onSubmit={async name => {
       if (accountRef.current?.id !== creating.account) throw new Error("The connected account changed. Close this dialog and try again.");
       const note = await createNote(store, creating.account, creating.space, name, creating.text);
       await refresh(); setSelected(note.key); setShowNote(true); saved();
     }} />}
-    <header className="web-header"><div className="web-brand"><Cloud size={23}/><span>Nova</span></div>
-      <div className="web-header-actions"><BuiltinDocs />
-        <button className="web-cloud-button" aria-label="Google Drive settings" aria-haspopup="dialog" aria-expanded={showCloud}
-          title={`Google Drive · ${!online ? "Offline" : connecting ? "Connecting" : syncing ? "Syncing" : connected ? "Connected" : "Connect to sync"}`}
-          data-attention={!!error || (!!account && !connected)} onClick={() => setShowCloud(true)}><Cloud size={22}/></button>
-      </div>
-    </header>
     {showCloud && <CloudDialog onClose={() => setShowCloud(false)}>
       {account && <p className="web-cloud-account">{account.email}</p>}
       <p role="status">{!online ? "Offline · using device copies" : connecting ? "Connecting…" : syncing ? "Syncing…" : connected ? "Connected to Google Drive" : account ? "Reconnect to sync" : "Connect your Google Drive account"}</p>
+      <p className="web-cloud-help">{notes.length} downloaded · {pending} pending</p>
       <div className="web-cloud-actions">
         <button disabled={connecting || syncing || saving || !auth.clientId || !identityReady || !online} onClick={connect}>{connected || account ? "Reconnect" : "Connect Google Drive"}</button>
         {connecting && <button onClick={() => auth.disconnect()}>Cancel sign-in</button>}
@@ -157,23 +161,27 @@ function Workspace() {
       {auth.clientId && !identityReady && !connecting && <p>Google sign-in is not ready. <button onClick={prepareIdentity}>Retry loading sign-in</button></p>}
       {error && <p className="web-error" role="alert">{error}</p>}
     </CloudDialog>}
-    <div className="web-notices">
-      {!auth.clientId && <p>Google Drive is not configured for this preview yet.</p>}
-      {auth.clientId && !identityReady && !connecting && <p>Google sign-in is not ready. <button onClick={prepareIdentity}>Retry loading sign-in</button></p>}
-      {account && !connected && <p>Your downloaded notes remain editable. Open the cloud icon to reconnect and upload pending edits.</p>}
-      {error && <p className="web-error" role="alert">{error}</p>}
-    </div>
+    {error && !showCloud && <div className="web-notices"><p className="web-error" role="alert">{error} <button onClick={() => setShowCloud(true)}>Open sync settings</button></p></div>}
     <div className="web-body">
       <aside className="web-library" aria-label="Cloud notes">
-        <div className="web-library-heading"><h1>Cloud</h1><button title="Refresh Cloud" aria-label="Refresh Cloud" disabled={!connected || syncing || saving || !online} onClick={() => void sync()}><RefreshCw size={18}/></button><button aria-label="New note" disabled={!space || saving || connecting} onClick={() => void newNote()}><Plus size={20}/></button></div>
+        <div className="web-brand"><span className="web-monogram" aria-hidden="true">N</span><span>nova<span className="web-brand-dot">.</span></span><Orbit size={22} aria-hidden="true"/></div>
+        <label className="web-search"><Search size={16}/><input aria-label="Search downloaded notes" placeholder="Quick find…" value={query} onChange={event => setQuery(event.target.value)} /></label>
+        <div className="web-library-heading"><h1><Cloud size={14}/>Cloud</h1><button title="Refresh Cloud" aria-label="Refresh Cloud" disabled={!connected || syncing || saving || !online} onClick={() => void sync()}><RefreshCw size={18}/></button><button aria-label="New note" disabled={!space || saving || connecting} onClick={() => void newNote()}><Plus size={20}/></button></div>
         {spaces.length > 0 && <label className="web-space">Space<select value={space} onChange={event => setSpace(event.target.value)}>{spaces.map(space => <option value={space.id} key={space.id}>{space.name}</option>)}</select></label>}
-        <input aria-label="Search downloaded notes" placeholder="Search downloaded notes…" value={query} onChange={event => setQuery(event.target.value)} />
-        <nav className="web-files" aria-label="Notes">{visible.map(note => <button key={note.key} aria-current={selected === note.key ? "page" : undefined} onClick={() => void selectNote(note.key)}><FileText size={17}/><span>{note.name}<small>{note.directory || "Cloud"}{note.conflict || note.missing || note.error ? " · needs attention" : pendingNote(note) ? " · pending" : ""}</small></span></button>)}</nav>
+        <nav className="web-files" aria-label="Notes">{visible.map(note => <button key={note.key} aria-current={selected === note.key ? "page" : undefined} onClick={() => void selectNote(note.key)}><FileText size={17}/><span>{note.name}{(note.directory || note.conflict || note.missing || note.error || pendingNote(note)) && <small>{[note.directory, note.conflict || note.missing || note.error ? "needs attention" : pendingNote(note) ? "pending" : ""].filter(Boolean).join(" · ")}</small>}</span></button>)}</nav>
         {!visible.length && <p className="web-empty">{loading ? "Opening device copies…" : query ? "No downloaded notes match." : account ? "Refresh Cloud or create your first note." : "Connect Google Drive to bring your Cloud notes here."}</p>}
-        <footer>{notes.length} downloaded · {pending} pending<p>Sync runs while Nova is open. Export important unsynced notes before clearing browser data.</p></footer>
+        <footer>
+          <button className="web-sync-status" onClick={() => setShowCloud(true)}><span data-attention={!!error || pending > 0}/><span role="status">{status}</span></button>
+          <div className="web-orbit-controls" aria-label="Workspace controls">
+            <button className="web-orbit-new" title="New note" aria-label="Create a note" disabled={!space || saving || connecting} onClick={() => void newNote()}><Plus size={20}/></button>
+            <button className="web-orbit-settings" title="Appearance" aria-label="Appearance" aria-haspopup="dialog" onClick={() => setShowAppearance(true)}><Settings2 size={19}/></button>
+            <button className="web-cloud-button" title="Google Drive settings" aria-label="Google Drive settings" aria-haspopup="dialog" aria-expanded={showCloud} data-attention={!!error || (!!account && !connected)} onClick={() => setShowCloud(true)}><Cloud size={20}/></button>
+            <BuiltinDocs />
+          </div>
+        </footer>
       </aside>
       <main className="web-main">
-        <button className="web-back" onClick={() => setShowNote(false)}><ArrowLeft size={17}/>All notes</button>
+        {!note && <div className="web-empty-controls">{panelControl}</div>}
         {note ? <>
           {(note.conflict || note.missing || note.error) && <section className="web-conflict" aria-label="Sync needs attention"><p role="alert">{note.error}</p>
             {note.conflict && <><details><summary>Review the Drive copy: {note.conflict.name}</summary><pre>{note.conflict.text}</pre></details>
@@ -182,8 +190,8 @@ function Workspace() {
             <button onClick={() => editor.current?.export()}>Export my edits</button>
           </section>}
           {note.recovery?.map((recovery, index) => <div className="web-recovery" key={index}>Previous local version {index + 1} retained. <button onClick={() => exportText(`Recovered ${recovery.name}`, recovery.text)}>Export recovery copy</button></div>)}
-          <NoteEditor key={note.key} ref={editor} note={note} store={store} onSaved={saved} onSaving={setSaving}/>
-        </> : <section className="web-setup"><Cloud size={42}/><h1>A little space to think.</h1><p>Your Cloud notes, directly from Google Drive.</p><p>Open a downloaded note or connect your account to get started.</p>{space && <button onClick={() => void newNote()}>Create a note</button>}</section>}
+          <NoteEditor key={note.key} ref={editor} note={note} store={store} onSaved={saved} onSaving={setSaving} panelControl={panelControl}/>
+        </> : <section className="web-setup"><Orbit size={46}/><h1>A little space to think.</h1><p>{notes.length ? "Pick a note. Make some room for an idea." : "Your notes, wherever you are."}</p>{space ? <button onClick={() => void newNote()}><Plus size={16}/>Create a note</button> : <button onClick={() => setShowCloud(true)}><Cloud size={16}/>Connect Google Drive</button>}</section>}
       </main>
     </div>
   </div>;

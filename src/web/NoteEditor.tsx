@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import Editor, { type EditorHandle } from "../Editor";
 import { supportsDocumentView } from "../documentLimits";
 import type { Bookmark } from "../model";
@@ -11,7 +11,7 @@ export function exportText(name: string, text: string) {
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 export type NoteEditorHandle = { flush: () => Promise<void>; export: () => void };
-export default forwardRef<NoteEditorHandle, { note: WebNote; store: WebStore; onSaved: () => void; onSaving: (saving: boolean) => void }>(function NoteEditor({ note, store, onSaved, onSaving }, handle) {
+export default forwardRef<NoteEditorHandle, { note: WebNote; store: WebStore; onSaved: () => void; onSaving: (saving: boolean) => void; panelControl?: ReactNode }>(function NoteEditor({ note, store, onSaved, onSaving, panelControl }, handle) {
   const editor = useRef<EditorHandle>(null);
   const saved = useRef(note);
   const queue = useRef(Promise.resolve());
@@ -68,6 +68,7 @@ export default forwardRef<NoteEditorHandle, { note: WebNote; store: WebStore; on
   return <section className="web-writing" aria-label="Note">
     {renaming && <FilenameDialog title="Rename note" initialName={saved.current.name} action="Rename" onSubmit={rename} onClose={() => setRenaming(false)} />}
     <div className="web-note-toolbar">
+      {panelControl}
       <strong title={note.name}>{note.name}</strong>
       <div role="group" aria-label="Editing mode">
         {rich && <button aria-pressed={mode === "edit"} onClick={() => setMode("edit")}>Edit</button>}
@@ -76,7 +77,7 @@ export default forwardRef<NoteEditorHandle, { note: WebNote; store: WebStore; on
       <button onClick={() => setRenaming(true)}>Rename</button>
       <button onClick={() => exportText(saved.current.name, editor.current?.text() ?? saved.current.text)}>Export</button>
     </div>
-    <div className="web-save-state" role="status">{failed.current ? "Not saved — export your edits before closing" : saving ? "Saving on this device…" : note.error ? "Saved on this device · sync needs attention" : pendingNote(note) ? "Saved on this device · waiting to sync" : "Saved on this device · synced"}</div>
+
     {error && <p className="web-error" role="alert">{error}</p>}
     <div className="document-area"><Editor key={version} ref={editor} initial={initial.text} bookmarks={initial.bookmarks}
       onChange={() => persist()} onBookmarks={marks => persist(undefined, marks)} onCursor={() => {}}
@@ -84,5 +85,6 @@ export default forwardRef<NoteEditorHandle, { note: WebNote; store: WebStore; on
       onRequestRename={() => setRenaming(true)}
       documentMode={rich && mode === "edit" ? "edit" : undefined}
       showLineNumbers={false} showLineHighlight={false} wordWrap spellcheck /></div>
+    <div className="web-save-state" role="status">{failed.current ? "Not saved — export your edits before closing" : saving ? "Saving on this device…" : note.error ? "Saved on this device · sync needs attention" : pendingNote(note) ? "Saved on this device · waiting to sync" : "Saved on this device · synced"}</div>
   </section>;
 });
