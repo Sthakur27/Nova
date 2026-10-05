@@ -254,6 +254,12 @@ pub(super) fn pull(
         })); },
     )
 }
+fn defer_edits(blocked: &mut HashSet<String>, report: &mut Report, path: &str, remote_path: &str) {
+    blocked.insert(path.into());
+    blocked.insert(remote_path.into());
+    report.items.push(Item { missing_drive_id: None, path: path.into(), state: "pending".into(),
+        message: "Waiting for local edits to finish saving before syncing.".into() });
+}
 fn pull_local(
     data_dir: &Path,
     writes: &std::sync::Mutex<()>,
@@ -338,7 +344,8 @@ fn pull_local(
                 return Err("Deleted locally. The Drive copy is retained and will not be downloaded again automatically.".into());
             }
             if protected.contains(&path) || saved_draft(data_dir, root, &path)? {
-                return Err("Local edits are open or awaiting recovery. Save or discard them before syncing this file.".into());
+                defer_edits(&mut blocked, report, &path, &entry.path);
+                return Ok(());
             }
             let identity = &registry["driveObjects"][account][&file_id];
             if identity["version"].is_string()
@@ -393,7 +400,8 @@ fn pull_local(
                 return Err("File moved during sync. Retry.".into());
             }
             if saved_draft(data_dir, root, &path)? {
-                return Err("Unsaved edits retained. Save or discard them before syncing.".into());
+                defer_edits(&mut blocked, report, &path, &entry.path);
+                return Ok(());
             }
             let local = local_target(root, &path)?;
             let local_bytes = read_local(&local)?;
@@ -861,6 +869,7 @@ mod integration_tests {
         );
         let f = Fixture::new("local edit", "other PC edit");
         let report = f.run(Some("old.txt"), &[]);
+        assert_eq!(report.items[0].state, "error");
         assert!(report.items[0].message.contains("Both copies changed"));
         assert_eq!(
             fs::read_to_string(f.root.path().join("old.txt")).unwrap(),
@@ -1017,6 +1026,26 @@ mod integration_tests {
             fs::read_to_string(f.root.path().join("old.txt")).unwrap(),
             "baseline"
         );
+    }
+    #[test]
+    fn editing_defers_sync_without_errors_and_resumes_after_saving() {
+        let f = Fixture::new("baseline", "other PC edit");
+        let protected = f.run(Some("old.txt"), &["old.txt".into()]);
+        assert_eq!(protected.items[0].state, "pending");
+        assert!(protected.changes.is_empty());
+        assert!(f.server.requests.lock().unwrap().is_empty());
+        let directory = f.data.path().join("drafts");
+        fs::create_dir_all(&directory).unwrap();
+        let draft = crate::draft_path(&directory, &f.root.path().to_string_lossy(), "old.txt");
+        fs::write(&draft, r#"{"text":"unsaved"}"#).unwrap();
+        let recovering = f.run(Some("old.txt"), &[]);
+        assert_eq!(recovering.items[0].state, "pending");
+        assert!(recovering.changes.is_empty());
+        assert_eq!(fs::read_to_string(f.root.path().join("old.txt")).unwrap(), "baseline");
+        fs::remove_file(draft).unwrap();
+        let resumed = f.run(Some("old.txt"), &[]);
+        assert_eq!(resumed.items[0].state, "uploaded");
+        assert_eq!(resumed.changes.len(), 1);
     }
     #[test]
     fn same_named_workspaces_stay_distinct() {

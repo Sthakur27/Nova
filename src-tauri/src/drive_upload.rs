@@ -258,6 +258,7 @@ fn upload_workspace(app: tauri::AppHandle, root: PathBuf, protected_paths: Vec<S
         if blocked.contains(&file.path) || protected_paths.contains(&file.path) { continue; }
         if !allowed(&root, &file.path)? { continue; }
         let emit = |state: &str, message: &str| { let _ = app.emit("drive-upload-progress", json!({"root":report.root,"path":file.path,"state":state,"message":message})); };
+        let mut changed_during_upload = false;
         let result = (|| {
             let local = crate::scoped_path(&root,&file.path)?;
             if fs::metadata(&local).map_err(crate::err)?.len() > crate::MAX_FILE { return Err("File exceeds Nova’s 32 MB limit.".into()); }
@@ -313,12 +314,13 @@ fn upload_workspace(app: tauri::AppHandle, root: PathBuf, protected_paths: Vec<S
                 crate::write_registry(&root,registry,&stars)?;
             }
             if crate::revision(&fs::read(local).map_err(crate::err)?) != crate::revision(&bytes) {
-                return Err("File changed during upload. Save and upload again to send the latest version.".into());
+                changed_during_upload = true;
             }
             Ok(true)
         })();
         if matches!(result, Ok(true)) { report.uploaded = true; }
         let (state,message) = match result {
+            Ok(true) if changed_during_upload => ("pending","Newer local edits are waiting to sync.".to_string()),
             Ok(true) => ("uploaded","Uploaded changes to Google Drive.".to_string()),
             Ok(false) => ("local","Saved on this device · Edit or rename to sync".to_string()),
             Err(error) => ("error",error),

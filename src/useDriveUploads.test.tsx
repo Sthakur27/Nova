@@ -6,6 +6,7 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { useDriveUploads, type DriveUploads } from "./useDriveUploads";
 import { driveTransfer } from "./driveTransfer";
+import SyncAttention from "./SyncAttention";
 vi.mock("./platform", () => ({ driveSupported: true }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(async () => () => {}) }));
@@ -318,5 +319,38 @@ it("resolves missing identities, refreshes sync, and preserves warnings on failu
     expect(onDeleted).toHaveBeenCalledWith("/notes","note.txt");
     expect(uploads.errors["/notes"]).toBeFalsy();
     expect(uploads.items["/notes\nnote.txt"]).toBeUndefined();
+  } finally { await act(async () => root.unmount()); }
+});
+
+it("keeps deferred edits pending without an attention warning until the next successful sync", async () => {
+  vi.mocked(invoke).mockReset();
+  let uploads!: DriveUploads;
+  function Harness() {
+    uploads = useDriveUploads(true);
+    return <SyncAttention error={uploads.errors["/notes"]} onReview={() => {}} />;
+  }
+  const host = document.createElement("div"), root = createRoot(host);
+  const report = {items: [{path:"note.txt",state:"pending",message:"Waiting for local edits to finish saving before syncing."}]};
+  try {
+    await act(async () => root.render(<Harness />));
+    vi.mocked(invoke).mockResolvedValueOnce({items:[]});
+    await act(async () => { await uploads.upload("/notes"); });
+    expect(uploads.completed["/notes"]).toBeTruthy();
+    vi.mocked(invoke).mockResolvedValueOnce(report);
+    await act(async () => { await uploads.upload("/notes"); });
+    expect(uploads.errors["/notes"]).toBeFalsy();
+    expect(host.querySelector("button")).toBeNull();
+    expect(uploads.pending["/notes"]).toBe(true);
+    expect(uploads.completed["/notes"]).toBeFalsy();
+    vi.mocked(invoke).mockResolvedValueOnce({items:[{path:"note.txt",state:"error",message:"Both copies changed."}]});
+    await act(async () => { await uploads.upload("/notes"); });
+    expect(uploads.errors["/notes"]).toBeTruthy();
+    expect(host.querySelector("button")?.textContent).toContain("Sync needs attention");
+    vi.mocked(invoke).mockResolvedValueOnce({items:[{path:"note.txt",state:"uploaded",message:"Uploaded changes."}],uploaded:true});
+    await act(async () => { await uploads.upload("/notes"); });
+    expect(uploads.errors["/notes"]).toBeFalsy();
+    expect(host.querySelector("button")).toBeNull();
+    expect(uploads.pending["/notes"]).toBe(false);
+    expect(uploads.completed["/notes"]).toBeTruthy();
   } finally { await act(async () => root.unmount()); }
 });

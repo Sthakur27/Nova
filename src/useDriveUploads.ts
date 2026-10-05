@@ -3,7 +3,7 @@ import { invoke } from "./resetLocalState";
 import { listen } from "@tauri-apps/api/event";
 import { driveTransfer } from "./driveTransfer";
 import { driveSupported } from "./platform";
-export type UploadItem = { path: string; state: "uploading" | "uploaded" | "local" | "error"; message: string; missingDriveId?: string };
+export type UploadItem = { path: string; state: "uploading" | "uploaded" | "pending" | "local" | "error"; message: string; missingDriveId?: string };
 export type SyncChange = { path: string; previousPath: string };
 type Report = { root: string; folderUrl: string; items: UploadItem[]; changes?: SyncChange[]; uploaded?: boolean };
 type SyncContext = { roots: string[]; focusedFile?: () => { root: string; path: string } | null; protectedPaths: (root: string) => string[]; onDeleted?: (root: string, path: string) => Promise<void>; onFolders?: (root: string) => Promise<void>; onComplete: (root: string, changes: SyncChange[]) => Promise<void> };
@@ -68,12 +68,17 @@ export function useDriveUploads(connected: boolean) {
         if (!onlyPath && !report.changes?.length) await context.current?.onFolders?.(root);
         await context.current?.onComplete(root, report.changes ?? []);
         const failed = report.items.filter(item => item.state === "error");
+        const deferred = report.items.some(item => item.state === "pending");
+        if (deferred) {
+          setPending(old => ({...old,[root]:true}));
+          setCompleted(old => ({...old,[root]:""}));
+        }
         const changed = !!report.uploaded || !!report.changes?.length;
         if (!failed.length && enabled.current && changed) {
           setLastSyncedAt(old => ({...old,[root]:Date.now()}));
         }
         if (failed.length) setErrors(old => ({...old,[root]:`${failed.length} file${failed.length === 1 ? "" : "s"} need attention. See the messages below.`}));
-        else if (!onlyPath && enabled.current && !protectedPaths.length
+        else if (!deferred && !onlyPath && enabled.current && !protectedPaths.length
           && !(context.current?.protectedPaths(root).length)
           && version === (versions.current[root] ?? 0)) {
           setErrors(old => old[root] ? {...old,[root]:""} : old);

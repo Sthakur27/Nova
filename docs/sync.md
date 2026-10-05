@@ -98,7 +98,8 @@ in the managed Cloud sync loop.
 The bottom panel shows a red **Sync needs attention · Review** button when the
 active Cloud note has a sync error. Click it to open sync settings and review
 the error and available recovery or retry controls. The error detail is also
-available by hovering over the button.
+available by hovering over the button. Ordinary typing, waiting for autosave, and
+newer edits queued during an upload do not trigger this warning.
 
 ## Organize Cloud notes
 
