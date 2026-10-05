@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WebStore, noteKey, pendingNote, type RemoteCopy, type WebNote } from "./store";
-import { acceptDriveCopy, createNote, syncAccount } from "./sync";
+import { acceptLocalCopy, acceptDriveCopy, createNote, syncAccount } from "./sync";
 import { DriveError } from "./drive";
 
 const stores: WebStore[] = [];
@@ -114,4 +114,68 @@ it("rejects duplicate local note names before creating another record", async ()
   const store = database(); await createNote(store, "alice", "space", "Note.md", "first");
   await expect(createNote(store, "alice", "space", "note.md", "second")).rejects.toThrow("already exists");
   expect(await store.notes("alice")).toHaveLength(1);
+});
+
+
+describe("offline reconnection and choosing the local version", () => {
+  it("uploads an offline edit automatically even if only the Drive revision changed", async () => {
+    const store = database(); const note = fixture({ text: "offline edit" }); await store.mutate(note.key, () => note);
+    const drive = client({ ...copy(), etag: '"metadata-only"' });
+    await syncAccount(store, drive);
+    expect(drive.write).toHaveBeenCalledWith("remote", { ...copy("offline edit"), etag: '"metadata-only"' }, false);
+    expect((await store.get(note.key))?.conflict).toBeUndefined();
+  });
+  it("recognizes an acknowledged-by-Drive upload after a lost reply", async () => {
+    const store = database(); const note = fixture({ text: "first offline edit" }); await store.mutate(note.key, () => note);
+    const drive = client();
+    drive.write.mockImplementationOnce(async () => {
+      expect((await store.get(note.key))?.pendingUpload?.text).toBe("first offline edit");
+      drive.read.mockResolvedValue({ ...copy("first offline edit"), etag: '"v2"' });
+      throw new Error("Connection lost before response");
+    });
+    await syncAccount(store, drive);
+    const current = (await store.get(note.key))!;
+    await store.save({ ...current, text: "continued editing offline" });
+    await syncAccount(store, drive);
+    expect(drive.write).toHaveBeenLastCalledWith("remote", { ...copy("continued editing offline"), etag: '"v2"' }, false);
+    expect(await store.get(note.key)).toMatchObject({ text: "continued editing offline", base: { text: "continued editing offline" } });
+    expect((await store.get(note.key))?.conflict).toBeUndefined();
+    expect((await store.get(note.key))?.pendingUpload).toBeUndefined();
+  });
+  it("still raises a genuine conflict after an uncertain upload if Drive has different text", async () => {
+    const store = database(); const note = fixture({ text: "latest local", pendingUpload: copy("earlier local") }); await store.mutate(note.key, () => note);
+    const drive = client(copy("other device")); await syncAccount(store, drive);
+    expect((await store.get(note.key))?.conflict?.text).toBe("other device"); expect(drive.write).not.toHaveBeenCalled();
+  });
+  it("queues an approved replacement, retains Drive recovery, and uploads with If-Match", async () => {
+    const store = database(); const remote = { ...copy("desktop version"), etag: '"v2"' };
+    const note = fixture({ text: "my offline version", conflict: remote }); await store.mutate(note.key, () => note);
+    await acceptLocalCopy(store, note.key, remote);
+    const queued = (await store.get(note.key))!;
+    expect(queued.text).toBe("my offline version"); expect(pendingNote(queued)).toBe(true);
+    expect(queued.recovery).toEqual([{ text: "desktop version", name: "Note.md" }]);
+    const drive = client(remote); await syncAccount(store, drive);
+    expect(drive.write).toHaveBeenCalledWith("remote", { ...remote, text: "my offline version" }, false);
+    expect(pendingNote((await store.get(note.key))!)).toBe(false);
+  });
+  it("does not overwrite Drive changes made after replacement was approved", async () => {
+    const store = database(); const reviewed = copy("reviewed version");
+    const note = fixture({ text: "local", conflict: reviewed }); await store.mutate(note.key, () => note);
+    await acceptLocalCopy(store, note.key, reviewed);
+    const drive = client(copy("new unreviewed edit")); await syncAccount(store, drive);
+    expect(drive.write).not.toHaveBeenCalled();
+    expect((await store.get(note.key))?.conflict?.text).toBe("new unreviewed edit");
+  });
+  it("rejects a stale conflict dialog without changing either version", async () => {
+    const store = database(); const note = fixture({ text: "local", conflict: copy("latest remote") }); await store.mutate(note.key, () => note);
+    await expect(acceptLocalCopy(store, note.key, copy("previous remote"))).rejects.toThrow("conflict changed");
+    expect(await store.get(note.key)).toMatchObject({ text: "local", base: { text: "baseline" }, conflict: { text: "latest remote" } });
+  });
+});
+
+it("does not recreate a moved file when choosing the local contents", async () => {
+  const store = database(); const remote = { ...copy("remote"), parent: "moved-folder" };
+  const note = fixture({ text: "local", conflict: remote }); await store.mutate(note.key, () => note);
+  await acceptLocalCopy(store, note.key, remote);
+  expect((await store.get(note.key))?.parent).toBe("moved-folder");
 });

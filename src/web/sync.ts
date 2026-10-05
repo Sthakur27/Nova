@@ -5,6 +5,11 @@ import { WebStore, noteKey, pendingNote, type RemoteCopy, type WebNote } from ".
 type Drive = Pick<BrowserDrive, "session" | "spaces" | "tree" | "read" | "write" | "reserve">;
 const same = (a: Pick<RemoteCopy, "text" | "name" | "parent">, b: Pick<RemoteCopy, "text" | "name" | "parent">) => a.text === b.text && a.name === b.name && a.parent === b.parent;
 export function reconcile(note: WebNote, remote: RemoteCopy, directory: string): WebNote {
+  // A lost acknowledgement is not a competing edit. Recognize our exact upload,
+  // even if more local edits were saved before reconnecting.
+  if (note.pendingUpload && same(note.pendingUpload, remote)) {
+    note = { ...note, base: remote, pendingUpload: undefined };
+  }
   if (same(note, remote)) return { ...note, base: remote, directory, conflict: undefined, missing: false, error: undefined };
   if (note.base && same(note, note.base)) return { ...note, ...remote, base: remote, directory, revision: note.revision + 1,
     bookmarks: reanchor(note.bookmarks, remote.text), conflict: undefined, missing: false, error: undefined };
@@ -43,9 +48,10 @@ export async function syncAccount(store: WebStore, drive: Drive, changed: () => 
       if (note.conflict || !pendingNote(note)) continue;
       if (remote.some(other => other.id !== item.id && other.parent === note.parent && other.name.toLocaleLowerCase() === note.name.toLocaleLowerCase())) throw new Error("Another Drive note already uses this filename. Rename your local note before syncing.");
       const uploaded = { text: note.text, name: note.name, parent: note.parent, etag: copy.etag };
-      await drive.write(item.id, uploaded, false); active();
+      await store.mutate(key, old => ({ ...old!, pendingUpload: uploaded }));
+      active(); await drive.write(item.id, uploaded, false); active();
       // Advance the baseline, never replace edits saved during this request.
-      await store.mutate(key, old => ({ ...old!, base: uploaded, error: undefined }));
+      await store.mutate(key, old => ({ ...old!, base: uploaded, pendingUpload: undefined, error: undefined }));
       changed();
     } catch (error) {
       active();
@@ -80,8 +86,9 @@ export async function syncAccount(store: WebStore, drive: Drive, changed: () => 
         if (!spaces.some(space => space.id === note.space) || note.parent !== note.space) throw new Error("The destination Cloud space is unavailable. Your new note stays on this device.");
         if (remote.some(other => other.parent === note.parent && other.name.toLocaleLowerCase() === note.name.toLocaleLowerCase())) throw new Error("Another Drive note already uses this filename. Rename your local note before syncing.");
         const uploaded = { text: note.text, name: note.name, parent: note.parent, etag: "" };
-        await drive.write(note.remoteId!, uploaded, true); active();
-        await store.mutate(note.key, old => ({ ...old!, base: uploaded, error: undefined }));
+        await store.mutate(note.key, old => ({ ...old!, pendingUpload: uploaded }));
+        active(); await drive.write(note.remoteId!, uploaded, true); active();
+        await store.mutate(note.key, old => ({ ...old!, base: uploaded, pendingUpload: undefined, error: undefined }));
       }
     } catch (error) {
       active();
@@ -102,7 +109,18 @@ export function acceptDriveCopy(store: WebStore, key: string): Promise<WebNote> 
   return store.mutate(key, old => {
     if (!old?.conflict) throw new Error("Refresh sync before resolving this note.");
     const remote = old.conflict;
-    return { ...old, ...remote, base: remote, conflict: undefined, error: undefined,
+    return { ...old, ...remote, base: remote, conflict: undefined, pendingUpload: undefined, error: undefined,
       recovery: [...(old.recovery ?? []), { text: old.text, name: old.name }], bookmarks: reanchor(old.bookmarks, remote.text), revision: old.revision + 1 };
+  });
+}
+
+/** Approve only the reviewed Drive version; the normal sync still rechecks it and uses If-Match. */
+export function acceptLocalCopy(store: WebStore, key: string, reviewed: RemoteCopy): Promise<WebNote> {
+  return store.mutate(key, old => {
+    if (!old?.conflict || !same(old.conflict, reviewed) || old.conflict.etag !== reviewed.etag) {
+      throw new Error("The conflict changed. Review the latest Drive copy before replacing it.");
+    }
+    return { ...old, parent: reviewed.parent, base: reviewed, conflict: undefined, pendingUpload: undefined, missing: false, error: undefined,
+      recovery: [...(old.recovery ?? []), { text: reviewed.text, name: reviewed.name }] };
   });
 }

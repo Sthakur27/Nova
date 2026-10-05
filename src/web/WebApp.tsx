@@ -2,14 +2,15 @@ import { useCallback, useDeferredValue, useEffect, useRef, useState } from "reac
 import { Cloud, FileText, Plus, RefreshCw, PanelLeft, Orbit, Settings2, Search, Maximize2, Minimize2, ChevronLeft, ChevronRight } from "lucide-react";
 import MobileNoteCarousel, { adjacentNote } from "../MobileNoteCarousel";
 import useWebLayout from "./useWebLayout";
+import ReplaceDriveDialog from "./ReplaceDriveDialog";
 import AppearanceDialog from "./AppearanceDialog";
 import CloudDialog from "./CloudDialog";
 import FilenameDialog from "./FilenameDialog";
 import BuiltinDocs from "../BuiltinDocs";
 import { loadIdentity, WebAuth } from "./auth";
 import { BrowserDrive, DriveError } from "./drive";
-import { WebStore, pendingNote, type Account, type Space, type WebNote } from "./store";
-import { acceptDriveCopy, createNote, syncAccount } from "./sync";
+import { WebStore, pendingNote, type Account, type Space, type WebNote, type RemoteCopy } from "./store";
+import { acceptLocalCopy, acceptDriveCopy, createNote, syncAccount } from "./sync";
 import NoteEditor, { exportText, type NoteEditorHandle } from "./NoteEditor";
 
 declare const __NOVA_WEB_CLIENT_ID__: string;
@@ -56,6 +57,7 @@ function Workspace() {
   const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
+  const [replacing, setReplacing] = useState<{ key: string; name: string; account: string; copy: RemoteCopy }>();
   const [showCloud, setShowCloud] = useState(false);
   const { mobile, focused, setFocused } = useWebLayout();
   const [showAppearance, setShowAppearance] = useState(false);
@@ -152,6 +154,17 @@ function Workspace() {
   const focusControl = <button className="web-focus-enter" title="Focus mode" aria-label="Enter focus mode" onClick={() => setFocused(true)}><Maximize2 size={18}/></button>;
   return <div className="web-app" data-note-open={showNote} data-sidebar={sidebar} data-wide={wide} data-focused={focused}>
     {focused && <button className="web-focus-exit" title="Exit focus mode · Escape" aria-label="Exit focus mode" onClick={() => setFocused(false)}><Minimize2 size={18}/></button>}
+    {replacing && <ReplaceDriveDialog name={replacing.name} onClose={() => setReplacing(undefined)} onConfirm={async () => {
+      if (syncingRef.current) throw new Error("Wait for sync to finish, then try again.");
+      syncingRef.current = true; setSyncing(true);
+      try {
+        await editor.current?.flush();
+        if (accountRef.current?.id !== replacing.account) throw new Error("The connected account changed. Review this note again.");
+        await acceptLocalCopy(store, replacing.key, replacing.copy);
+        await refresh();
+      } finally { syncingRef.current = false; setSyncing(false); }
+      void syncRef.current();
+    }} />}
     {showAppearance && <AppearanceDialog wide={wide} onWideChange={setWide} onClose={() => setShowAppearance(false)} />}
     {creating && <FilenameDialog title="New note" initialName={creating.name} action="Create note" onClose={() => setCreating(undefined)} onSubmit={async name => {
       if (accountRef.current?.id !== creating.account) throw new Error("The connected account changed. Close this dialog and try again.");
@@ -199,12 +212,12 @@ function Workspace() {
           }}>
         {note ? <>
           {(note.conflict || note.missing || note.error) && <section className="web-conflict" aria-label="Sync needs attention"><p role="alert">{note.error}</p>
-            {note.conflict && <><details><summary>Review the Drive copy: {note.conflict.name}</summary><pre>{note.conflict.text}</pre></details>
+            {note.conflict && <><button disabled={syncing || saving} onClick={() => setReplacing({ key: note.key, name: note.name, account: note.account, copy: note.conflict! })}>Replace Drive with my version</button><details><summary>Review the Drive copy: {note.conflict.name}</summary><pre>{note.conflict.text}</pre></details>
               <button disabled={syncing || saving} onClick={() => void (async () => { try { await editor.current?.flush(); await acceptDriveCopy(store, note.key); await refresh(); } catch (error) { setError(String(error)); } })()}>Use Drive copy · keep local recovery</button></>}
             {(note.conflict || note.missing) && <button disabled={saving || syncing} onClick={() => void newNote(note)}>Save local text as a new note</button>}
             <button onClick={() => editor.current?.export()}>Export my edits</button>
           </section>}
-          {note.recovery?.map((recovery, index) => <div className="web-recovery" key={index}>Previous local version {index + 1} retained. <button onClick={() => exportText(`Recovered ${recovery.name}`, recovery.text)}>Export recovery copy</button></div>)}
+          {note.recovery?.map((recovery, index) => <div className="web-recovery" key={index}>Recovery copy {index + 1} retained. <button onClick={() => exportText(`Recovered ${recovery.name}`, recovery.text)}>Export recovery copy</button></div>)}
           <NoteEditor key={note.key} ref={editor} note={note} store={store} onSaved={saved} onSaving={setSaving} panelControl={panelControl} focusControl={focusControl}/>
         </> : <section className="web-setup"><Orbit size={46}/><h1>A little space to think.</h1><p>{notes.length ? "Pick a note. Make some room for an idea." : "Your notes, wherever you are."}</p>{space ? <button onClick={() => void newNote()}><Plus size={16}/>Create a note</button> : <button onClick={() => setShowCloud(true)}><Cloud size={16}/>Connect Google Drive</button>}</section>}
         </MobileNoteCarousel>

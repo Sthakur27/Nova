@@ -22,6 +22,8 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 #### Fixed
 
+- Web sync recognizes an upload whose network reply was lost, avoiding a false conflict when editing continued offline. Genuine conflicts now offer **Replace Drive with my version**, with confirmation, a retained Drive recovery copy, and protection against newer Drive changes.
+
 - Intentional blank lines between Markdown list items now stay visible after reopening and survive edits within the list, including spacing added in formatted Edit.
 
 - Desktop Cloud sync no longer shows “Sync needs attention” while edits are waiting to save or newer changes are queued during an upload. Actual sync failures still show the warning.

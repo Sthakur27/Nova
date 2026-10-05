@@ -6,7 +6,7 @@ export type RemoteCopy = { text: string; name: string; parent: string; etag: str
 export type WebNote = {
   key: string; account: string; space: string; id: string; remoteId?: string;
   name: string; parent: string; directory: string; text: string; bookmarks: Bookmark[];
-  revision: number; base?: RemoteCopy; conflict?: RemoteCopy; missing?: boolean;
+  revision: number; base?: RemoteCopy; pendingUpload?: RemoteCopy; conflict?: RemoteCopy; missing?: boolean;
   recovery?: { text: string; name: string }[]; error?: string;
 };
 export const noteKey = (account: string, id: string) => JSON.stringify([account, id]);
