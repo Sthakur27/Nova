@@ -14,6 +14,8 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 #### Changed
 
+- The web header uses a top-right cloud icon for a Google Drive settings modal, keeping account and connection controls inside it. Removed the Web Preview header label.
+
 - Web note creation, recovery copies, and renaming use in-app filename dialogs with inline errors and keyboard controls.
 
 #### Fixed

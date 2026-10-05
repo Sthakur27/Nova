@@ -1,5 +1,6 @@
 import { useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
 import { Cloud, FileText, Plus, RefreshCw, ArrowLeft } from "lucide-react";
+import CloudDialog from "./CloudDialog";
 import FilenameDialog from "./FilenameDialog";
 import BuiltinDocs from "../BuiltinDocs";
 import { loadIdentity, WebAuth } from "./auth";
@@ -52,6 +53,7 @@ function Workspace() {
   const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
+  const [showCloud, setShowCloud] = useState(false);
   const [showNote, setShowNote] = useState(false);
   const editor = useRef<NoteEditorHandle>(null);
   const syncingRef = useRef(false);
@@ -136,18 +138,29 @@ function Workspace() {
       const note = await createNote(store, creating.account, creating.space, name, creating.text);
       await refresh(); setSelected(note.key); setShowNote(true); saved();
     }} />}
-    <header className="web-header"><div className="web-brand"><Cloud size={23}/><span>Nova <small>WEB PREVIEW</small></span></div>
-      <div className="web-connection"><span title={account?.email}>{!online ? "Offline · device copies" : connecting ? "Connecting…" : syncing ? "Syncing…" : connected ? account?.email : account ? "Reconnect to sync" : "Cloud notes"}</span>
-        <button disabled={connecting || syncing || saving || !auth.clientId || !identityReady || !online} onClick={connect}>{connected || account ? "Reconnect" : "Connect Google Drive"}</button>
-        {connecting && <button onClick={() => auth.disconnect()}>Cancel</button>}
-        {connected && <button disabled={syncing || saving} onClick={() => { auth.disconnect(); setConnected(false); }}>Disconnect</button>}
-        <BuiltinDocs />
+    <header className="web-header"><div className="web-brand"><Cloud size={23}/><span>Nova</span></div>
+      <div className="web-header-actions"><BuiltinDocs />
+        <button className="web-cloud-button" aria-label="Google Drive settings" aria-haspopup="dialog" aria-expanded={showCloud}
+          title={`Google Drive · ${!online ? "Offline" : connecting ? "Connecting" : syncing ? "Syncing" : connected ? "Connected" : "Connect to sync"}`}
+          data-attention={!!error || (!!account && !connected)} onClick={() => setShowCloud(true)}><Cloud size={22}/></button>
       </div>
     </header>
+    {showCloud && <CloudDialog onClose={() => setShowCloud(false)}>
+      {account && <p className="web-cloud-account">{account.email}</p>}
+      <p role="status">{!online ? "Offline · using device copies" : connecting ? "Connecting…" : syncing ? "Syncing…" : connected ? "Connected to Google Drive" : account ? "Reconnect to sync" : "Connect your Google Drive account"}</p>
+      <div className="web-cloud-actions">
+        <button disabled={connecting || syncing || saving || !auth.clientId || !identityReady || !online} onClick={connect}>{connected || account ? "Reconnect" : "Connect Google Drive"}</button>
+        {connecting && <button onClick={() => auth.disconnect()}>Cancel sign-in</button>}
+        {connected && <button disabled={syncing || saving} onClick={() => { auth.disconnect(); setConnected(false); }}>Disconnect</button>}
+      </div>
+      {!auth.clientId && <p>Google Drive is not configured for this preview yet.</p>}
+      {auth.clientId && !identityReady && !connecting && <p>Google sign-in is not ready. <button onClick={prepareIdentity}>Retry loading sign-in</button></p>}
+      {error && <p className="web-error" role="alert">{error}</p>}
+    </CloudDialog>}
     <div className="web-notices">
       {!auth.clientId && <p>Google Drive is not configured for this preview yet.</p>}
       {auth.clientId && !identityReady && !connecting && <p>Google sign-in is not ready. <button onClick={prepareIdentity}>Retry loading sign-in</button></p>}
-      {account && !connected && <p>Your downloaded notes remain editable. Reconnect Google Drive to upload pending edits.</p>}
+      {account && !connected && <p>Your downloaded notes remain editable. Open the cloud icon to reconnect and upload pending edits.</p>}
       {error && <p className="web-error" role="alert">{error}</p>}
     </div>
     <div className="web-body">

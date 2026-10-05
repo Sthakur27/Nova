@@ -5,10 +5,6 @@ body { background: #17181c; }
 .web-app button[aria-pressed="true"] { background: #bca2ea20; color: #d5beff; }
 .web-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: max(15px, env(safe-area-inset-top)) 22px 15px; border-bottom: 1px solid #ffffff12; }
 .web-brand { display: flex; align-items: center; gap: 10px; font-size: 20px; color: #e9e1f4; white-space: nowrap; }
-.web-brand small { display: block; font-size: 9px; letter-spacing: .14em; color: #9f91b3; margin-top: 2px; }
-.web-connection { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 12px; }
-.web-connection > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 240px; color: #a7a2b3; }
-.web-connection > button:first-of-type { border: 1px solid #ffffff23; }
 .web-notices { font-size: 12px; background: #24212c; }
 .web-notices p { margin: 0; padding: 9px 22px; }
 .web-error { color: #ffb5b2; }
@@ -55,9 +51,6 @@ body { background: #17181c; }
 .web-offline-warning { position: fixed; bottom: 0; padding: 12px; background: #4d3427; width: 100%; z-index: 100; margin: 0; }
 @media (max-width: 700px) {
   .web-header { gap: 10px; padding-left: 14px; padding-right: 14px; }
-  .web-connection { gap: 3px; flex-wrap: wrap; justify-content: flex-end; }
-  .web-connection > span { flex-basis: 100%; text-align: right; font-size: 10px; }
-  .web-connection button { padding: 5px 8px; min-height: 36px; }
   .web-library { flex-basis: 100%; border: 0; padding-bottom: max(18px, env(safe-area-inset-bottom)); }
   .web-main { display: none; }
   .web-app[data-note-open="true"] .web-library { display: none; }
@@ -78,3 +71,16 @@ body { background: #17181c; }
 .web-filename-dialog input:focus { outline: 2px solid #b8a0d8; outline-offset: 2px; }
 .web-filename-dialog .primary { background: #b8a0d8; color: #19151f; }
 .web-filename-dialog .primary:disabled { opacity: .5; }
+
+.web-header-actions { display: flex; align-items: center; gap: 8px; }
+.web-cloud-button { position: relative; display: grid; place-items: center; width: 40px; height: 40px; }
+.web-cloud-button[data-attention="true"]::after { content: ""; position: absolute; right: 5px; top: 5px; width: 6px; height: 6px; border-radius: 50%; background: #e5ba7a; }
+.web-cloud-dialog { width: min(420px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; box-sizing: border-box; }
+.web-cloud-dialog header { display: flex; align-items: center; gap: 10px; }
+.web-cloud-dialog h2 { margin: 0; flex: 1; }
+.web-cloud-dialog header button { display: grid; place-items: center; }
+.web-cloud-dialog p { font-size: 13px; line-height: 1.6; }
+.web-cloud-account { overflow-wrap: anywhere; }
+.web-cloud-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0; }
+.web-cloud-actions button { border: 1px solid #ffffff26; }
+.web-cloud-help { color: #aaa1b7; }
