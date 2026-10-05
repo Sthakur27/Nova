@@ -134,3 +134,52 @@ body { background: #101014; }
   .web-mobile-back { display: grid; place-items: center; }
 }
 .web-writing .document-area { --scroll-before: 0px; }
+
+/* Shared native swipe behavior, with web-specific note previews and chrome. */
+.web-app .mobile-note-carousel, .web-app .note-carousel-current { display: flex; flex: 1; min-width: 0; min-height: 0; flex-direction: column; }
+.web-app .mobile-note-carousel { position: relative; overflow: hidden; --note-drag: 0px; }
+.web-app .mobile-note-carousel[data-enabled="true"] { touch-action: pan-y pinch-zoom; }
+.web-app .note-carousel-current { width: 100%; transform: translate3d(var(--note-drag), 0, 0); }
+.web-app .note-carousel-neighbor { position: absolute; inset: 0; visibility: hidden; pointer-events: none; background: #101014; }
+.web-app .note-carousel-previous { transform: translate3d(calc(var(--note-drag) - 100%), 0, 0); }
+.web-app .note-carousel-next { transform: translate3d(calc(var(--note-drag) + 100%), 0, 0); }
+.web-app .mobile-note-carousel:not([data-motion="idle"]) > .note-carousel-neighbor { visibility: visible; }
+.web-app .mobile-note-carousel:not([data-motion="idle"]) > * { will-change: transform; }
+.web-app .mobile-note-carousel[data-motion="settling"] > * { transition: transform var(--note-settle-duration, 180ms) cubic-bezier(.2,.7,.2,1); }
+.web-app .mobile-note-carousel[data-enabled="false"] > .note-carousel-current { transform: none; }
+.web-swipe-preview { padding: 55px 22px; height: 100%; overflow: hidden; }
+.web-swipe-preview h1 { font: 24px "Lora", Georgia, serif; overflow-wrap: anywhere; }
+.web-swipe-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 17px/1.7 "Lora", Georgia, serif; }
+.web-note-menu, .web-note-navigation { display: none; }
+.web-focus-exit { position: fixed; z-index: 40; top: max(8px, env(safe-area-inset-top)); right: max(8px, env(safe-area-inset-right)); width: 44px; height: 44px; display: grid; place-items: center; background: #29252fd9; color: #d7c6ed; border: 1px solid #baa0e630; }
+.web-app[data-focused="true"] .web-library,
+.web-app[data-focused="true"] .web-note-toolbar,
+.web-app[data-focused="true"] .web-save-state,
+.web-app[data-focused="true"] .web-note-navigation { display: none; }
+.web-app[data-focused="true"] .document-area { padding-top: max(18px, env(safe-area-inset-top)); }
+@media (max-width: 700px) {
+  .web-app { height: var(--web-viewport-height, 100dvh); }
+  .web-app button, .web-note-menu summary { min-height: 44px; }
+  .web-note-toolbar { flex-wrap: nowrap; gap: 4px; padding: max(4px, env(safe-area-inset-top)) 8px 4px; }
+  .web-note-toolbar strong { max-width: none; font-size: 13px; padding: 0 4px; min-width: 0; }
+  .web-note-toolbar > .web-desktop-actions { display: none; }
+  .web-note-toolbar > button { flex-shrink: 0; width: 44px; padding: 0; }
+  .web-note-menu { display: block; position: relative; flex-shrink: 0; }
+  .web-note-menu summary { display: grid; place-items: center; width: 44px; cursor: pointer; border-radius: 8px; list-style: none; }
+  .web-note-menu summary::-webkit-details-marker { display: none; }
+  .web-note-menu[open] summary { background: #baa0e61c; }
+  .web-note-menu > div { position: absolute; z-index: 30; right: 0; top: 48px; width: 180px; display: grid; padding: 6px; background: #232029; border: 1px solid #baa0e633; border-radius: 12px; box-shadow: 0 12px 32px #0008; }
+  .web-note-menu button { text-align: left; }
+  .web-note-navigation { display: flex; align-items: center; justify-content: center; gap: 24px; border-top: 1px solid #ffffff0a; padding-bottom: env(safe-area-inset-bottom); color: #b9adc9; font-size: 11px; }
+  .web-note-navigation button { display: grid; place-items: center; width: 48px; }
+  .web-save-state { padding: 4px 12px; }
+  .web-files > button { min-height: 46px; font-size: 14px; }
+  .web-orbit-controls { height: 48px; width: 220px; }
+  .web-orbit-controls > button { width: 44px; height: 44px; }
+  .web-brand { padding-bottom: 6px; font-size: 24px; }
+  .web-library-heading { margin-top: 0; }
+  .web-app[data-focused="true"] .web-library { display: none; }
+  .web-app .web-search input { font-size: 16px; }
+}
+
+.web-empty-controls { z-index: 2; }

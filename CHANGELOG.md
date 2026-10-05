@@ -14,6 +14,8 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 #### Changed
 
+- The web phone layout has larger touch targets, a compact note action menu, and native-style swiping through the current note list. Focus mode hides surrounding controls while keeping editing and swiping active; exit with the top-right button or Escape.
+
 - The web workspace now has a compact desktop-style sidebar, orbital corner controls, a collapsible notes panel, and Focused/Wide writing widths. Removed the full-width header, repeated Cloud labels, and routine sync banners; connection controls and sync guidance live in the cloud modal. Save status sits below the editor.
 
 - Web note creation, recovery copies, and renaming use in-app filename dialogs with inline errors and keyboard controls.

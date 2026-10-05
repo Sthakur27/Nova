@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState, type ReactNode } from "react";
+import { MoreHorizontal } from "lucide-react";
 import Editor, { type EditorHandle } from "../Editor";
 import { supportsDocumentView } from "../documentLimits";
 import type { Bookmark } from "../model";
@@ -11,7 +12,7 @@ export function exportText(name: string, text: string) {
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 export type NoteEditorHandle = { flush: () => Promise<void>; export: () => void };
-export default forwardRef<NoteEditorHandle, { note: WebNote; store: WebStore; onSaved: () => void; onSaving: (saving: boolean) => void; panelControl?: ReactNode }>(function NoteEditor({ note, store, onSaved, onSaving, panelControl }, handle) {
+export default forwardRef<NoteEditorHandle, { note: WebNote; store: WebStore; onSaved: () => void; onSaving: (saving: boolean) => void; panelControl?: ReactNode; focusControl?: ReactNode }>(function NoteEditor({ note, store, onSaved, onSaving, panelControl, focusControl }, handle) {
   const editor = useRef<EditorHandle>(null);
   const saved = useRef(note);
   const queue = useRef(Promise.resolve());
@@ -70,12 +71,23 @@ export default forwardRef<NoteEditorHandle, { note: WebNote; store: WebStore; on
     <div className="web-note-toolbar">
       {panelControl}
       <strong title={note.name}>{note.name}</strong>
-      <div role="group" aria-label="Editing mode">
+      <div className="web-desktop-actions" role="group" aria-label="Editing mode">
         {rich && <button aria-pressed={mode === "edit"} onClick={() => setMode("edit")}>Edit</button>}
         <button aria-pressed={!rich || mode === "source"} onClick={() => setMode("source")}>Source</button>
       </div>
-      <button onClick={() => setRenaming(true)}>Rename</button>
-      <button onClick={() => exportText(saved.current.name, editor.current?.text() ?? saved.current.text)}>Export</button>
+      <button className="web-desktop-actions" onClick={() => setRenaming(true)}>Rename</button>
+      <button className="web-desktop-actions" onClick={() => exportText(saved.current.name, editor.current?.text() ?? saved.current.text)}>Export</button>
+      {focusControl}
+      <details className="web-note-menu" onKeyDown={event => {
+        if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); event.currentTarget.open = false; event.currentTarget.querySelector("summary")?.focus(); }
+      }}>
+        <summary aria-label="Note actions" title="Note actions"><MoreHorizontal size={20}/></summary>
+        <div>
+          {rich && <button onClick={event => { setMode(mode === "edit" ? "source" : "edit"); event.currentTarget.closest("details")?.removeAttribute("open"); }}>{mode === "edit" ? "Switch to Source" : "Switch to Edit"}</button>}
+          <button onClick={event => { event.currentTarget.closest("details")?.removeAttribute("open"); setRenaming(true); }}>Rename</button>
+          <button onClick={event => { exportText(saved.current.name, editor.current?.text() ?? saved.current.text); event.currentTarget.closest("details")?.removeAttribute("open"); }}>Export</button>
+        </div>
+      </details>
     </div>
 
     {error && <p className="web-error" role="alert">{error}</p>}

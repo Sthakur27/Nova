@@ -56,6 +56,8 @@ Use **Open files** to choose a note, **New note** to start one, and swipe left o
 
 Open the [web preview](https://nova-indol-pi.vercel.app) in your browser to use Cloud notes. Use the cloud icon in the bottom-left corner controls to connect, reconnect, or disconnect Google Drive, then choose a downloaded note or use **+** to create one. Use **Edit** or **Source**, search downloaded notes from the sidebar, and use **Export** to keep an extra copy. When creating or renaming a note, enter its filename in the dialog, then press Enter to save or Escape to cancel. Hide or show the sidebar with the panel button beside your note title. The corner Appearance button switches between Focused and Wide writing widths for the current session.
 
+On a phone, swipe left or right across a note to cycle through the current sidebar list, or use the previous/next arrows below it. Search and space filters determine that list. Open **Note actions** (the three dots) for Source/Edit, Rename, and Export. Tap the expand button for **Focus mode**; use the small top-right exit button or Escape to restore the controls. Focus keeps the editor and swiping active.
+
 Downloaded notes remain editable offline. **Saved on this device** means the browser has your edits; **synced** means that version reached Drive. Reconnect after Google access expires or the page reloads, and keep the app open to finish uploading. A conflict keeps your local text available for review and export. Export important pending edits before clearing browser data.
 
 ## Come back whenever you like

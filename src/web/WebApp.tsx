@@ -1,5 +1,7 @@
 import { useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
-import { Cloud, FileText, Plus, RefreshCw, PanelLeft, Orbit, Settings2, Search } from "lucide-react";
+import { Cloud, FileText, Plus, RefreshCw, PanelLeft, Orbit, Settings2, Search, Maximize2, Minimize2, ChevronLeft, ChevronRight } from "lucide-react";
+import MobileNoteCarousel, { adjacentNote } from "../MobileNoteCarousel";
+import useWebLayout from "./useWebLayout";
 import AppearanceDialog from "./AppearanceDialog";
 import CloudDialog from "./CloudDialog";
 import FilenameDialog from "./FilenameDialog";
@@ -55,6 +57,7 @@ function Workspace() {
   const [saving, setSaving] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
   const [showCloud, setShowCloud] = useState(false);
+  const { mobile, focused, setFocused } = useWebLayout();
   const [showAppearance, setShowAppearance] = useState(false);
   const [sidebar, setSidebar] = useState(true);
   const [wide, setWide] = useState(false);
@@ -114,15 +117,15 @@ function Workspace() {
     void connection.then(async session => {
       await editor.current?.flush();
       localStorage.setItem(ACCOUNT_KEY, JSON.stringify(session.account));
-      accountRef.current = session.account; setAccount(session.account); setSelected(""); setNotes([]); setSpaces([]);
+      accountRef.current = session.account; setAccount(session.account); setSelected(""); setFocused(false); setNotes([]); setSpaces([]);
       setConnected(true); await refresh();
       void navigator.storage?.persist?.().catch(() => false);
       await syncRef.current();
     }).catch(error => { auth.disconnect(); setConnected(false); setError(String(error)); }).finally(() => setConnecting(false));
   }
   const selectNote = async (key: string) => {
-    try { await editor.current?.flush(); setSelected(key); setShowNote(true); }
-    catch (error) { setError(String(error)); }
+    try { await editor.current?.flush(); setSelected(key); setShowNote(true); return true; }
+    catch (error) { setError(String(error)); return false; }
   };
   async function newNote(copy?: WebNote) {
     try {
@@ -139,9 +142,16 @@ function Workspace() {
   const status = error ? "Sync needs attention" : !online ? "Offline" : connecting ? "Connecting…" : syncing ? "Syncing…" : !connected ? account ? "Reconnect to sync" : "Connect Google Drive" : pending ? `${pending} pending` : "Up to date";
   const panelControl = <>
     <button className="web-panel-toggle" title={sidebar ? "Hide sidebar" : "Show sidebar"} aria-label={sidebar ? "Hide sidebar" : "Show sidebar"} aria-expanded={sidebar} onClick={() => setSidebar(value => !value)}><PanelLeft size={18}/></button>
-    <button className="web-mobile-back" title="Show notes" aria-label="Show notes" onClick={() => setShowNote(false)}><PanelLeft size={18}/></button>
+    <button className="web-mobile-back" title="Show notes" aria-label="Show notes" onClick={() => { setShowNote(false); setFocused(false); }}><PanelLeft size={18}/></button>
   </>;
-  return <div className="web-app" data-note-open={showNote} data-sidebar={sidebar} data-wide={wide}>
+  const noteIds = visible.map(note => note.key);
+  const navigate = (direction: -1 | 1) => {
+    const key = adjacentNote(noteIds, selected, direction);
+    if (key) void selectNote(key);
+  };
+  const focusControl = <button className="web-focus-enter" title="Focus mode" aria-label="Enter focus mode" onClick={() => setFocused(true)}><Maximize2 size={18}/></button>;
+  return <div className="web-app" data-note-open={showNote} data-sidebar={sidebar} data-wide={wide} data-focused={focused}>
+    {focused && <button className="web-focus-exit" title="Exit focus mode · Escape" aria-label="Exit focus mode" onClick={() => setFocused(false)}><Minimize2 size={18}/></button>}
     {showAppearance && <AppearanceDialog wide={wide} onWideChange={setWide} onClose={() => setShowAppearance(false)} />}
     {creating && <FilenameDialog title="New note" initialName={creating.name} action="Create note" onClose={() => setCreating(undefined)} onSubmit={async name => {
       if (accountRef.current?.id !== creating.account) throw new Error("The connected account changed. Close this dialog and try again.");
@@ -182,6 +192,11 @@ function Workspace() {
       </aside>
       <main className="web-main">
         {!note && <div className="web-empty-controls">{panelControl}</div>}
+        <MobileNoteCarousel enabled={mobile && showNote && !!note} ids={noteIds} selected={selected} onSelect={selectNote}
+          renderPreview={key => {
+            const preview = notes.find(note => note.key === key);
+            return <article className="web-swipe-preview"><h1>{preview?.name}</h1><pre>{preview?.text.slice(0, 6000)}</pre></article>;
+          }}>
         {note ? <>
           {(note.conflict || note.missing || note.error) && <section className="web-conflict" aria-label="Sync needs attention"><p role="alert">{note.error}</p>
             {note.conflict && <><details><summary>Review the Drive copy: {note.conflict.name}</summary><pre>{note.conflict.text}</pre></details>
@@ -190,8 +205,14 @@ function Workspace() {
             <button onClick={() => editor.current?.export()}>Export my edits</button>
           </section>}
           {note.recovery?.map((recovery, index) => <div className="web-recovery" key={index}>Previous local version {index + 1} retained. <button onClick={() => exportText(`Recovered ${recovery.name}`, recovery.text)}>Export recovery copy</button></div>)}
-          <NoteEditor key={note.key} ref={editor} note={note} store={store} onSaved={saved} onSaving={setSaving} panelControl={panelControl}/>
+          <NoteEditor key={note.key} ref={editor} note={note} store={store} onSaved={saved} onSaving={setSaving} panelControl={panelControl} focusControl={focusControl}/>
         </> : <section className="web-setup"><Orbit size={46}/><h1>A little space to think.</h1><p>{notes.length ? "Pick a note. Make some room for an idea." : "Your notes, wherever you are."}</p>{space ? <button onClick={() => void newNote()}><Plus size={16}/>Create a note</button> : <button onClick={() => setShowCloud(true)}><Cloud size={16}/>Connect Google Drive</button>}</section>}
+        </MobileNoteCarousel>
+        {note && <nav className="web-note-navigation" aria-label="Browse notes">
+          <button aria-label="Previous note" disabled={noteIds.length < 2 || !noteIds.includes(selected)} onClick={() => navigate(-1)}><ChevronLeft size={18}/></button>
+          <span>{noteIds.includes(selected) ? `${noteIds.indexOf(selected) + 1} / ${noteIds.length}` : "Filtered note"}</span>
+          <button aria-label="Next note" disabled={noteIds.length < 2 || !noteIds.includes(selected)} onClick={() => navigate(1)}><ChevronRight size={18}/></button>
+        </nav>}
       </main>
     </div>
   </div>;

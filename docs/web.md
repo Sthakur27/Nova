@@ -16,6 +16,8 @@ Open the [hosted web preview](https://nova-indol-pi.vercel.app). This remains a 
 - Conflict review with the Drive text visible alongside the retained local copy. **Use Drive copy · keep local recovery** adopts the downloaded version and retains the previous local text for export. **Save local text as a new note** creates a separate note without changing the conflicted original.
 - A missing Drive note stays on this device. It is never silently deleted or automatically recreated. Export it or explicitly save a separate new copy.
 
+On a phone, swipe left or right across a note to cycle through the current sidebar list, or use the previous/next arrows below it. Search and space filters determine that list. Open **Note actions** (the three dots) for Source/Edit, Rename, and Export. Tap the expand button for **Focus mode**; use the small top-right exit button or Escape to restore the controls. Focus keeps the editor and swiping active.
+
 The web preview has a smaller interface than the native app. It does not offer Local folders, split panes, saved layouts, terminal, native dictation, folder creation/moves, deletion, or a full bookmark/settings interface. Device bookmark metadata is retained with cached notes but is not imported from or written to the native app's bookmark storage.
 
 Sync runs after saves settle, on Refresh Cloud, on returning to the foreground/online, and approximately once a minute while visible. Closing or suspending the web app can stop sync. Reopen and reconnect to finish pending uploads.
