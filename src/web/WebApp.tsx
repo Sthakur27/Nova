@@ -213,7 +213,7 @@ function Workspace() {
         {note ? <>
           {(note.conflict || note.missing || note.error) && <section className="web-conflict" aria-label="Sync needs attention"><p role="alert">{note.error}</p>
             {note.conflict && <><button disabled={syncing || saving} onClick={() => setReplacing({ key: note.key, name: note.name, account: note.account, copy: note.conflict! })}>Replace Drive with my version</button><details><summary>Review the Drive copy: {note.conflict.name}</summary><pre>{note.conflict.text}</pre></details>
-              <button disabled={syncing || saving} onClick={() => void (async () => { try { await editor.current?.flush(); await acceptDriveCopy(store, note.key); await refresh(); } catch (error) { setError(String(error)); } })()}>Use Drive copy · keep local recovery</button></>}
+              <button disabled={syncing || saving} onClick={() => void (async () => { try { await editor.current?.flush(); await acceptDriveCopy(store, note.key); await refresh(); } catch (error) { setError(String(error)); } })()}>Use Drive copy</button></>}
             {(note.conflict || note.missing) && <button disabled={saving || syncing} onClick={() => void newNote(note)}>Save local text as a new note</button>}
             <button onClick={() => editor.current?.export()}>Export my edits</button>
           </section>}
