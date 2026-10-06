@@ -10,6 +10,7 @@ import type { Node as DocumentNode } from "@tiptap/pm/model";
 import type { Nodes } from "mdast";
 import { createRoot } from "react-dom/client";
 import Markdown from "./Markdown";
+import { installEditorLinks } from "./editorLinks";
 import { documentPositions, markdownTree, parseDocument, taskOffsets } from "./documentMarkdown";
 import { formatShortcuts, type FormatAction } from "./richMarkdown";
 import type { Bookmark } from "./model";
@@ -136,6 +137,7 @@ export class DocumentEditor {
   private lineHighlight = false;
   private highlightFrame = 0;
   private highlightObserver?: ResizeObserver;
+  private disposeLinks: () => void;
 
   constructor(element: HTMLElement, source: string, private callbacks: Callbacks) {
     this.source = source;
@@ -271,15 +273,6 @@ export class DocumentEditor {
       content: parsed.content,
       editorProps: {
         attributes: { class: "document-content", "aria-label": "Note editor", role: "textbox", "aria-multiline": "true" },
-        handleClick: (_view, _pos, event) => {
-          const link = (event.target as HTMLElement).closest("a");
-          if (link && (!this.editor.isEditable || event.metaKey || event.ctrlKey)) {
-            const href = link.getAttribute("href");
-            if (href && /^(https?:|mailto:)/i.test(href)) window.open(href, "_blank", "noopener,noreferrer");
-            return true;
-          }
-          return false;
-        },
       },
       onUpdate: ({ transaction }) => {
         if (this.syncing) return;
@@ -304,6 +297,7 @@ export class DocumentEditor {
         if (!this.syncing) this.reportFormatting();
       },
     });
+    this.disposeLinks = installEditorLinks(this.editor.view.dom);
     this.rememberParts(this.editor.state.doc, parsed);
     if (typeof ResizeObserver !== "undefined") {
       this.highlightObserver = new ResizeObserver(() => this.scheduleLineHighlight());
@@ -516,6 +510,7 @@ export class DocumentEditor {
     this.reportSelection();
   }
   destroy() {
+    this.disposeLinks();
     cancelAnimationFrame(this.highlightFrame);
     this.highlightObserver?.disconnect();
     this.editor.destroy();

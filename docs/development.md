@@ -190,6 +190,10 @@ Sidebar saved-state reordering uses `useStateReorder` pointer handling, matching
 
 Verify the folder menu launches a separate native Cloud-only window, with no Local section and no change to the originating window. Check disconnected setup, a connected empty space, cached notes offline, restart, and reopening a local recent into a mixed window. Menu, preference, and IPC tests cover the frontend portions; Google authentication and real offline sync require native verification.
 
+## Markdown links
+
+`editorLinks.ts` handles click and right-click link opening on the shared formatted Edit/Read surface without document transactions. The desktop `open_external_link` command validates HTTP, HTTPS, and mailto schemes before handing the URL to the default application; browser previews use a new tab. Tests cover navigation, selection gestures, context-menu dismissal and cleanup, errors, and the native scheme boundary. Native UI verification should check click and right-click opening of an HTTPS and email link, then confirm text selection and unchanged note contents.
+
 ## Built-in documents
 
 `BuiltinDocs.tsx` provides the About Nova book button in App’s navigation row below Quick find, alongside Files, Search, folder, and Recent files controls. It opens Welcome directly in a modal read-only Markdown viewer, with buttons to switch to Changelog. Initial focus goes to Close rather than the document heading; closing restores focus to the book button. Vite bundles `docs/welcome.md` and the root `CHANGELOG.md` through raw imports, so both work offline without filesystem or Drive access. Edit those Markdown files to update the bundled pages; keep Welcome focused on everyday workflows and platform differences. The changelog retains its development-date and publication caveats. Relative changelog links resolve against the repository on GitHub. These pages never enter note tabs, recovery drafts, saved states, or workspace search.

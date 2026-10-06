@@ -946,6 +946,30 @@ fn quit_app(app: tauri::AppHandle, access: State<'_, Access>) {
     app.exit(0);
 }
 #[cfg(desktop)]
+fn external_link_url(url: &str) -> Result<reqwest::Url, String> {
+    let parsed = reqwest::Url::parse(url).map_err(|_| "Invalid link.".to_string())?;
+    if !matches!(parsed.scheme(), "http" | "https" | "mailto") {
+        return Err("Only web and email links can be opened.".into());
+    }
+    Ok(parsed)
+}
+#[cfg(desktop)]
+#[tauri::command]
+fn open_external_link(url: String) -> Result<(), String> {
+    let parsed = external_link_url(&url)?;
+    webbrowser::open(parsed.as_str()).map_err(|_| "Could not open this link in your default application.".to_string())
+}
+#[cfg(all(test, desktop))]
+#[test]
+fn external_links_allow_only_web_and_email() {
+    for url in ["https://example.com/path?q=1#heading", "http://example.com", "mailto:hello@example.com"] {
+        assert!(external_link_url(url).is_ok());
+    }
+    for url in ["javascript:alert(1)", "file:///etc/passwd", "data:text/html,hello", "../note.md", "https://"] {
+        assert!(external_link_url(url).is_err());
+    }
+}
+#[cfg(desktop)]
 #[tauri::command]
 fn open_readme() -> Result<(), String> {
     webbrowser::open("https://github.com/Sthakur27/Nova/blob/main/README.md")
@@ -1078,6 +1102,7 @@ pub fn run() {
             save_explorer,
             quit_app,
             open_readme,
+            open_external_link,
             begin_update,
             cancel_update,
             restart_after_update,

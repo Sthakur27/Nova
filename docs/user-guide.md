@@ -102,6 +102,8 @@ Collapse navigation, bookmarks, top bars, or the status bar with the edge contro
 
 On mobile, tap the expand icon beside **Open files** to enter focus mode. Navigation, file controls, toolbars, and the status bar disappear while typing and swiping between open notes remain available. The small top-right icon exits focus mode. The adjacent **Galaxy mode** button switches Galaxy styling on or off and stays visible while focused. Mobile hides the desktop translucency and frosted-panel controls.
 
+In Markdown **Edit** mode, click a web or email link to open it, or right-click and choose **Open link**. Desktop opens your default browser or email application; the web preview opens a new browser tab. Command/Ctrl-click also works. Drag across link text or Shift-click to select it; use **Source** to edit its address. Press Escape to dismiss the link menu. Relative file links are not opened by these actions.
+
 In Markdown **Edit** mode, typing these shortcuts applies formatting immediately:
 
 | Type | Result |

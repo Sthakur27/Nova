@@ -2238,6 +2238,7 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 .document-prose { font-size: var(--editor-visual-size, 15px); }
 .document-content { position: relative; outline: none; min-height: 1.95em; overflow-wrap: anywhere; }
 .document-content .document-all-selected { background: #b393d63b; }
+.document-content a[href] { cursor: pointer; }
 .document-content > :first-child { margin-top: 0; }
 .document-content p:empty::after { content: "\00a0"; }
 .document-content li > p { margin: 0; }

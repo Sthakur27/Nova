@@ -16,6 +16,8 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 #### Changed
 
+- Markdown Edit mode opens web and email hyperlinks with a click or right-click → **Open link**. Desktop links open in the default application.
+
 - The web app prompts for Google Drive connection on opening, returning, or access expiry, with an option to continue without syncing. Offline visits defer the prompt until internet returns.
 
 ### 2026-10-05

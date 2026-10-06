@@ -14,6 +14,8 @@ On desktop, use the folder button below **Quick find** to open a folder on your 
 
 Use **Edit** for a formatted page with headings, lists, links, and checkboxes. Use **Source** to work with the plain text underneath. Markdown is simply text with a few formatting marks—try starting a line with `# ` for a heading or `- ` for a list.
 
+Click a web or email link in **Edit** to open it, or right-click it and choose **Open link**. Use **Source** to edit a link’s address.
+
 Prefer a reading view? Turn on **Show Read mode** in Settings. You can then switch to **Read**, with continuous scrolling or pages. Very large Markdown notes offer **Source** and **Read** only to keep editing responsive; Read stays available even with this setting off.
 
 ## Find the thought you’re looking for
