@@ -50,3 +50,16 @@ it("calls browser fetch with its global receiver for Drive requests", async () =
   });
   expect(await new BrowserDrive(session()).reserve()).toBe("reserved");
 });
+
+it("checks an unchanged revision without downloading its content again", async () => {
+  const fetcher = vi.fn(async () => json(metadata()));
+  const cached = { name: "Note.md", parent: "space", text: "baseline", etag: '"v1"' };
+  expect(await new BrowserDrive(session(), fetcher).read("remote", cached)).toEqual(cached);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+it("downloads content when the cached revision is stale", async () => {
+  const fetcher = vi.fn().mockResolvedValueOnce(json(metadata('"v2"'))).mockResolvedValueOnce(new Response("updated")).mockResolvedValueOnce(json(metadata('"v2"')));
+  const cached = { name: "Note.md", parent: "space", text: "baseline", etag: '"v1"' };
+  expect(await new BrowserDrive(session(), fetcher).read("remote", cached)).toMatchObject({ text: "updated", etag: '"v2"' });
+  expect(fetcher).toHaveBeenCalledTimes(3);
+});

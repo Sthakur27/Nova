@@ -121,10 +121,12 @@ function Workspace() {
     void connection.then(async session => {
       await editor.current?.flush();
       localStorage.setItem(ACCOUNT_KEY, JSON.stringify(session.account));
-      accountRef.current = session.account; setAccount(session.account); setSelected(""); setFocused(false); setNotes([]); setSpaces([]);
-      setConnected(true); await refresh();
+      const sameAccount = accountRef.current?.id === session.account.id;
+      accountRef.current = session.account; setAccount(session.account);
+      if (!sameAccount) { setSelected(""); setFocused(false); setNotes([]); setSpaces([]); }
+      setConnected(true); setConnecting(false); await refresh();
       void navigator.storage?.persist?.().catch(() => false);
-      await syncRef.current();
+      void syncRef.current();
     }).catch(error => { auth.disconnect(); setConnected(false); setError(String(error)); }).finally(() => setConnecting(false));
   }
   const selectNote = async (key: string) => {
@@ -216,6 +218,7 @@ function Workspace() {
           }}>
         {note ? <>
           {(note.conflict || note.missing || note.error) && <section className="web-conflict" aria-label="Sync needs attention"><p role="alert">{note.error}</p>
+            {syncing && <p role="status">Checking Drive… Conflict controls will be available when sync finishes. You can keep editing or export your edits.</p>}
             {note.conflict && <><button disabled={syncing || saving} onClick={() => setReplacing({ key: note.key, name: note.name, account: note.account, copy: note.conflict! })}>Replace Drive with my version</button><details><summary>Review the Drive copy: {note.conflict.name}</summary><pre>{note.conflict.text}</pre></details>
               <button disabled={syncing || saving} onClick={() => void (async () => { try { await editor.current?.flush(); await acceptDriveCopy(store, note.key); await refresh(); } catch (error) { setError(String(error)); } })()}>Use Drive copy</button></>}
             {(note.conflict || note.missing) && <button disabled={saving || syncing} onClick={() => void newNote(note)}>Save local text as a new note</button>}

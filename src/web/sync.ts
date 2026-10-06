@@ -37,7 +37,7 @@ export async function syncAccount(store: WebStore, drive: Drive, changed: () => 
     active();
     const key = identities.get(item.id)?.key ?? noteKey(account, item.id);
     try {
-      const copy = await drive.read(item.id); active();
+      const copy = await drive.read(item.id, identities.get(item.id)?.base); active();
       // A move after listing must be rediscovered before a write is permitted.
       if (copy.parent !== item.parent || copy.name !== item.name) throw new DriveError(412);
       const note = await store.mutate(key, old => old ? { ...reconcile(old, copy, item.directory), space: item.space } : {
@@ -51,7 +51,7 @@ export async function syncAccount(store: WebStore, drive: Drive, changed: () => 
       await store.mutate(key, old => ({ ...old!, pendingUpload: uploaded }));
       active(); await drive.write(item.id, uploaded, false); active();
       // Advance the baseline, never replace edits saved during this request.
-      await store.mutate(key, old => ({ ...old!, base: uploaded, pendingUpload: undefined, error: undefined }));
+      await store.mutate(key, old => ({ ...old!, base: { ...uploaded, etag: "" }, pendingUpload: undefined, error: undefined }));
       changed();
     } catch (error) {
       active();
@@ -88,7 +88,7 @@ export async function syncAccount(store: WebStore, drive: Drive, changed: () => 
         const uploaded = { text: note.text, name: note.name, parent: note.parent, etag: "" };
         await store.mutate(note.key, old => ({ ...old!, pendingUpload: uploaded }));
         active(); await drive.write(note.remoteId!, uploaded, true); active();
-        await store.mutate(note.key, old => ({ ...old!, base: uploaded, pendingUpload: undefined, error: undefined }));
+        await store.mutate(note.key, old => ({ ...old!, base: { ...uploaded, etag: "" }, pendingUpload: undefined, error: undefined }));
       }
     } catch (error) {
       active();

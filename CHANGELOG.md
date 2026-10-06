@@ -10,6 +10,8 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 #### Fixed
 
+- Web sync reuses unchanged Drive revisions instead of repeatedly downloading note contents. Reconnecting to the same account keeps the open note and reports sign-in completion before background sync finishes; conflict controls explain when they are waiting for sync.
+
 - Online web refreshes fetch the latest app instead of staying on an older offline shell. Offline launches still use the installed version.
 
 #### Changed

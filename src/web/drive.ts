@@ -106,8 +106,12 @@ export class BrowserDrive {
     if (Number(meta.fileSize) > MAX_NOTE_BYTES) throw new Error("This note exceeds the web preview's 2 MB limit.");
     return { etag: meta.etag as string, name: meta.title as string, parent: id(meta.parents[0].id) };
   }
-  async read(fileId: string): Promise<RemoteCopy> {
+  async read(fileId: string, cached?: RemoteCopy): Promise<RemoteCopy> {
     const before = await this.metadata(fileId);
+    // Reuse only a verified revision, never the possibly edited local text.
+    if (cached?.etag && cached.etag === before.etag && cached.name === before.name && cached.parent === before.parent) {
+      return { ...cached };
+    }
     const response = await this.request(`${API}/${id(fileId)}?alt=media`);
     const reader = response.body?.getReader();
     if (!reader) throw new Error("Google returned no note content.");

@@ -65,7 +65,7 @@ describe("Drive reconciliation", () => {
     await syncAccount(store, drive);
     expect(drive.write).toHaveBeenCalledWith("remote", { ...copy("first edit"), etag: '"v1"' }, false);
     const latest = (await store.get(note.key))!;
-    expect(latest.text).toBe("newer edit"); expect(latest.base?.text).toBe("first edit"); expect(pendingNote(latest)).toBe(true);
+    expect(latest.text).toBe("newer edit"); expect(latest.base?.etag).toBe(""); expect(latest.base?.text).toBe("first edit"); expect(pendingNote(latest)).toBe(true);
   });
   it("does not advance the baseline when a conditional upload fails", async () => {
     const store = database(); const note = fixture({ text: "local" }); await store.mutate(note.key, () => note);
@@ -178,4 +178,12 @@ it("does not recreate a moved file when choosing the local contents", async () =
   const note = fixture({ text: "local", conflict: remote }); await store.mutate(note.key, () => note);
   await acceptLocalCopy(store, note.key, remote);
   expect((await store.get(note.key))?.parent).toBe("moved-folder");
+});
+
+it("passes only the saved Drive baseline to revision checks, never pending local edits", async () => {
+  const store = database(); const note = fixture({ text: "offline edit" });
+  await store.mutate(note.key, () => note);
+  const drive = client(); await syncAccount(store, drive);
+  expect(drive.read).toHaveBeenCalledWith("remote", note.base);
+  expect(drive.write).toHaveBeenCalledWith("remote", expect.objectContaining({ text: "offline edit" }), false);
 });
