@@ -6,6 +6,12 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 ## Unreleased
 
+### 2026-10-06
+
+#### Changed
+
+- The web app prompts for Google Drive connection on opening, returning, or access expiry, with an option to continue without syncing. Offline visits defer the prompt until internet returns.
+
 ### 2026-10-05
 
 #### Added
