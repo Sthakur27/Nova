@@ -7,7 +7,7 @@ it("only caches the application shell and never intercepts Google or token traff
   const addAll = vi.fn(async () => {}); const match = vi.fn(async () => new Response("cached shell"));
   const cache = { open: vi.fn(async () => ({ addAll, match })), keys: vi.fn(async () => []) };
   const self = { location: { origin: "https://nova.example" }, addEventListener: (type: string, handler: (event: unknown) => void) => { handlers[type] = handler; } };
-  runInNewContext(webServiceWorker("build", ["/index.html", "/assets/app.js"]), { self, caches: cache, URL, fetch: vi.fn() });
+  runInNewContext(webServiceWorker("build", ["/index.html", "/assets/app.js"]), { self, caches: cache, URL, fetch: vi.fn(async () => { throw new Error("offline"); }) });
   const waitUntil = vi.fn(); handlers.install({ waitUntil }); await waitUntil.mock.calls[0][0];
   expect(addAll).toHaveBeenCalledWith(["/index.html", "/assets/app.js"]);
   const respondWith = vi.fn();
@@ -17,4 +17,20 @@ it("only caches the application shell and never intercepts Google or token traff
   expect(respondWith).not.toHaveBeenCalled();
   handlers.fetch({ request: { method: "GET", url: "https://nova.example/", mode: "navigate" }, respondWith });
   expect(await (await respondWith.mock.calls[0][0]).text()).toBe("cached shell");
+});
+
+it.each(["online", "offline", "server-error"])("navigation uses the latest deployment with an offline fallback: %s", async mode => {
+  const handlers: Record<string, (event: unknown) => void> = {};
+  const match = vi.fn(async () => new Response("installed shell"));
+  const fetcher = vi.fn(async () => {
+    if (mode === "offline") throw new Error("offline");
+    return new Response("latest shell", { status: mode === "server-error" ? 503 : 200 });
+  });
+  const self = { location: { origin: "https://nova.example" }, addEventListener: (type: string, handler: (event: unknown) => void) => { handlers[type] = handler; } };
+  runInNewContext(webServiceWorker("build", ["/index.html"]), { self, caches: { open: async () => ({ match }) }, URL, fetch: fetcher });
+  const request = { method: "GET", url: "https://nova.example/", mode: "navigate" };
+  const respondWith = vi.fn(); handlers.fetch({ request, respondWith });
+  expect(await (await respondWith.mock.calls[0][0]).text()).toBe(mode === "online" ? "latest shell" : "installed shell");
+  expect(fetcher).toHaveBeenCalledWith(request, { cache: "no-store" });
+  expect(match).toHaveBeenCalledTimes(mode === "online" ? 0 : 1);
 });

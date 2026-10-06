@@ -8,6 +8,10 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 ### 2026-10-06
 
+#### Fixed
+
+- Online web refreshes fetch the latest app instead of staying on an older offline shell. Offline launches still use the installed version.
+
 #### Changed
 
 - The web app prompts for Google Drive connection on opening, returning, or access expiry, with an option to continue without syncing. Offline visits defer the prompt until internet returns.

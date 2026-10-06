@@ -13,7 +13,16 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   if (event.request.method !== 'GET' || url.origin !== self.location.origin) return;
   if (event.request.mode === 'navigate') {
-    event.respondWith(caches.open(CACHE).then(cache => cache.match('/index.html')).then(cached => cached || fetch(event.request)));
+    // Refreshes should load the current deployment; retain the complete installed
+    // shell as an offline fallback instead of mixing new HTML with old assets.
+    event.respondWith(fetch(event.request, { cache: 'no-store' }).then(response => {
+      if (!response.ok) throw new Error('Application unavailable');
+      return response;
+    }).catch(async error => {
+      const cached = await caches.open(CACHE).then(cache => cache.match('/index.html'));
+      if (cached) return cached;
+      throw error;
+    }));
   } else if (FILES.includes(url.pathname)) {
     event.respondWith(caches.open(CACHE).then(cache => cache.match(url.pathname)).then(cached => cached || fetch(event.request)));
   }
