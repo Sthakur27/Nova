@@ -59,7 +59,9 @@
 .app-shell[data-compact="true"] .overlay { padding: max(16px, env(safe-area-inset-top)) 12px; align-items: center; }
 .app-shell[data-compact="true"] .overlay > * { max-width: 100%; max-height: calc(var(--mobile-height, 100dvh) - 40px); overflow-y: auto; }
 .app-shell[data-compact="true"] :is(input, textarea, select) { font-size: 16px; }
-.app-shell[data-compact="true"] .toast { left: 12px; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); max-width: none; }
+.app-shell[data-compact="true"] .toast { left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); bottom: calc(76px + env(safe-area-inset-bottom)); max-width: none; transform: none; }
+.app-shell[data-compact="true"] .toast > span { min-width: 0; overflow-wrap: anywhere; }
+.app-shell[data-compact="true"] .toast > button { flex-shrink: 0; }
 .app-shell[data-compact="true"] .settings-dialog { width: calc(100% - 24px); max-height: calc(var(--mobile-height, 100dvh) - 40px); }
 .app-shell[data-compact="true"] .settings-content { padding: 16px; }
 .app-shell[data-compact="true"] .palette-footer { flex-wrap: wrap; }

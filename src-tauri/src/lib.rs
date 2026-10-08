@@ -1142,7 +1142,12 @@ pub fn run() {
 #[cfg(mobile)]
 #[tauri::mobile_entry_point]
 pub fn run() {
-    let builder = tauri::Builder::default();
+    let platform = if cfg!(target_os = "ios") { "ios" } else { "android" };
+    let builder = tauri::Builder::default().plugin(
+        tauri::plugin::Builder::<tauri::Wry>::new("nova-platform")
+            .js_init_script(format!("window.__NOVA_NATIVE_PLATFORM__ = '{platform}';"))
+            .build()
+    );
     #[cfg(target_os = "ios")]
     let builder = builder.plugin(tauri_plugin_nova_auth::init()).manage(drive_auth::DriveAuth::default());
     let builder = builder
@@ -1160,12 +1165,14 @@ pub fn run() {
         drive_upload::cloud_spaces::cloud_setup, drive_upload::cloud_spaces::cloud_move_in,
         drive_upload::drive_upload, drive_upload::drive_resolve_missing, drive_upload::drive_open_folder, drive_upload::drive_open_file, drive_upload::drive_workspaces, drive_upload::drive_restore,
         registry_editor::read_registry_document, registry_editor::validate_registry_document, registry_editor::save_registry_document,
-        open_workspace, set_file_star, set_sync_choice, read_note, save_note, save_bookmarks, search_notes, cancel_search, load_draft, save_draft, load_explorer, save_explorer, create_note, create_folder, rename_note, move_note, delete_note
+        open_workspace, local_tree::list_directory, local_tree::refresh_directory, local_tree::search_files,
+        set_file_star, set_sync_choice, read_note, save_note, save_bookmarks, search_notes, cancel_search, load_draft, save_draft, load_explorer, save_explorer, create_note, create_folder, rename_note, move_note, delete_note
     ]);
     #[cfg(not(target_os = "ios"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
             registry_editor::read_registry_document, registry_editor::validate_registry_document, registry_editor::save_registry_document,
-            open_workspace, set_file_star, set_sync_choice, read_note, save_note,
+            open_workspace, local_tree::list_directory, local_tree::refresh_directory, local_tree::search_files,
+            set_file_star, set_sync_choice, read_note, save_note,
             save_bookmarks, search_notes, cancel_search, load_draft, save_draft, load_explorer,
             save_explorer, create_note, create_folder, rename_note, move_note, delete_note
         ]);

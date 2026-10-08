@@ -6,6 +6,13 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 ## Unreleased
 
+### 2026-10-08
+
+#### Fixed
+
+- Mobile notifications stay inside the screen and wrap long errors without hiding the dismiss button.
+- iPhone and iPad identify their native platform even when Xcode bundles frontend assets built for desktop, preserving mobile Cloud setup and avoiding unsupported desktop commands. Mobile filename search now has its required native command registration.
+
 ### 2026-10-06
 
 #### Fixed

@@ -168,6 +168,8 @@ Use `python3 scripts/test-drive-connection.py --help` for the standalone Drive s
 
 See [the iOS port guide](mobile.md) for the mobile scope, prerequisites, simulator commands, and outstanding device checks.
 
+The mobile shell injects `window.__NOVA_NATIVE_PLATFORM__` before frontend startup. `platform.ts` prefers this value over the build target so Xcode cannot accidentally enable desktop commands when reusing frontend assets built outside the iOS launcher. Compact viewport detection controls layout only. Verify a bundled mobile build with desktop-built frontend assets: Cloud setup should remain available and desktop window, watcher, and blur commands must not run.
+
 ## Workspace metadata editor
 
 `registry_editor.rs` exposes separate read, validate, and save commands for the root `.nova` file. Ordinary note scope and sync scans continue to reject it. Native saves validate under the shared write lock and compare disk revisions before atomic replacement. Cloud identity/tracking fields must equal their saved values. `storage.ts` routes `.nova` reads and saves from normal editor tabs to these commands. `RegistryValidation.tsx` shows debounced native validation inline; tabs use the existing draft store and explicit Save, with Cloud autosave disabled for metadata. Local navigation visibility and the search `includeHidden` option are separate preferences. The search matcher filters both traversal and results so hidden directories are searched only when requested.
