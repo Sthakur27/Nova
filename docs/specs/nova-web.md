@@ -10,7 +10,7 @@ Provide a Cloud-only Nova web application hosted as static files on Vercel. It m
 
 - Build the existing React/TypeScript project in an explicit `web` Vite mode. Keep the native entry point and browser demo unchanged in ordinary builds.
 - Reuse Nova's Markdown editor in a separate web shell. Avoid pretending that browser storage implements native filesystem or Tauri APIs.
-- Use Google Identity Services' browser token model with a **Web application** OAuth client in the same Google Cloud project as Nova's native clients. Register each exact HTTPS origin (and localhost for development). Request `drive.file`; do not embed client secrets or persist access tokens.
+- Use Google Identity Services' browser token model with a **Web application** OAuth client in the same Google Cloud project as Nova's native clients. Register each exact HTTPS origin (and localhost for development). Request `drive.file`; do not embed client secrets or refresh tokens. Persist verified access tokens only with their original expiry and account identity.
 - Identify the account through Drive's `about.user.permissionId`. Key cached notes by account and file ID, retaining their current space ID separately so moving a note does not change its identity. Remember the last account only for reopening its local cache; cached identity does not authorize network requests.
 - Discover the existing `.nova` folder by `novaKey=nova-notes-v1`, and Cloud space folders by their Nova app properties. Preserve Drive IDs across native/web use. Never infer identity from a filename or access ordinary Local folders.
 - Store downloaded text, its last synced baseline, pending edits, local bookmarks, reserved upload IDs, and recovery copies in IndexedDB. A save succeeds only after transaction completion. Denied storage and quota failures must stay visible and must not be reported as saved.
@@ -39,7 +39,7 @@ Each cached note has a local revision, current text/name, remote baseline text/n
 
 Remote content and names are untrusted. Ignore Google-native documents, non-Nova files, internal registries, unsafe names, and oversized files. Bound pagination, traversal depth, total downloads, and per-note size. Stop on ambiguous Nova root folders. Do not publish tokens, credentials, or note bodies to analytics/logs.
 
-Google access tokens stay in memory. Expiration or a 401 pauses network sync; obtaining another token requires a user gesture. Disconnect clears authorization, not cached notes. Switching accounts must never upload one account's queued edits to another account. Any request started with an old connection must be cancelled or ignored before subsequent work proceeds.
+Google access tokens are saved in browser local storage with their original expiry, OAuth client ID, and verified account identity, and restored on reopening. Invalid or expired records are discarded; storage failures fall back to memory. Expiration or a 401 pauses network sync; obtaining another token requires a user gesture. Disconnect clears authorization, not cached notes. Switching accounts must never upload one account's queued edits to another account. Any request started with an old connection must be cancelled or ignored before subsequent work proceeds.
 
 Browser storage can be evicted or cleared. Request persistent storage when supported and provide export; clearly distinguish local-only edits from uploaded notes. Device-only removal, reset, and multi-account cache management require explicit later design before exposing destructive controls.
 

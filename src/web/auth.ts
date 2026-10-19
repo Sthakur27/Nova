@@ -1,5 +1,6 @@
 import type { Account } from "./store";
 
+const SESSION_KEY = "nova-web-drive-session-v1";
 export const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.file";
 type TokenResponse = { access_token?: string; expires_in?: number; scope?: string; error?: string };
 type TokenOptions = { client_id: string; scope: string; callback: (response: TokenResponse) => void; error_callback: () => void };
@@ -30,9 +31,27 @@ export class WebAuth {
   constructor(readonly clientId: string, private fetcher: typeof fetch = (...args) => globalThis.fetch(...args)) {}
   current(): Session | undefined {
     if (this.session && this.session.expires <= Date.now()) this.disconnect();
+    if (!this.session) {
+      try {
+        const saved = JSON.parse(localStorage.getItem(SESSION_KEY) ?? "null");
+        if (saved?.clientId === this.clientId && this.clientId && typeof saved.token === "string" && saved.token &&
+            typeof saved.expires === "number" && Number.isFinite(saved.expires) && saved.expires > Date.now() &&
+            typeof saved.account?.id === "string" && saved.account.id && typeof saved.account.email === "string") {
+          this.session = { token: saved.token, expires: saved.expires, account: saved.account, signal: this.controller.signal };
+        } else this.clearSaved();
+      } catch { this.clearSaved(); }
+    }
     return this.session;
   }
+  private clearSaved() {
+    try { localStorage.removeItem(SESSION_KEY); } catch { /* Storage may be blocked. */ }
+  }
   disconnect() {
+    this.clearSaved();
+    this.dispose();
+  }
+  // Cancel this page's work without signing out when the workspace unmounts.
+  dispose() {
     this.generation++; this.controller.abort(); this.controller = new AbortController();
     this.session = undefined; this.cancelPending?.(); this.cancelPending = undefined;
   }
@@ -64,7 +83,10 @@ export class WebAuth {
             if (!user?.permissionId || typeof user.permissionId !== "string") throw new Error("Google did not return an account identity.");
             if (generation !== this.generation || signal.aborted) return;
             const session = { token, expires, signal, account: { id: user.permissionId, email: user.emailAddress || "Google Drive account" } };
-            this.session = session; this.cancelPending = undefined; resolve(session);
+            this.session = session;
+            try { localStorage.setItem(SESSION_KEY, JSON.stringify({ clientId: this.clientId, token, expires, account: session.account })); }
+            catch { /* Keep the in-memory connection usable when storage is unavailable. */ }
+            this.cancelPending = undefined; resolve(session);
           }).catch(finishError);
         },
         error_callback: () => finishError(new Error("Google sign-in was closed or blocked. Try connecting again.")),

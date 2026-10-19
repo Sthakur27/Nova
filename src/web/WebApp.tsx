@@ -42,7 +42,7 @@ export default function WebApp() {
 function Workspace() {
   const [store] = useState(() => new WebStore());
   const [auth] = useState(() => new WebAuth(__NOVA_WEB_CLIENT_ID__));
-  const [account, setAccount] = useState(lastAccount);
+  const [account, setAccount] = useState(() => auth.current()?.account ?? lastAccount());
   const accountRef = useRef(account); accountRef.current = account;
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [notes, setNotes] = useState<WebNote[]>([]);
@@ -54,7 +54,7 @@ function Workspace() {
   const [loading, setLoading] = useState(true);
   const [identityReady, setIdentityReady] = useState(false);
   const [connecting, setConnecting] = useState(false);
-  const [connected, setConnected] = useState(false);
+  const [connected, setConnected] = useState(() => !!auth.current());
   const [syncing, setSyncing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
@@ -91,7 +91,8 @@ function Workspace() {
     window.addEventListener("online", resume); window.addEventListener("offline", resume);
     document.addEventListener("visibilitychange", resume); window.addEventListener("focus", resume);
     const poll = setInterval(() => { if (!document.hidden) void syncRef.current(); }, 60000);
-    return () => { auth.disconnect(); clearInterval(timer); clearInterval(poll); clearTimeout(syncTimer.current); window.removeEventListener("online", resume); window.removeEventListener("offline", resume); window.removeEventListener("focus", resume); document.removeEventListener("visibilitychange", resume); };
+    void syncRef.current();
+    return () => { auth.dispose(); clearInterval(timer); clearInterval(poll); clearTimeout(syncTimer.current); window.removeEventListener("online", resume); window.removeEventListener("offline", resume); window.removeEventListener("focus", resume); document.removeEventListener("visibilitychange", resume); };
   }, [auth]);
   async function sync() {
     const session = auth.current(); setConnected(!!session);

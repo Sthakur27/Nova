@@ -6,6 +6,12 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 ## Unreleased
 
+### 2026-10-19
+
+#### Fixed
+
+- Web Drive authorization survives reloads and reopening until its original expiry. Disconnect and rejected authorization clear the saved token; downloaded notes remain available.
+
 ### 2026-10-08
 
 #### Fixed

@@ -79,3 +79,15 @@ npm run build:web
 ```
 
 The browser tests use fake IndexedDB and simulated OAuth/Drive endpoints. They do not need credentials or modify real Drive notes. Native Rust code and platform integration are unchanged by the web preview.
+
+### Remembering web authorization
+
+Nova saves the verified Drive access token, account identity, and original expiry
+in this browser’s local storage. Reopening the same site in the same browser
+profile resumes sync while that token is valid. Expiration still requires
+reconnection; saving the token does not extend Google’s access lifetime.
+Disconnect or a Drive authorization rejection clears the saved token without
+removing downloaded notes. When browser storage is blocked, the connection lasts
+only for the current page session. No refresh token or client secret is stored.
+Scripts running on Nova’s origin can access this token, as with other local
+storage data; disconnect when finished on a shared browser profile.
