@@ -183,3 +183,10 @@ body { background: #101014; }
 }
 
 .web-empty-controls { z-index: 2; }
+
+/* File controls are available on desktop as well as compact layouts. */
+.web-note-menu { display: block; position: relative; flex-shrink: 0; }
+.web-note-menu summary { display: grid; place-items: center; width: 44px; min-height: 44px; cursor: pointer; list-style: none; }
+.web-note-menu summary::-webkit-details-marker { display: none; }
+.web-note-menu > div { position: absolute; z-index: 30; right: 0; top: 48px; width: 230px; display: grid; padding: 6px; background: #232029; border: 1px solid #baa0e633; border-radius: 12px; box-shadow: 0 12px 32px #0008; }
+.web-note-menu button { text-align: left; }

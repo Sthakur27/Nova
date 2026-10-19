@@ -10,6 +10,8 @@ On desktop, use the folder button below **Quick find** to open a folder on your 
 
 **Cloud** is for notes connected to Google Drive. Connect in Settings, then write in a Cloud space for automatic saving and syncing. If Google access expires, choose **Reconnect Google Drive** in Cloud settings and sign in again. Notes already downloaded remain available offline; syncing resumes when you reconnect. Local files stay local unless you choose to move or sync them.
 
+For a Cloud note, open **Cloud · Advanced…** from its file actions (or click its Cloud status on desktop/iOS). You can sync just that file, review the device and Drive text, and explicitly replace either copy. Nova keeps the replaced text for recovery. Deleting a Cloud note moves it into the space’s **.deleted** folder in Google Drive. Other updated devices remove clean copies when they sync; unsynced edits stay available for recovery. To restore a note, move it from **.deleted** back to its original folder in Drive, then refresh Cloud.
+
 ## Write the way you like
 
 Use **Edit** for a formatted page with headings, lists, links, and checkboxes. Use **Source** to work with the plain text underneath. Markdown is simply text with a few formatting marks—try starting a line with `# ` for a heading or `- ` for a list.

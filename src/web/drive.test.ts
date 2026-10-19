@@ -63,3 +63,21 @@ it("downloads content when the cached revision is stale", async () => {
   expect(await new BrowserDrive(session(), fetcher).read("remote", cached)).toMatchObject({ text: "updated", etag: '"v2"' });
   expect(fetcher).toHaveBeenCalledTimes(3);
 });
+
+it("archives the same file ID with a conditional move into .deleted", async () => {
+  const fetcher = vi.fn().mockResolvedValueOnce(json(metadata())).mockResolvedValueOnce(new Response("content"))
+    .mockResolvedValueOnce(json(metadata())).mockResolvedValueOnce(json({ files: [{ id:"deleted",name:".deleted",mimeType:"application/vnd.google-apps.folder" }] }))
+    .mockResolvedValueOnce(json({ id:"remote" }));
+  await new BrowserDrive(session(), fetcher).archive("remote", "space", { text:"content",name:"Note.md",parent:"space",etag:'"v1"' });
+  expect(fetcher).toHaveBeenLastCalledWith(expect.stringContaining("/drive/v2/files/remote?addParents=deleted&removeParents=space"), expect.objectContaining({ method:"PATCH",headers:expect.objectContaining({ "If-Match":'"v1"' }) }));
+});
+it("does not archive a newer unreviewed Drive revision", async () => {
+  const fetcher = vi.fn().mockResolvedValueOnce(json(metadata('"v2"'))).mockResolvedValueOnce(new Response("new content")).mockResolvedValueOnce(json(metadata('"v2"')));
+  await expect(new BrowserDrive(session(), fetcher).archive("remote", "space", { text:"old",name:"Note.md",parent:"space",etag:'"v1"' })).rejects.toMatchObject({ status:412 });
+  expect(fetcher).toHaveBeenCalledTimes(3);
+});
+it("excludes .deleted contents from normal discovery", async () => {
+  const fetcher = vi.fn(async () => json({ files:[{ id:"deleted",name:".deleted",mimeType:"application/vnd.google-apps.folder",appProperties:{novaKey:"nova-deleted-v1"} }] }));
+  expect(await new BrowserDrive(session(), fetcher).tree("space")).toEqual([]);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});

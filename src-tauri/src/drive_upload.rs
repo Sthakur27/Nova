@@ -13,6 +13,8 @@ use crate::drive_registry as identities;
 use crate::{Access, drive_auth::{self, DriveAuth}};
 #[path = "drive_reconcile.rs"]
 mod reconcile;
+#[path = "drive_file.rs"]
+pub mod drive_file;
 const API: &str = "https://www.googleapis.com/drive/v3/files";
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -203,6 +205,27 @@ fn upload_workspace(app: tauri::AppHandle, root: PathBuf, protected_paths: Vec<S
     let root_id = crate::mobile_storage::identity(&app.path().app_data_dir().map_err(crate::err)?, &root)?;
     let mut report = Report { root: root_id, folder_url: format!("https://drive.google.com/drive/folders/{folder}"), items: Vec::new(), changes: Vec::new(), uploaded: false };
     let (remote, remote_folders) = reconcile::remote_tree_with_folders(&drive, &folder)?;
+    // Restoring the same Drive ID from .deleted makes it a new download again.
+    // Old device-only tombstones retain their original behavior.
+    {
+        let access = app.state::<Access>();
+        let _lock = access.writes.lock().map_err(crate::err)?;
+        let mut registry = crate::read_registry(&root)?;
+        let mut restored = false;
+        for entry in &remote {
+            let file_id = id(&entry.file)?;
+            if registry["driveObjects"][&account][&file_id]["cloudArchived"] == true {
+                registry["driveObjects"][&account].as_object_mut().ok_or("Invalid Cloud registry")?.remove(&file_id);
+                restored = true;
+            }
+        }
+        if restored { let stars = crate::registry_stars(&registry)?; crate::write_registry(&root, registry, &stars)?; }
+    }
+    if crate::read_registry(&root)?["cloudSpace"].is_object() {
+        let access = app.state::<Access>();
+        drive_file::receive_deletions(&drive, &root, &folder, &account,
+            &app.path().app_data_dir().map_err(crate::err)?, &access.writes, &protected_paths, &mut report, only_path.as_deref())?;
+    }
     let mut known_folders = remote_folders.iter().map(|e| id(&e.file)).collect::<Result<std::collections::HashSet<_>,_>>()?;
     {
         let access = app.state::<Access>();
@@ -231,7 +254,7 @@ fn upload_workspace(app: tauri::AppHandle, root: PathBuf, protected_paths: Vec<S
             }
         }
     }
-    if only_path.is_none() && reconcile::workspace_unchanged(
+    if only_path.is_none() && report.items.is_empty() && reconcile::workspace_unchanged(
         &root, &account, &remote, &app.path().app_data_dir().map_err(crate::err)?, &protected_paths,
     )? {
         let registry = crate::read_registry(&root)?;

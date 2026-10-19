@@ -157,7 +157,7 @@ type Props = {
   activePath: string;
   onOpen: (folder: Workspace, path: string, pinned?: boolean) => void;
   onRename: (folder: Workspace, path: string) => void;
-  onFileAction: (folder: Workspace, path: string, action: "move" | "delete" | "reveal" | "drive") => void;
+  onFileAction: (folder: Workspace, path: string, action: "move" | "delete" | "reveal" | "drive" | "cloud") => void;
   onChange: (folders: Workspace[]) => void;
   onRemove: (root: string) => void;
   onRefresh: (root: string) => void;
@@ -435,6 +435,7 @@ export default function Explorer({
         <button role="menuitem" onClick={() => { menu.trigger.focus(); setMenu(null); onRename(menu.folder, menu.path); }}>Rename…</button>
         <button role="menuitem" onClick={() => { menu.trigger.focus(); setMenu(null); onFileAction(menu.folder, menu.path, "move"); }}>Move…</button>
         <button hidden={mobile} role="menuitem" disabled={menu.folder.root === "demo"} title={menu.folder.root === "demo" ? "Sample notes have no file location" : undefined} onClick={() => { menu.trigger.focus(); setMenu(null); onFileAction(menu.folder, menu.path, "reveal"); }}>Open in File Location</button>
+        {menu.folder.cloudSpace && <button role="menuitem" onClick={() => { menu.trigger.focus(); setMenu(null); onFileAction(menu.folder, menu.path, "cloud"); }}>Cloud · Advanced…</button>}
         {menu.folder.cloudSpace && <button role="menuitem" onClick={() => { menu.trigger.focus(); setMenu(null); onFileAction(menu.folder, menu.path, "drive"); }}>Open in Google Drive</button>}
         <button role="menuitem" className="danger" onClick={() => { menu.trigger.focus(); setMenu(null); onFileAction(menu.folder, menu.path, "delete"); }}>Delete…</button>
       </div>, document.body)}

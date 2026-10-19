@@ -8,9 +8,19 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 ### 2026-10-19
 
+#### Added
+
+- Cloud files on desktop, iOS, and web have **Cloud · Advanced…** actions for a single-file sync, reviewing both versions, and explicitly replacing device or Drive text. Replacements retain recovery text and reject stale reviews; Drive writes remain conditional.
+
+#### Changed
+
+- Deleting a Cloud note moves its existing Drive file into the space’s `.deleted` folder, preserving Drive history. Updated devices remove clean copies on their next sync and retain unsynced edits. Move the file back in Drive to restore it. Local-file deletion stays device-only.
+
 #### Fixed
 
 - Web Drive authorization survives reloads and reopening until its original expiry. Disconnect and rejected authorization clear the saved token; downloaded notes remain available.
+
+- Web sync checks the selected note first after discovery, displays completed results as they arrive, and queues another pass when a sync request arrives during an active one. A linked file’s manual retry bypasses unrelated file listings.
 
 ### 2026-10-08
 

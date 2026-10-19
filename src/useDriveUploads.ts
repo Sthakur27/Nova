@@ -1,9 +1,10 @@
+import type { CloudFileReview } from "./CloudFileDialog";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "./resetLocalState";
 import { listen } from "@tauri-apps/api/event";
 import { driveTransfer } from "./driveTransfer";
 import { driveSupported } from "./platform";
-export type UploadItem = { path: string; state: "uploading" | "uploaded" | "pending" | "local" | "error"; message: string; missingDriveId?: string };
+export type UploadItem = { path: string; state: "uploading" | "uploaded" | "pending" | "local" | "error" | "deleted"; message: string; missingDriveId?: string };
 export type SyncChange = { path: string; previousPath: string };
 type Report = { root: string; folderUrl: string; items: UploadItem[]; changes?: SyncChange[]; uploaded?: boolean };
 type SyncContext = { roots: string[]; focusedFile?: () => { root: string; path: string } | null; protectedPaths: (root: string) => string[]; onDeleted?: (root: string, path: string) => Promise<void>; onFolders?: (root: string) => Promise<void>; onComplete: (root: string, changes: SyncChange[]) => Promise<void> };
@@ -60,6 +61,7 @@ export function useDriveUploads(connected: boolean) {
           return invoke<Report>("drive_upload", {root, protectedPaths, ...(onlyPath ? {onlyPath} : {})});
         });
         if (!report) return;
+        for (const item of report.items) if (item.state === "deleted") await context.current?.onDeleted?.(root, item.path);
         setItems(old => {
           const next = onlyPath ? {...old} : Object.fromEntries(Object.entries(old).filter(([key])=>!key.startsWith(`${root}\n`)));
           for (const item of report.items) next[`${root}\n${item.path}`] = item;
@@ -145,10 +147,41 @@ export function useDriveUploads(connected: boolean) {
     await task;
     await upload(root);
   }
+  async function fileTask<T>(root: string, path: string, operation: (protectedPaths: string[]) => Promise<T>): Promise<T> {
+    const task = queue.current.then(async () => {
+      if (!enabled.current) throw new Error("Reconnect Google Drive first.");
+      setActiveRoot(root);
+      try {
+        return await driveTransfer(() => {
+          const protectedPaths = context.current?.protectedPaths(root) ?? [];
+          if (protectedPaths.includes(path)) throw new Error("Save or discard this note’s unsaved changes first.");
+          return operation(protectedPaths);
+        });
+      } finally { setActiveRoot(null); }
+    });
+    queue.current = task.then(() => {}, () => {});
+    return task;
+  }
+  const reviewFile = (root: string, path: string) => fileTask(root, path, () => invoke<CloudFileReview>("drive_file_review", { root, path }));
+  const applyFile = (root: string, path: string, reviewed: CloudFileReview, direction: "pull" | "push" | "delete") => fileTask(root, path, async protectedPaths => {
+    await invoke("drive_file_apply", { root, path, reviewed, direction, protectedPaths });
+    if (direction === "delete") await context.current?.onDeleted?.(root, path);
+    else await context.current?.onComplete(root, direction === "pull" ? [{ path, previousPath: path }] : []);
+    setItems(old => ({ ...old, [`${root}\n${path}`]: { path, state: direction === "delete" ? "deleted" : "uploaded", message: "Explicit Cloud action completed." } }));
+    setLastSyncedAt(old => ({ ...old, [root]: Date.now() }));
+  });
+  const syncFile = (root: string, path: string) => fileTask(root, path, async protectedPaths => {
+    const report = await invoke<Report>("drive_upload", { root, onlyPath: path, protectedPaths });
+    for (const item of report.items) if (item.state === "deleted") await context.current?.onDeleted?.(root, item.path);
+    await context.current?.onComplete(root, report.changes ?? []);
+    setItems(old => { const next = { ...old }; for (const item of report.items) next[`${root}\n${item.path}`] = item; return next; });
+    const failure = report.items.find(item => item.state === "error" || item.state === "pending");
+    if (failure) throw new Error(failure.message);
+  });
   async function openFolder(root: string) {
     try { await driveTransfer(() => invoke("drive_open_folder",{root})); }
     catch (error) { setErrors(old => ({...old,[root]:String(error)})); }
   }
-  return {activeRoot,transferringRoot,items,errors,completed,lastSyncedAt,pending,upload,schedule,openFolder,resolveMissing, configure: (next: SyncContext) => { context.current = next; }};
+  return {activeRoot,transferringRoot,items,errors,completed,lastSyncedAt,pending,upload,schedule,openFolder,resolveMissing,reviewFile,applyFile,syncFile, configure: (next: SyncContext) => { context.current = next; }};
 }
 export type DriveUploads = ReturnType<typeof useDriveUploads>;

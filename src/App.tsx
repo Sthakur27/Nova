@@ -1,3 +1,4 @@
+import CloudFileDialog from "./CloudFileDialog";
 import BuiltinDocs from "./BuiltinDocs";
 import SyncAttention from "./SyncAttention";
 import FocusStateNav from "./FocusStateNav";
@@ -189,8 +190,10 @@ export default function App() {
   const drive = useDriveConnection();
   const uploads = useDriveUploads(drive.status.connected);
   const [syncFolder, setSyncFolder] = useState<Workspace | null>(null);
+  const [cloudFile, setCloudFile] = useState<{ root: string; path: string }>();
   const [syncPath, setSyncPath] = useState<string | undefined>();
   function showSync(folder: Workspace, notePath?: string) {
+    if (notePath && folder.cloudSpace) { setCloudFile({ root: folder.root, path: notePath }); return; }
     setSyncPath(notePath);
     setSyncFolder(folders.find(item => item.root === folder.root) ?? folders[0] ?? folder);
   }
@@ -1437,6 +1440,8 @@ export default function App() {
     onDeleted: async (root, path) => {
       const id = tabId({ root, path });
       snapshots.current.delete(id);
+      paneSessions.current.delete(id);
+      savedDocuments.current.delete(id);
       createdNotes.current.delete(id);
       updateTabs(tabsRef.current.filter(tab => tabId(tab) !== id));
       if (current.current.workspace.root === root && current.current.path === path) {
@@ -2161,6 +2166,7 @@ export default function App() {
           }}
           onFileAction={(folder, path, action) => {
             if (action === "reveal") void revealNote(folder.root, path).catch(error => setNotice(String(error)));
+            else if (action === "cloud") setCloudFile({ root: folder.root, path });
             else if (action === "drive") void driveTransfer(() => invoke("drive_open_file", { root: folder.root, path })).catch(error => setNotice(String(error)));
             else setFileAction({ folder, path, action });
           }}
@@ -2600,6 +2606,13 @@ export default function App() {
         }
         if (action === "move") { await renameFile(folder, targetPath, destination, true); return; }
         if (operation.current || saveInFlight.current || voiceBusy.current) throw new Error("Finish the current operation before deleting.");
+        if (folder.cloudSpace) {
+          if (current.current.workspace.root === folder.root && current.current.path === targetPath && !(await save())) throw new Error("Save this note before deleting.");
+          const reviewed = await uploads.reviewFile(folder.root, targetPath);
+          await uploads.applyFile(folder.root, targetPath, reviewed, "delete");
+          removeRecentFile({ root: folder.root, path: targetPath });
+          return;
+        }
         operation.current = true;
         try {
           if (!(await preserveDraft())) throw new Error("Could not preserve your draft before deleting.");
@@ -2618,6 +2631,14 @@ export default function App() {
           }
         } finally { operation.current = false; }
       }} />}
+      {cloudFile && <CloudFileDialog name={cloudFile.path}
+        status={uploads.items[`${cloudFile.root}\n${cloudFile.path}`]?.message || "Saved on this device. Review the current Drive copy before choosing a replacement."}
+        onClose={() => setCloudFile(undefined)}
+        review={async () => { if (current.current.workspace.root === cloudFile.root && current.current.path === cloudFile.path && !(await save())) throw new Error("Save this note first."); return uploads.reviewFile(cloudFile.root, cloudFile.path); }}
+        sync={async () => { if (current.current.workspace.root === cloudFile.root && current.current.path === cloudFile.path && !(await save())) throw new Error("Save this note first."); await uploads.syncFile(cloudFile.root, cloudFile.path); }}
+        replace={(copy, direction) => uploads.applyFile(cloudFile.root, cloudFile.path, copy, direction)}
+        recoveries={() => invoke("drive_file_recovery", { root: cloudFile.root, path: cloudFile.path })}
+        archive={copy => uploads.applyFile(cloudFile.root, cloudFile.path, copy, "delete")} />}
       {syncFolder && <SyncSettings cloudLoading={cloud.loading} cloudError={cloud.error} onRefreshCloud={()=>void cloud.refresh()} onRestored={async root => { const restored = await openWorkspace(root); await acceptFolders([restored]); setSyncFolder(restored); setSyncPath(undefined); }} uploads={uploads} onUpload={async () => { if (await save()) await uploads.upload(syncFolder.root); }} drive={drive} key={syncFolder.root} folder={syncFolder} folders={folders} initialPath={syncPath} onFolderChange={folder => showSync(folder)} onClose={() => setSyncFolder(null)}
         onSaved={policy => { setFolders(old => old.map(folder => folder.root === syncFolder.root ? { ...folder, syncPolicy: policy, syncError: undefined } : folder)); setWorkspace(old => old.root === syncFolder.root ? { ...old, syncPolicy: policy } : old); uploads.schedule(syncFolder.root); }} />}
       {renameTarget && (

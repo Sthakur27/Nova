@@ -79,16 +79,50 @@ local file only if local contents match the last synced receipt. Conflicting loc
 and remote edits pause that file; neither version is silently overwritten. Open
 edits and saved recovery drafts are protected. Automatic merge is not implemented.
 
-**Deletion remains device-only in this version.** The delete dialog explains that
-Drive copies are retained. A local tombstone prevents the retained copy from
-reappearing on that device. A file removed from Drive pauses sync and retains its
-local copy; Nova does not silently recreate it. In Cloud settings, each missing
-file offers **Restore to Cloud**, which uploads the saved local note as a new Drive
-copy, or **Acknowledge & delete…**, which requires confirmation before permanently
-removing the local note, bookmarks, and star. Copies in Drive Trash or moved
-elsewhere in Drive are left untouched. Unsaved edits must be saved or discarded
-first. Nova rechecks the remote listing and file identity before resolving the
-warning; restoration reserves a new ID so retries do not create duplicates.
+**Cloud deletion is shared across updated devices.** Delete moves the existing
+Drive file into a hidden `.deleted` folder inside its Cloud space. The file ID
+and Drive revision history stay intact. Deletion requires a connection and a saved
+note already linked to Drive. Other devices remove clean downloaded copies on
+their next sync; unsynced edits and recovery drafts are retained for review.
+Local-folder deletion and older device-only tombstones keep their previous behavior.
+Install the updated app on every device to receive shared deletions.
+
+To restore a deleted note, open its space in Google Drive, move the file from
+`.deleted` back to its original folder, and refresh Cloud. Nova downloads it again
+using its original identity. A different local file occupying that path is retained
+and blocks the download until you rename it. Web restores the Drive text while
+retaining any saved recovery text.
+
+A file otherwise removed from Drive or moved outside its space still pauses sync
+and retains its local copy; Nova does not silently recreate it. Cloud settings
+offer **Restore to Cloud** (a new Drive copy) or **Acknowledge & delete…** (remove
+this device’s copy), with the existing identity and draft checks.
+
+### Advanced controls for one file
+
+Open a Cloud note’s file actions and choose **Cloud · Advanced…**. On desktop and
+iOS, clicking the note’s Cloud status or **Review** warning opens the same dialog.
+**Sync this file now** checks that file; **Review copies / sync details** reads the
+current device and Drive text. Expand either copy to inspect it, then choose
+**Replace device copy with Drive…** or **Replace Drive copy with this version…**
+and confirm. These replacements change text and keep the filename and folder.
+If either copy changed since review, review again before replacing it.
+
+The replaced text is retained on the device: review the file again to view, copy,
+or export recovery text. Native recovery files live outside the workspace in the
+app data’s `Cloud Recovery` directory; web recovery text lives in browser storage.
+The dialog also offers **Move to .deleted…**. A note with unsaved edits in another
+tab must be saved or discarded before an explicit action can proceed.
+
+### Drive revision history
+
+Nova updates the same Drive file ID for edits, including explicit replacements,
+so Drive’s ordinary file revision history applies. Nova does not currently show
+Drive revision history or pin revisions forever. Google normally preserves
+purgeable revisions for 30 days, but may remove them earlier once a file has
+100 unpinned revisions and another is uploaded. Use Drive’s version controls for
+longer retention; device recovery text is separate from Drive revisions. See
+[Google’s revision guide](https://developers.google.com/workspace/drive/api/guides/manage-revisions).
 
 Disconnect requires confirmation, removes this device's saved credential, and
 retains local and Drive files. Mobile returns to setup. It does not revoke Google's
@@ -96,7 +130,7 @@ app authorization. Existing Local folders and legacy selections do not participa
 in the managed Cloud sync loop.
 
 The bottom panel shows a red **Sync needs attention · Review** button when the
-active Cloud note has a sync error. Click it to open sync settings and review
+active Cloud note has a sync error. Click it to open that file’s advanced Cloud controls and review
 the error and available recovery or retry controls. The error detail is also
 available by hovering over the button. Ordinary typing, waiting for autosave, and
 newer edits queued during an upload do not trigger this warning.

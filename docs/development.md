@@ -203,3 +203,22 @@ Verify the folder menu launches a separate native Cloud-only window, with no Loc
 ## Recent files
 
 `recentFileHistory.ts` stores a bounded, deduplicated list of root/path identities in device-local `nova:recent-files:v1` storage. App records successful document selection, not text or sync updates; the sidebar filters to mounted workspace roots and applies Explorer’s connected-account boundary for Cloud. Writes read the latest stored list and storage events refresh other windows. Renames, moves, deletion, and discarded empty notes update history without touching document ownership or recovery. Recent files reopen through `openNote`; folder sessions remain in `explorer.json` and are accessible from `OpenWindowMenu`. Tests cover ordering, scope, persistence, clearing, and menu keyboard/focus behavior. Browser checks do not verify native folder launch or Drive access.
+
+### Explicit Cloud file operations
+
+`drive_file.rs` implements native per-file review and guarded text replacements,
+with recovery files outside ordinary workspaces. Both desktop and iOS register
+these commands. `CloudFileDialog` is shared with web; the web adapter stores
+recovery text in IndexedDB and uses direct conditional Drive writes. A linked
+web file retry avoids account-wide discovery; full passes prioritize the selected
+key and deliver progressive refreshes.
+
+Shared Cloud deletion conditionally moves the same Drive ID into a per-space
+`.deleted` folder marked `nova-deleted-v1`. Only membership in that folder permits
+clean-copy removal; ordinary missing files remain protected. Native `cloudArchived`
+tombstones distinguish shared deletion from older device-only deletion so a file
+restored in Drive can download again. HTTP-backed filesystem tests and fake-Drive
+web tests cover clean/dirty deletion and review guards. Before release confidence,
+verify real desktop/iOS/web sync with dedicated notes, choppy connectivity,
+conflicting edits, shared deletion, and restoration; mocked requests do not prove
+Google authorization or native platform integration.

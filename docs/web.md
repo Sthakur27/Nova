@@ -16,11 +16,22 @@ Open the [hosted web preview](https://nova-indol-pi.vercel.app). This remains a 
 - Conflict review with the Drive text visible alongside the retained local copy. **Use Drive copy** adopts the downloaded version and retains the previous local text for export. **Replace Drive with my version** confirms use of your local text and filename, keeps the reviewed Drive text as a recovery copy on this device, and queues a conditional upload. A newer Drive change triggers review again; the file stays in its current Drive folder. **Save local text as a new note** creates a separate note without changing the conflicted original.
 - A missing Drive note stays on this device. It is never silently deleted or automatically recreated. Export it or explicitly save a separate new copy.
 
-On a phone, swipe left or right across a note to cycle through the current sidebar list, or use the previous/next arrows below it. Search and space filters determine that list. Open **Note actions** (the three dots) for Source/Edit, Rename, and Export. Tap the expand button for **Focus mode**; use the small top-right exit button or Escape to restore the controls. Focus keeps the editor and swiping active.
+On a phone, swipe left or right across a note to cycle through the current sidebar list, or use the previous/next arrows below it. Search and space filters determine that list. Open **Note actions** (the three dots) for Source/Edit, Rename, Export, and **Cloud · Advanced…**. Tap the expand button for **Focus mode**; use the small top-right exit button or Escape to restore the controls. Focus keeps the editor and swiping active.
 
-The web preview has a smaller interface than the native app. It does not offer Local folders, split panes, saved layouts, terminal, native dictation, folder creation/moves, deletion, or a full bookmark/settings interface. Device bookmark metadata is retained with cached notes but is not imported from or written to the native app's bookmark storage.
+The web preview has a smaller interface than the native app. It does not offer Local folders, split panes, saved layouts, terminal, native dictation, folder creation/moves, or a full bookmark/settings interface. Device bookmark metadata is retained with cached notes but is not imported from or written to the native app's bookmark storage.
 
 Offline edits upload automatically when Drive still matches the last synced copy. Nova records upload attempts before sending them, so a lost network reply followed by more editing can be reconciled without mistaking its own upload for another device’s edit. Genuinely different changes on both sides still require review.
+
+Open **Note actions → Cloud · Advanced…** on desktop or phone for a targeted
+retry, copy review, explicit text replacement, and **Move to .deleted…**. Replacements
+retain recovery text and require a new review if either copy changes. Deletion
+moves the original file into its space’s hidden `.deleted` folder in Drive; clean
+copies disappear from updated devices on sync while unsynced edits stay available.
+Move the file back to its original folder in Drive and refresh Cloud to restore it.
+Linked files can retry without listing unrelated notes; new notes and filename or
+location changes still require Refresh Cloud. Full sync prioritizes the selected
+note after discovery and shows completed work progressively. Requests during an
+active sync queue another pass.
 
 Sync runs after saves settle, on Refresh Cloud, on returning to the foreground/online, and approximately once a minute while visible. Closing or suspending the web app can stop sync. Reopen and reconnect to finish pending uploads.
 

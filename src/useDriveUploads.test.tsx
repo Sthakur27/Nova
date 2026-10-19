@@ -354,3 +354,36 @@ it("keeps deferred edits pending without an attention warning until the next suc
     expect(uploads.completed["/notes"]).toBeTruthy();
   } finally { await act(async () => root.unmount()); }
 });
+
+it("targets manual file operations, refreshes pulled text, and protects dirty notes", async () => {
+  vi.mocked(invoke).mockReset();
+  const onComplete = vi.fn(async () => {}), onDeleted = vi.fn(async () => {});
+  let uploads!: DriveUploads, protectedPaths: string[] = [];
+  function Harness() {
+    uploads = useDriveUploads(true);
+    uploads.configure({ roots:[], protectedPaths:()=>protectedPaths, onComplete, onDeleted });
+    return null;
+  }
+  const root = createRoot(document.createElement("div"));
+  const reviewed = { name:"note.md",localText:"local",localRevision:"1",remoteText:"remote",remoteRevision:"v1",remoteName:"note.md",driveId:"id",account:"alice",parent:"space" };
+  try {
+    await act(async () => root.render(<Harness />));
+    vi.mocked(invoke).mockResolvedValueOnce({items:[], changes:[{path:"note.md",previousPath:"note.md"}]});
+    await act(async () => uploads.syncFile("/notes", "note.md"));
+    expect(invoke).toHaveBeenLastCalledWith("drive_upload", {root:"/notes",onlyPath:"note.md",protectedPaths:[]});
+    expect(onComplete).toHaveBeenLastCalledWith("/notes", [{path:"note.md",previousPath:"note.md"}]);
+    vi.mocked(invoke).mockResolvedValueOnce(undefined);
+    await act(async () => uploads.applyFile("/notes", "note.md", reviewed, "pull"));
+    expect(onComplete).toHaveBeenLastCalledWith("/notes", [{path:"note.md",previousPath:"note.md"}]);
+    vi.mocked(invoke).mockRejectedValueOnce(new Error("Drive changed"));
+    await act(async () => { await expect(uploads.applyFile("/notes", "note.md", reviewed, "delete")).rejects.toThrow("changed"); });
+    expect(onDeleted).not.toHaveBeenCalled();
+    protectedPaths = ["note.md"]; const calls = vi.mocked(invoke).mock.calls.length;
+    await act(async () => { await expect(uploads.applyFile("/notes", "note.md", reviewed, "push")).rejects.toThrow("unsaved"); });
+    expect(invoke).toHaveBeenCalledTimes(calls);
+    protectedPaths = [];
+    vi.mocked(invoke).mockResolvedValueOnce({items:[{path:"note.md",state:"deleted",message:"Moved to .deleted"}],changes:[]});
+    await act(async () => uploads.upload("/notes"));
+    expect(onDeleted).toHaveBeenCalledWith("/notes", "note.md");
+  } finally { await act(async () => root.unmount()); }
+});

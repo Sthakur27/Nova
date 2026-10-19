@@ -187,3 +187,91 @@ it("passes only the saved Drive baseline to revision checks, never pending local
   expect(drive.read).toHaveBeenCalledWith("remote", note.base);
   expect(drive.write).toHaveBeenCalledWith("remote", expect.objectContaining({ text: "offline edit" }), false);
 });
+
+it("syncs just the requested file without listing unrelated spaces", async () => {
+  const { syncFile } = await import("./sync");
+  const store = database(), note = fixture({ text: "my edit" }), drive = client();
+  await store.mutate(note.key, () => note);
+  await syncFile(store, drive, note.key);
+  expect(drive.spaces).not.toHaveBeenCalled(); expect(drive.tree).not.toHaveBeenCalled();
+  expect(drive.write).toHaveBeenCalledWith("remote", expect.objectContaining({ text: "my edit", etag: '"v1"' }), false);
+  expect(pendingNote((await store.get(note.key))!)).toBe(false);
+});
+it("refuses a reviewed replacement after either copy changes", async () => {
+  const { reviewFile, replaceFile } = await import("./sync");
+  const store = database(), note = fixture({ text: "my edit" }), drive = client(copy("Drive edit"));
+  await store.mutate(note.key, () => note);
+  const reviewed = await reviewFile(store, drive, note.key);
+  drive.read.mockResolvedValue({ ...copy("new Drive edit"), etag: '"v2"' });
+  await expect(replaceFile(store, drive, note.key, reviewed, "push")).rejects.toThrow("changed");
+  expect(drive.write).not.toHaveBeenCalled(); expect((await store.get(note.key))?.text).toBe("my edit");
+  drive.read.mockResolvedValue(copy("Drive edit"));
+  await store.save({ ...note, text: "newer local edit" });
+  await expect(replaceFile(store, drive, note.key, reviewed, "pull")).rejects.toThrow("changed");
+  expect((await store.get(note.key))?.text).toBe("newer local edit");
+});
+it("retains replaced text for explicit pull and push", async () => {
+  const { reviewFile, replaceFile } = await import("./sync");
+  for (const direction of ["pull", "push"] as const) {
+    const store = database(), note = fixture({ text: "my edit" }), drive = client(copy("Drive edit"));
+    await store.mutate(note.key, () => note);
+    const reviewed = await reviewFile(store, drive, note.key);
+    await replaceFile(store, drive, note.key, reviewed, direction);
+    const result = (await store.get(note.key))!;
+    expect(result.recovery?.[0].text).toBe(direction === "pull" ? "my edit" : "Drive edit");
+    expect(result.text).toBe(direction === "pull" ? "Drive edit" : "my edit");
+    if (direction === "push") expect(drive.write).toHaveBeenCalledWith("remote", expect.objectContaining({ etag: '"v1"', text: "my edit" }), false);
+    else expect(drive.write).not.toHaveBeenCalled();
+  }
+});
+it("recognizes an uncertain targeted upload after more local editing", async () => {
+  const { syncFile } = await import("./sync");
+  const store = database(), note = fixture({ text: "uploaded" }), drive = client();
+  await store.mutate(note.key, () => note);
+  drive.write.mockRejectedValueOnce(new TypeError("Network reply lost"));
+  await expect(syncFile(store, drive, note.key)).rejects.toThrow("lost");
+  await store.save({ ...(await store.get(note.key))!, text: "newer edit" });
+  drive.read.mockResolvedValue({ ...copy("uploaded"), etag: '"v2"' });
+  await syncFile(store, drive, note.key);
+  expect((await store.get(note.key))?.conflict).toBeUndefined();
+  expect(drive.write).toHaveBeenLastCalledWith("remote", expect.objectContaining({ text: "newer edit", etag: '"v2"' }), false);
+});
+it("hides clean Cloud deletions and retains unsynced edits on another device", async () => {
+  for (const dirty of [false, true]) {
+    const store = database(), note = fixture({ text: dirty ? "unsynced edit" : "baseline" });
+    await store.mutate(note.key, () => note);
+    const drive = { ...client(), deleted: vi.fn(async () => ["remote"]) };
+    drive.tree.mockResolvedValue([]);
+    await syncAccount(store, drive);
+    expect((await store.get(note.key))?.deleted).toBe(!dirty);
+    expect((await store.get(note.key))?.text).toBe(note.text);
+    if (dirty) expect((await store.get(note.key))?.error).toContain("unsynced edits");
+    expect(drive.write).not.toHaveBeenCalled();
+  }
+});
+it("checks the selected note before unrelated notes and reports progress", async () => {
+  const store = database(), first = fixture(), second = fixture({ key: noteKey("alice", "second"), id: "second", remoteId: "second" });
+  await store.mutate(first.key, () => first); await store.mutate(second.key, () => second);
+  const drive = client();
+  drive.tree.mockResolvedValue([{ id:"remote",name:"Note.md",parent:"space",directory:"",space:"space" }, { id:"second",name:"Note.md",parent:"space",directory:"",space:"space" }]);
+  const changed = vi.fn(); await syncAccount(store, drive, changed, second.key);
+  expect(drive.read).toHaveBeenNthCalledWith(1, "second", expect.anything()); expect(changed).toHaveBeenCalled();
+});
+
+it("restores a deleted Drive ID without re-uploading its discarded device text", async () => {
+  const store = database(), note = fixture({ deleted:true, text:"discarded device edit", recovery:[{text:"discarded device edit",name:"Note.md"}] });
+  await store.mutate(note.key, () => note);
+  const drive = client(copy("restored Drive text")); await syncAccount(store, drive);
+  expect(await store.get(note.key)).toMatchObject({ deleted:false, text:"restored Drive text", recovery:note.recovery });
+  expect(drive.write).not.toHaveBeenCalled();
+});
+
+it("keeps the original baseline and both copies when an approved conditional push fails", async () => {
+  const { reviewFile, replaceFile } = await import("./sync");
+  const store = database(), note = fixture({ text:"my edit", conflict:copy("Drive edit") }), drive = client(copy("Drive edit"));
+  await store.mutate(note.key, () => note);
+  const reviewed = await reviewFile(store, drive, note.key);
+  drive.write.mockRejectedValueOnce(new DriveError(412));
+  await expect(replaceFile(store, drive, note.key, reviewed, "push")).rejects.toMatchObject({ status:412 });
+  expect(await store.get(note.key)).toMatchObject({ text:"my edit",base:copy(),conflict:copy("Drive edit"),pendingUpload:{text:"my edit",etag:'"v1"'} });
+});

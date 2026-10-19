@@ -3045,3 +3045,10 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 .recent-folders-menu button > svg { flex-shrink: 0; }
 .recent-folders-menu hr { border: 0; border-top: 1px solid #ffffff20; margin: 5px 0; }
 .open-window-menu { width: min(250px, calc(100vw - 16px)); }
+
+.cloud-file-dialog { max-width: min(680px, calc(100vw - 32px)); max-height: calc(100dvh - 40px); overflow: auto; padding: 24px; }
+.cloud-copy-review pre { max-height: 220px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+.cloud-file-dialog button { min-height: 40px; margin: 4px; padding: 8px 12px; border: 1px solid #baa0e633; border-radius: 8px; background: #baa0e60d; text-align: left; }
+.cloud-file-dialog .cloud-space-actions { flex-wrap: wrap; gap: 6px; }
+.cloud-file-dialog section > details pre { max-height: 220px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cloud-file-dialog p { overflow-wrap: anywhere; }

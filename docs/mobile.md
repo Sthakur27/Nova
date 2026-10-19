@@ -8,7 +8,7 @@ Nova now builds and runs as an installed iPhone/iPad app: a Tauri native shell w
 - **Reconnect Google Drive** in Cloud settings renews expired access without disconnecting first. The setup screen also offers Reconnect when a saved account cannot load its spaces.
 - A Cloud-only setup gate and automatically discovered Google Drive spaces, with offline copies in private app storage.
 - **Show Read mode** in Settings defaults off, just as on desktop. Enable it to add Read to the view switch; Markdown notes over 500,000 characters offer Source and Read only, retaining the reading fallback even with the setting off.
-- Editing, reading, search, stars, bookmarks, rename, Cloud folder creation and note moves, device-only deletion, Cloud autosave, and native recovery drafts using the existing note engine.
+- Editing, reading, search, stars, bookmarks, rename, Cloud folder creation and note moves, shared Cloud deletion into `.deleted`, Cloud autosave, and native recovery drafts using the existing note engine.
 - **Focus mode:** tap the expand icon beside Open files to show only the note panel. Typing and swiping between open notes remain available. Tap the small top-right icon to restore the controls. The adjacent **Galaxy mode** button stays available while focused and replaces the desktop translucency controls on mobile.
 - Cloud shows a single space directly, without an extra Notes row. Its **+** menu offers **New file** and **New folder**; settings and refresh are in the Cloud header’s **…** menu.
 - Touch navigation, safe-area spacing, horizontally scrolling formatting controls, and keyboard-aware viewport sizing. iPad uses the same touch layout. The mode switch uses larger icon controls; bottom navigation hides while editing, and the scroll canvas stays stable as the keyboard resizes.
@@ -132,3 +132,13 @@ A narrow browser window previews the touch layout with sample notes. It does not
 Before distributing a native build, verify on both iPhone and iPad: create and save a note, edit and recover an unsaved draft after relaunch, rename and delete through the note actions menu, search and jump to bookmarks, rotate with the keyboard open, background/foreground the app, and confirm content persists without network access. Test with VoiceOver and a hardware keyboard too.
 
 For Google Drive testing, keep Xcode’s normal simulator signing enabled. `--no-sign` removes the simulated application entitlement needed by Keychain, so that build cannot save or read Google credentials. This simulator build uses ad hoc signing and does not require a paid Apple developer account.
+
+## Advanced Cloud actions and shared deletion
+
+Open a Cloud note’s file actions and choose **Cloud · Advanced…**, or tap its Cloud
+status, to retry just that file or review and explicitly replace either copy’s text.
+Replaced text stays in device recovery and can be viewed or copied from the dialog.
+Deleting a linked Cloud note requires a connection and moves the existing Drive
+file to the space’s `.deleted` folder. Other updated devices remove clean copies
+on sync and retain unsynced edits. Move it back in Drive to restore it. See
+[Cloud recovery](sync.md#advanced-controls-for-one-file).

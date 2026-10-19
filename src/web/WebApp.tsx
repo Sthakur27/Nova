@@ -1,3 +1,4 @@
+import CloudFileDialog from "../CloudFileDialog";
 import { useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
 import { Cloud, FileText, Plus, RefreshCw, PanelLeft, Orbit, Settings2, Search, Maximize2, Minimize2, ChevronLeft, ChevronRight } from "lucide-react";
 import MobileNoteCarousel, { adjacentNote } from "../MobileNoteCarousel";
@@ -9,6 +10,7 @@ import CloudDialog from "./CloudDialog";
 import FilenameDialog from "./FilenameDialog";
 import BuiltinDocs from "../BuiltinDocs";
 import { loadIdentity, WebAuth } from "./auth";
+import { reviewFile, replaceFile, syncFile } from "./sync";
 import { BrowserDrive, DriveError } from "./drive";
 import { WebStore, pendingNote, type Account, type Space, type WebNote, type RemoteCopy } from "./store";
 import { acceptLocalCopy, acceptDriveCopy, createNote, syncAccount } from "./sync";
@@ -59,6 +61,9 @@ function Workspace() {
   const [saving, setSaving] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
   const [replacing, setReplacing] = useState<{ key: string; name: string; account: string; copy: RemoteCopy }>();
+  const [fileCloud, setFileCloud] = useState<string>();
+  const selectedRef = useRef("");
+  const syncAgain = useRef(false);
   const [showCloud, setShowCloud] = useState(false);
   useConnectionPrompt({ connected: () => !!auth.current(), connecting, open: showCloud, request: () => setShowCloud(true) });
   const { mobile, focused, setFocused } = useWebLayout();
@@ -68,6 +73,10 @@ function Workspace() {
   const [showNote, setShowNote] = useState(false);
   const editor = useRef<NoteEditorHandle>(null);
   const syncingRef = useRef(false);
+  const syncIdle = useRef(Promise.resolve());
+  const releaseSync = useRef<() => void>(() => {});
+  function beginSync() { syncingRef.current = true; setSyncing(true); syncIdle.current = new Promise(resolve => { releaseSync.current = resolve; }); }
+  function endSync() { syncingRef.current = false; setSyncing(false); releaseSync.current(); }
   const syncRef = useRef<() => Promise<void>>(async () => {});
   const syncTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const refresh = useCallback(async () => {
@@ -76,7 +85,7 @@ function Workspace() {
     if (!id) { setSpaces([]); setNotes([]); setLoading(false); return; }
     const [spaces, notes] = await Promise.all([store.spaces(id), store.notes(id)]);
     if (id !== accountRef.current?.id) return;
-    setSpaces(spaces); setNotes(notes); setSpace(old => spaces.some(space => space.id === old) ? old : spaces[0]?.id ?? "");
+    setSpaces(spaces); setNotes(notes.filter(note => !note.deleted)); setSpace(old => spaces.some(space => space.id === old) ? old : spaces[0]?.id ?? "");
     setLoading(false);
   }, [store]);
   useEffect(() => { void refresh().catch(error => { setLoading(false); setError(String(error)); }); }, [account, refresh]);
@@ -96,18 +105,20 @@ function Workspace() {
   }, [auth]);
   async function sync() {
     const session = auth.current(); setConnected(!!session);
+    if (syncingRef.current) { syncAgain.current = true; return; }
     if (!session || session.account.id !== accountRef.current?.id || syncingRef.current || !navigator.onLine || document.hidden) return;
-    syncingRef.current = true; setSyncing(true);
+    beginSync();
     try {
       await editor.current?.flush();
-      await syncAccount(store, new BrowserDrive(session));
+      await syncAccount(store, new BrowserDrive(session), () => { void refresh().catch(error => setError(String(error))); }, selectedRef.current);
       setError("");
     } catch (error) {
       if (error instanceof DriveError && error.status === 401) { auth.disconnect(); setConnected(false); }
       setError(String(error));
     } finally {
-      syncingRef.current = false; setSyncing(false);
+      endSync();
       await refresh().catch(error => setError(String(error)));
+      if (syncAgain.current) { syncAgain.current = false; void syncRef.current(); }
     }
   }
   syncRef.current = sync;
@@ -142,6 +153,16 @@ function Workspace() {
       setCreating({ account: account.id, space: destination, name: copy ? `Copy of ${copy.name}` : "Untitled.md", text: copy?.text ?? "" });
     } catch (error) { setError(String(error)); }
   }
+  selectedRef.current = selected;
+  async function fileOperation<T>(action: (drive: BrowserDrive) => Promise<T>): Promise<T> {
+    while (syncingRef.current) await syncIdle.current;
+    const session = auth.current();
+    if (!session || session.account.id !== accountRef.current?.id) throw new Error("Reconnect Google Drive first.");
+    beginSync();
+    try { await editor.current?.flush(); return await action(new BrowserDrive(session)); }
+    finally { endSync(); await refresh(); if (syncAgain.current) { syncAgain.current = false; void syncRef.current(); } }
+  }
+  const fileNote = notes.find(note => note.key === fileCloud);
   const note = notes.find(note => note.key === selected);
   const pending = notes.filter(pendingNote).length;
   const search = useDeferredValue(query.toLocaleLowerCase());
@@ -158,16 +179,28 @@ function Workspace() {
   };
   const focusControl = <button className="web-focus-enter" title="Focus mode" aria-label="Enter focus mode" onClick={() => setFocused(true)}><Maximize2 size={18}/></button>;
   return <div className="web-app" data-note-open={showNote} data-sidebar={sidebar} data-wide={wide} data-focused={focused}>
+    {fileNote && <CloudFileDialog name={fileNote.name} status={fileNote.error || (pendingNote(fileNote) ? "Saved on this device · pending upload" : fileNote.lastSyncedAt ? `Last verified sync: ${new Date(fileNote.lastSyncedAt).toLocaleString()}` : "Saved on this device")}
+      onClose={() => setFileCloud(undefined)} review={() => fileOperation(drive => reviewFile(store, drive, fileNote.key))}
+      sync={() => fileOperation(async drive => { await syncFile(store, drive, fileNote.key); const current = await store.get(fileNote.key); if (current?.error) throw new Error(current.error); })}
+      replace={(copy, direction) => fileOperation(drive => replaceFile(store, drive, fileNote.key, copy, direction))}
+      recoveries={async () => (await store.get(fileNote.key))?.recovery ?? []}
+      archive={copy => fileOperation(async drive => {
+        const latest = await reviewFile(store, drive, fileNote.key);
+        if (JSON.stringify(latest) !== JSON.stringify(copy)) throw new Error("This file changed. Review it again before deleting.");
+        await drive.archive(copy.driveId, fileNote.space, { text: copy.remoteText, name: copy.remoteName, parent: copy.parent, etag: copy.remoteRevision });
+        await store.mutate(fileNote.key, old => ({ ...old!, deleted: true, missing: true, recovery: [...(old!.recovery ?? []), { name: old!.name, text: old!.text }] }));
+        setSelected("");
+      })} />}
     {focused && <button className="web-focus-exit" title="Exit focus mode · Escape" aria-label="Exit focus mode" onClick={() => setFocused(false)}><Minimize2 size={18}/></button>}
     {replacing && <ReplaceDriveDialog name={replacing.name} onClose={() => setReplacing(undefined)} onConfirm={async () => {
       if (syncingRef.current) throw new Error("Wait for sync to finish, then try again.");
-      syncingRef.current = true; setSyncing(true);
+      beginSync();
       try {
         await editor.current?.flush();
         if (accountRef.current?.id !== replacing.account) throw new Error("The connected account changed. Review this note again.");
         await acceptLocalCopy(store, replacing.key, replacing.copy);
         await refresh();
-      } finally { syncingRef.current = false; setSyncing(false); }
+      } finally { endSync(); }
       void syncRef.current();
     }} />}
     {showAppearance && <AppearanceDialog wide={wide} onWideChange={setWide} onClose={() => setShowAppearance(false)} />}
@@ -226,7 +259,7 @@ function Workspace() {
             <button onClick={() => editor.current?.export()}>Export my edits</button>
           </section>}
           {note.recovery?.map((recovery, index) => <div className="web-recovery" key={index}>Recovery copy {index + 1} retained. <button onClick={() => exportText(`Recovered ${recovery.name}`, recovery.text)}>Export recovery copy</button></div>)}
-          <NoteEditor key={note.key} ref={editor} note={note} store={store} onSaved={saved} onSaving={setSaving} panelControl={panelControl} focusControl={focusControl}/>
+          <NoteEditor key={note.key} ref={editor} note={note} store={store} onSaved={saved} onSaving={setSaving} onCloud={() => setFileCloud(note.key)} panelControl={panelControl} focusControl={focusControl}/>
         </> : <section className="web-setup"><Orbit size={46}/><h1>A little space to think.</h1><p>{notes.length ? "Pick a note. Make some room for an idea." : "Your notes, wherever you are."}</p>{space ? <button onClick={() => void newNote()}><Plus size={16}/>Create a note</button> : <button onClick={() => setShowCloud(true)}><Cloud size={16}/>Connect Google Drive</button>}</section>}
         </MobileNoteCarousel>
         {note && <nav className="web-note-navigation" aria-label="Browse notes">

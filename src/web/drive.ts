@@ -87,6 +87,7 @@ export class BrowserDrive {
       if (count > 10000) throw new Error("This space is too large for the web preview.");
       for (const file of children) {
         if (!file.appProperties?.novaKey || !validName(file.name)) continue;
+        if (file.name === ".deleted") continue;
         if (file.mimeType === FOLDER) await walk(file.id, directory ? `${directory}/${file.name}` : file.name, depth + 1);
         else if (textFile(file)) {
           if (Number(file.size) > MAX_NOTE_BYTES) throw new Error(`“${file.name}” exceeds the web preview's 2 MB limit. No local copy was removed.`);
@@ -131,6 +132,18 @@ export class BrowserDrive {
     const after = await this.metadata(fileId);
     if (before.etag !== after.etag) throw new DriveError(412);
     return { ...after, text };
+  }
+  async deleted(space: string): Promise<string[]> {
+    const folders = (await this.children(space)).filter(file => file.mimeType === FOLDER && file.appProperties?.novaKey === "nova-deleted-v1");
+    return (await Promise.all(folders.map(file => this.children(file.id)))).flat().map(file => file.id);
+  }
+  async archive(fileId: string, space: string, reviewed: RemoteCopy): Promise<void> {
+    const current = await this.read(fileId);
+    if (current.etag !== reviewed.etag) throw new DriveError(412);
+    const destination = await this.folder(space, "nova-deleted-v1", ".deleted");
+    await this.request(`${V2}/${id(fileId)}?addParents=${id(destination)}&removeParents=${id(reviewed.parent)}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json", "If-Match": reviewed.etag }, body: "{}",
+    });
   }
   async reserve(): Promise<string> {
     const data = await (await this.request(`${API}/generateIds?count=1&space=drive&type=files`)).json();

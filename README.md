@@ -77,7 +77,7 @@ Single-click a starred file to preview it; double-click to keep its tab open. Pa
 
 Connect **Google Drive** from the cloud button beside Settings to discover your Cloud spaces. Cloud notes autosave on your device, sync while Nova is active, and stay editable offline. Your Local files stay local unless you choose **Move to Cloud…**.
 
-Sync is available in configured Mac and Windows builds. Conflicting edits pause for review. If a file disappears from Drive, Nova keeps its local copy and offers **Restore to Cloud** or **Acknowledge & delete…** in Cloud settings. Deleting a Cloud note in Nova removes only this device’s copy. See the [Google Drive guide](docs/sync.md) for setup and recovery details.
+Sync is available in configured Mac and Windows builds. Conflicting edits pause for review. If a file disappears from Drive, Nova keeps its local copy and offers **Restore to Cloud** or **Acknowledge & delete…** in Cloud settings. Use a Cloud file’s **Cloud · Advanced…** menu to sync just that file, review both copies, or explicitly replace either version with recovery protection. Deleting a Cloud note moves the same Drive file into its space’s `.deleted` folder; clean copies disappear from updated devices on their next sync, while unsynced edits are retained. See the [Google Drive guide](docs/sync.md) for setup and recovery details.
 
 ### Two notes, room for both
 
