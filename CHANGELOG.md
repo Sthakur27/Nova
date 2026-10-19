@@ -14,6 +14,8 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 #### Changed
 
+- Desktop, iOS, and web prominently offer Reconnect or Continue without syncing when Google authorization needs renewal. Dismissing the modal pauses reminders for one hour across reloads and windows; ordinary offline errors do not trigger it.
+
 - Deleting a Cloud note moves its existing Drive file into the space’s `.deleted` folder, preserving Drive history. Updated devices remove clean copies on their next sync and retain unsynced edits. Move the file back in Drive to restore it. Local-file deletion stays device-only.
 
 #### Fixed

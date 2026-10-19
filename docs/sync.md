@@ -262,3 +262,14 @@ recovery, and Nova reloads after success. A failed download leaves local data in
 ### Using Cloud without a local folder
 
 On desktop, choose **Open Cloud-only Window** from the folder icon below Quick find. Connect Google Drive if prompted. Cloud spaces work without selecting a local folder, including their existing offline copies, recovery drafts, and autosave behavior. Opening a local folder later creates a separate mixed window; it does not move Cloud notes into that folder.
+
+### Reconnect reminders
+
+When Google authorization expires or is revoked, desktop, native iOS, and web
+show a prominent modal over a dimmed, blurred workspace. **Reconnect** starts
+Google sign-in directly. **Continue without syncing** or Escape dismisses it for
+one hour; this cooldown survives reopening and is shared across windows on this
+device (within the same browser profile and site for web). Reminders resume only
+while Nova is visible and online and no other dialog is open. Ordinary offline
+errors and content conflicts do not trigger this modal. Downloaded notes and edits
+stay on the device; Cloud settings remain available for an earlier manual retry.

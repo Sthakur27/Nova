@@ -3052,3 +3052,16 @@ body[data-tooltips="hidden"] [role="tooltip"] {
 .cloud-file-dialog .cloud-space-actions { flex-wrap: wrap; gap: 6px; }
 .cloud-file-dialog section > details pre { max-height: 220px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .cloud-file-dialog p { overflow-wrap: anywhere; }
+
+/* Reconnection uses the modal top layer so the editor stays intact and inert. */
+.reconnect-dialog { width: min(460px, calc(100vw - 40px)); max-height: calc(100dvh - 40px); padding: 32px; text-align: center; box-sizing: border-box; overflow-y: auto; }
+.reconnect-dialog::backdrop { background: #080810b8; backdrop-filter: blur(8px); }
+.reconnect-dialog > svg { color: #a6b5ff; margin: 0 auto 12px; }
+.reconnect-dialog h2 { margin: 0 0 14px; }
+.reconnect-dialog p { line-height: 1.6; }
+.reconnect-actions { display: flex; flex-direction: column; gap: 10px; margin-top: 24px; }
+.reconnect-actions button { min-height: 44px; padding: 10px 16px; border: 1px solid #ffffff30; border-radius: 10px; background: #ffffff0b; color: inherit; font: inherit; cursor: pointer; }
+.reconnect-actions .reconnect-primary { background: #b7c4ff; color: #14172b; border-color: transparent; font-weight: 600; }
+.reconnect-actions button:disabled { opacity: .5; cursor: default; }
+.reconnect-actions button:focus-visible { outline: 2px solid #b7c4ff; outline-offset: 3px; }
+.reconnect-dialog .reconnect-help { font-size: 12px; opacity: .7; margin-top: 20px; }

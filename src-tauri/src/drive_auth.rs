@@ -206,6 +206,16 @@ fn connect(app: &tauri::AppHandle, cancelled: &AtomicBool) -> Result<Status, Str
 mod tests {
     use super::*;
     #[test]
+    fn temporary_refresh_failures_do_not_request_reconnection() {
+        for status in [408, 429, 500, 503] {
+            let message = refresh_failure(reqwest::StatusCode::from_u16(status).unwrap());
+            assert!(message.contains("temporarily unavailable"));
+            assert!(!message.contains("Reconnect"));
+        }
+        assert!(refresh_failure(reqwest::StatusCode::BAD_REQUEST).contains("Reconnect"));
+        assert!(refresh_failure(reqwest::StatusCode::UNAUTHORIZED).contains("Reconnect"));
+    }
+    #[test]
     fn credential_reads_are_reused_including_missing_and_denied() {
         for result in [Ok(Some(Credential { refresh_token: "test".into(), email: "test@example.com".into() })), Ok(None), Err("denied".into())] {
             let mut cache = CredentialCache::default();
@@ -237,13 +247,20 @@ mod tests {
     }
 }
 
+fn refresh_failure(status: reqwest::StatusCode) -> String {
+    if status.is_server_error() || status == reqwest::StatusCode::TOO_MANY_REQUESTS || status == reqwest::StatusCode::REQUEST_TIMEOUT {
+        "Google Drive sign-in service is temporarily unavailable. Retry syncing later.".into()
+    } else {
+        "Google access expired or was revoked. Choose Reconnect Google Drive in Cloud settings.".into()
+    }
+}
 pub(crate) fn access_token() -> Result<String, String> {
     let credential = cached_credential()?.ok_or("Connect Google Drive before uploading.")?;
     let client = reqwest::blocking::Client::builder().timeout(Duration::from_secs(30)).build().map_err(|_| "Could not reach Google.".to_string())?;
     let response = client.post("https://oauth2.googleapis.com/token").form(&token_form(vec![
         ("refresh_token", credential.refresh_token.as_str()), ("grant_type", "refresh_token"),
     ])?).send().map_err(|_| "Google Drive is offline. Check your connection and retry.".to_string())?;
-    if !response.status().is_success() { return Err("Google access expired or was revoked. Choose Reconnect Google Drive in Cloud settings.".into()); }
+    if !response.status().is_success() { return Err(refresh_failure(response.status())); }
     let value: serde_json::Value = response.json().map_err(|_| "Invalid response from Google.".to_string())?;
     value["access_token"].as_str().map(str::to_owned).ok_or("Google did not return access. Reconnect Google Drive.".into())
 }

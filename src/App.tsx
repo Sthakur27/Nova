@@ -1,3 +1,5 @@
+import ReconnectDialog from "./ReconnectDialog";
+import useReconnectPrompt, { needsDriveReconnect } from "./useReconnectPrompt";
 import CloudFileDialog from "./CloudFileDialog";
 import BuiltinDocs from "./BuiltinDocs";
 import SyncAttention from "./SyncAttention";
@@ -1315,6 +1317,21 @@ export default function App() {
       if (firstNote) void openNote(firstNote.path, undefined, spaces[0]);
     }
   }, uploads.upload);
+  const [reconnectRequired, setReconnectRequired] = useState(false);
+  const authorizationError = [drive.error, cloud.error, ...Object.values(uploads.errors),
+    ...Object.values(uploads.items).map(item => item.message), ...folders.map(folder => folder.syncError ?? "")].find(needsDriveReconnect);
+  // Keep an auth failure visible through periodic retries; only a new connection clears it.
+  useEffect(() => { setReconnectRequired(false); }, [drive.status]);
+  useEffect(() => { if (authorizationError) setReconnectRequired(true); }, [authorizationError]);
+  const reconnect = useReconnectPrompt({
+    account: drive.status.account ?? drive.status.email ?? "native",
+    busy: drive.busy || drive.checking,
+    blocked: settingsOpen || !!syncFolder || !!activeSettingId || !!palette || !!bookmarkDraft || !!renameTarget || !!fileAction,
+    needed: () => drive.supported && drive.status.configured && reconnectRequired,
+  });
+  const reconnectDialog = reconnect.open && <ReconnectDialog busy={drive.busy} error={drive.error}
+    reconnect={() => { void drive.connect().then(ok => { if (ok) { setReconnectRequired(false); reconnect.dismiss(); void cloud.refresh(); } }); }}
+    onClose={reconnect.dismiss} />;
   async function moveToCloud(folder: Workspace, notePath: string) {
     try {
       const target = current.current.folders.find(f => !!f.cloudSpace);
@@ -1844,7 +1861,7 @@ export default function App() {
     return { note, snapshot, mode: availablePaneMode(preferred, tab.path, note.text.length, showReadMode) };
   }, [showReadMode]);
   if (mobile && (!drive.status.connected || (!cloud.loaded && !folders.some(folder => folder.cloudSpace?.account === drive.status.account && !!drive.status.account)))) {
-    return <CloudSetup drive={drive} loading={cloud.loading} error={cloud.error} retry={()=>void cloud.refresh()}/>;
+    return <><CloudSetup drive={drive} loading={cloud.loading} error={cloud.error} retry={()=>void cloud.refresh()}/>{reconnectDialog}</>;
   }
   function renderPaneTabs(pane: Pane) {
     if (compact) return <MobileFileBar tabs={tabs} selected={pane.selected}
@@ -2654,6 +2671,7 @@ export default function App() {
         onClose={() => setActiveSettingId(null)}
         onOpenSettings={() => { setActiveSettingId(null); setSettingsOpen(true); }}
         storageError={readModeError || showHiddenError || editorFontError || spacingError || widthError || galaxyError || galaxyPerformanceError || translucencyError || frostedPanesError || numbersError || highlightError || wrapError || spellingError || fontError || railError || navigationError || topBarsError || statusBarError || focusModeError} />}
+      {reconnectDialog}
       {settingsOpen && <Settings onResetLocal={mobile ? resetLocalState : undefined} resetDisabled={!drive.status.connected || drive.busy || !!uploads.activeRoot || cloud.loading || saving} updater={desktop ? appUpdate : undefined} syncConnected={drive.status.connected} onSyncSetup={() => { setSettingsOpen(false); showSync(workspace); }} onClose={() => setSettingsOpen(false)}
         onOpenDrive={() => void uploads.openFolder(workspace.root)} openDriveDisabled={!!uploads.activeRoot || workspace.root === "demo"}
         showReadMode={showReadMode} onShowReadMode={setShowReadMode}

@@ -3,7 +3,8 @@ import { useCallback, useDeferredValue, useEffect, useRef, useState } from "reac
 import { Cloud, FileText, Plus, RefreshCw, PanelLeft, Orbit, Settings2, Search, Maximize2, Minimize2, ChevronLeft, ChevronRight } from "lucide-react";
 import MobileNoteCarousel, { adjacentNote } from "../MobileNoteCarousel";
 import useWebLayout from "./useWebLayout";
-import useConnectionPrompt from "./useConnectionPrompt";
+import useReconnectPrompt from "../useReconnectPrompt";
+import ReconnectDialog from "../ReconnectDialog";
 import ReplaceDriveDialog from "./ReplaceDriveDialog";
 import AppearanceDialog from "./AppearanceDialog";
 import CloudDialog from "./CloudDialog";
@@ -65,7 +66,7 @@ function Workspace() {
   const selectedRef = useRef("");
   const syncAgain = useRef(false);
   const [showCloud, setShowCloud] = useState(false);
-  useConnectionPrompt({ connected: () => !!auth.current(), connecting, open: showCloud, request: () => setShowCloud(true) });
+  const reconnect = useReconnectPrompt({ account: account?.id ?? "web", needed: () => !!account && !!auth.clientId && !auth.current(), busy: connecting });
   const { mobile, focused, setFocused } = useWebLayout();
   const [showAppearance, setShowAppearance] = useState(false);
   const [sidebar, setSidebar] = useState(true);
@@ -209,16 +210,18 @@ function Workspace() {
       const note = await createNote(store, creating.account, creating.space, name, creating.text);
       await refresh(); setSelected(note.key); setShowNote(true); saved();
     }} />}
-    {showCloud && <CloudDialog onClose={() => setShowCloud(false)}>
+    {reconnect.open && <ReconnectDialog busy={connecting} disabled={!identityReady || !online} error={error}
+      reconnect={connect} onClose={reconnect.dismiss} />}
+    {showCloud && <CloudDialog onClose={() => { if (!auth.current()) reconnect.dismiss(); setShowCloud(false); }}>
       {account && <p className="web-cloud-account">{account.email}</p>}
       <p role="status">{!online ? "Offline · using device copies" : connecting ? "Connecting…" : syncing ? "Syncing…" : connected ? "Connected to Google Drive" : account ? "Reconnect to sync" : "Connect your Google Drive account"}</p>
       <p className="web-cloud-help">{notes.length} downloaded · {pending} pending</p>
       {!connected && <p className="web-cloud-help">Sign in to sync with Google Drive. Your downloaded notes are still available on this device.</p>}
       <div className="web-cloud-actions">
         <button disabled={connecting || syncing || saving || !auth.clientId || !identityReady || !online} onClick={connect}>{connected || account ? "Reconnect" : "Connect Google Drive"}</button>
-        {!connected && !connecting && <button onClick={() => setShowCloud(false)}>Continue without syncing</button>}
+        {!connected && !connecting && <button onClick={() => { reconnect.dismiss(); setShowCloud(false); }}>Continue without syncing</button>}
         {connecting && <button onClick={() => auth.disconnect()}>Cancel sign-in</button>}
-        {connected && <button disabled={syncing || saving} onClick={() => { auth.disconnect(); setConnected(false); }}>Disconnect</button>}
+        {connected && <button disabled={syncing || saving} onClick={() => { auth.disconnect(); reconnect.dismiss(); setConnected(false); }}>Disconnect</button>}
       </div>
       {!auth.clientId && <p>Google Drive is not configured for this preview yet.</p>}
       {auth.clientId && !identityReady && !connecting && <p>Google sign-in is not ready. <button onClick={prepareIdentity}>Retry loading sign-in</button></p>}

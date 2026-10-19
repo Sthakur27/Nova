@@ -222,3 +222,16 @@ web tests cover clean/dirty deletion and review guards. Before release confidenc
 verify real desktop/iOS/web sync with dedicated notes, choppy connectivity,
 conflicting edits, shared deletion, and restoration; mocked requests do not prove
 Google authorization or native platform integration.
+
+### Reconnect prompt
+
+`useReconnectPrompt` coordinates the shared `ReconnectDialog` for desktop, iOS,
+and web. Native sync authorization errors are recognized separately from offline
+and conflict messages. Refresh-service timeouts, throttling, and server failures
+remain retryable sync errors. Web checks token validity for its previously
+connected account. Account-scoped local-storage deadlines share a one-hour dismissal across
+windows and reloads, with an in-memory fallback if storage is blocked. Tests cover
+the cooldown, focus/online events, deferred dialogs, expiry recovery, and dialog
+keyboard/focus behavior. Native verification should expire/revoke authorization,
+check reconnect and dismissal on desktop/iOS, then confirm downloaded edits survive
+and sync after reconnect; browser tests alone do not prove native integration.
