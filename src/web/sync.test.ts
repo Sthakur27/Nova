@@ -29,6 +29,33 @@ describe("browser storage", () => {
     expect(await reopened.notes("bob")).toEqual([]);
     expect(pendingNote((await reopened.notes("alice"))[0])).toBe(true);
   });
+  it("deletes only the reviewed recovery and preserves concurrent edits and newly retained copies", async () => {
+    const store = database();
+    const recovery = [{ name: "Old.md", text: "first" }, { name: "Old.md", text: "second" }];
+    const note = fixture({ recovery, conflict: copy("remote edit") });
+    await store.mutate(note.key, () => note);
+    await store.save({ ...note, text: "pending edit" });
+    await store.mutate(note.key, old => ({ ...old!, recovery: [...old!.recovery!, { name: "New.md", text: "new recovery" }] }));
+    await store.deleteRecovery(note.key, 0, recovery[0]);
+    const current = (await store.get(note.key))!;
+    expect(current).toEqual({ ...note, text: "pending edit", revision: 2,
+      recovery: [recovery[1], { name: "New.md", text: "new recovery" }] });
+    await expect(store.deleteRecovery(note.key, 0, recovery[0])).rejects.toThrow("Recovery copies changed");
+    // An editor save made before deletion must not restore the deleted copy.
+    await store.save({ ...current, recovery, text: "next edit" });
+    expect((await store.get(note.key))!.recovery).toEqual(current.recovery);
+  });
+  it("keeps recovery deletion after reopening browser storage", async () => {
+    const name = crypto.randomUUID();
+    const store = new WebStore(name); stores.push(store);
+    const recovery = { name: "Note.md", text: "old text" };
+    const note = fixture({ recovery: [recovery] });
+    await store.mutate(note.key, () => note);
+    await store.deleteRecovery(note.key, 0, recovery);
+    await store.close();
+    const reopened = new WebStore(name); stores.push(reopened);
+    expect(await reopened.get(note.key)).toEqual({ ...note, recovery: [] });
+  });
   it("rejects a competing stale save and retains the first committed value", async () => {
     const store = database(); const note = fixture(); await store.mutate(note.key, () => note);
     const results = await Promise.allSettled([store.save({ ...note, text: "first" }), store.save({ ...note, text: "second" })]);

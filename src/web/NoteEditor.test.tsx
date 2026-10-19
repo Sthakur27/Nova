@@ -12,14 +12,14 @@ vi.mock("../Editor", () => ({ default: forwardRef(function MockEditor(props: { i
   return <><textarea aria-label="Editor text" value={text} onChange={event => setText(event.target.value)}/><button onClick={props.onChange}>Persist edit</button></>;
 }) }));
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
-async function mount() {
+async function mount(overrides: Partial<WebNote> = {}, onRecovery?: () => void) {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   const store = new WebStore(crypto.randomUUID());
-  const note: WebNote = { key: noteKey("alice", "note"), id: "note", account: "alice", space: "space", parent: "space", name: "Note.md", text: "initial", directory: "", bookmarks: [], revision: 1 };
+  const note: WebNote = { key: noteKey("alice", "note"), id: "note", account: "alice", space: "space", parent: "space", name: "Note.md", text: "initial", directory: "", bookmarks: [], revision: 1, ...overrides };
   await store.mutate(note.key, () => note);
   const container = document.createElement("div"); document.body.append(container);
   const root = createRoot(container); const ref = createRef<NoteEditorHandle>();
-  await act(async () => root.render(<NoteEditor ref={ref} note={note} store={store} onSaved={() => {}} onSaving={() => {}}/>));
+  await act(async () => root.render(<NoteEditor ref={ref} note={note} store={store} onRecovery={onRecovery} onSaved={() => {}} onSaving={() => {}}/>));
   return { store, note, container, ref, cleanup: async () => { await act(async () => root.unmount()); container.remove(); await store.close(); } };
 }
 it("waits for local save completion before allowing navigation", async () => {
@@ -40,5 +40,19 @@ it("blocks navigation and retains the editor when browser storage fails", async 
     expect(test.container.textContent).toContain("Storage is full");
     expect(test.container.querySelector("textarea")!.value).toBe("initial");
     expect((await test.store.get(test.note.key))!.revision).toBe(1);
+  } finally { await test.cleanup(); }
+});
+
+it("keeps recovery copies in the note menu and closes the menu when opening them", async () => {
+  const open = vi.fn();
+  const test = await mount({ recovery: [{ name: "Note.md", text: "old" }, { name: "Note.md", text: "older" }] }, open);
+  try {
+    const menu = test.container.querySelector("details")!;
+    menu.open = true;
+    await act(async () => Array.from(menu.querySelectorAll("button")).find(button => button.textContent === "Recovery copies (2)")!.click());
+    expect(open).toHaveBeenCalledOnce();
+    expect(menu.open).toBe(false);
+    expect(test.container.textContent).not.toContain("retained.");
+    expect(test.container.querySelector("textarea")!.value).toBe("initial");
   } finally { await test.cleanup(); }
 });

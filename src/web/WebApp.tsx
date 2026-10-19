@@ -6,6 +6,7 @@ import useWebLayout from "./useWebLayout";
 import useReconnectPrompt from "../useReconnectPrompt";
 import ReconnectDialog from "../ReconnectDialog";
 import ReplaceDriveDialog from "./ReplaceDriveDialog";
+import RecoveryDialog from "./RecoveryDialog";
 import AppearanceDialog from "./AppearanceDialog";
 import CloudDialog from "./CloudDialog";
 import FilenameDialog from "./FilenameDialog";
@@ -15,7 +16,7 @@ import { reviewFile, replaceFile, syncFile } from "./sync";
 import { BrowserDrive, DriveError } from "./drive";
 import { WebStore, pendingNote, type Account, type Space, type WebNote, type RemoteCopy } from "./store";
 import { acceptLocalCopy, acceptDriveCopy, createNote, syncAccount } from "./sync";
-import NoteEditor, { exportText, type NoteEditorHandle } from "./NoteEditor";
+import NoteEditor, { type NoteEditorHandle } from "./NoteEditor";
 
 declare const __NOVA_WEB_CLIENT_ID__: string;
 const ACCOUNT_KEY = "nova-web-account-v1";
@@ -62,6 +63,7 @@ function Workspace() {
   const [saving, setSaving] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
   const [replacing, setReplacing] = useState<{ key: string; name: string; account: string; copy: RemoteCopy }>();
+  const [recoveryKey, setRecoveryKey] = useState<string>();
   const [fileCloud, setFileCloud] = useState<string>();
   const selectedRef = useRef("");
   const syncAgain = useRef(false);
@@ -163,6 +165,7 @@ function Workspace() {
     try { await editor.current?.flush(); return await action(new BrowserDrive(session)); }
     finally { endSync(); await refresh(); if (syncAgain.current) { syncAgain.current = false; void syncRef.current(); } }
   }
+  const recoveryNote = notes.find(note => note.key === recoveryKey);
   const fileNote = notes.find(note => note.key === fileCloud);
   const note = notes.find(note => note.key === selected);
   const pending = notes.filter(pendingNote).length;
@@ -180,6 +183,8 @@ function Workspace() {
   };
   const focusControl = <button className="web-focus-enter" title="Focus mode" aria-label="Enter focus mode" onClick={() => setFocused(true)}><Maximize2 size={18}/></button>;
   return <div className="web-app" data-note-open={showNote} data-sidebar={sidebar} data-wide={wide} data-focused={focused}>
+    {recoveryNote && <RecoveryDialog key={recoveryNote.key} note={recoveryNote} onClose={() => setRecoveryKey(undefined)}
+      onDelete={async (index, copy) => { await store.deleteRecovery(recoveryNote.key, index, copy); await refresh(); }} />}
     {fileNote && <CloudFileDialog name={fileNote.name} status={fileNote.error || (pendingNote(fileNote) ? "Saved on this device · pending upload" : fileNote.lastSyncedAt ? `Last verified sync: ${new Date(fileNote.lastSyncedAt).toLocaleString()}` : "Saved on this device")}
       onClose={() => setFileCloud(undefined)} review={() => fileOperation(drive => reviewFile(store, drive, fileNote.key))}
       sync={() => fileOperation(async drive => { await syncFile(store, drive, fileNote.key); const current = await store.get(fileNote.key); if (current?.error) throw new Error(current.error); })}
@@ -261,8 +266,7 @@ function Workspace() {
             {(note.conflict || note.missing) && <button disabled={saving || syncing} onClick={() => void newNote(note)}>Save local text as a new note</button>}
             <button onClick={() => editor.current?.export()}>Export my edits</button>
           </section>}
-          {note.recovery?.map((recovery, index) => <div className="web-recovery" key={index}>Recovery copy {index + 1} retained. <button onClick={() => exportText(`Recovered ${recovery.name}`, recovery.text)}>Export recovery copy</button></div>)}
-          <NoteEditor key={note.key} ref={editor} note={note} store={store} onSaved={saved} onSaving={setSaving} onCloud={() => setFileCloud(note.key)} panelControl={panelControl} focusControl={focusControl}/>
+          <NoteEditor key={note.key} ref={editor} note={note} store={store} onSaved={saved} onSaving={setSaving} onCloud={() => setFileCloud(note.key)} onRecovery={() => setRecoveryKey(note.key)} panelControl={panelControl} focusControl={focusControl}/>
         </> : <section className="web-setup"><Orbit size={46}/><h1>A little space to think.</h1><p>{notes.length ? "Pick a note. Make some room for an idea." : "Your notes, wherever you are."}</p>{space ? <button onClick={() => void newNote()}><Plus size={16}/>Create a note</button> : <button onClick={() => setShowCloud(true)}><Cloud size={16}/>Connect Google Drive</button>}</section>}
         </MobileNoteCarousel>
         {note && <nav className="web-note-navigation" aria-label="Browse notes">

@@ -78,6 +78,15 @@ export class WebStore {
       };
     }).catch(error => { throw failure ?? error; });
   }
+  deleteRecovery(key: string, index: number, copy: { name: string; text: string }): Promise<WebNote> {
+    return this.mutate(key, old => {
+      const current = old?.recovery?.[index];
+      if (!old || !current || current.name !== copy.name || current.text !== copy.text) {
+        throw new Error("Recovery copies changed. Close and reopen this dialog before deleting.");
+      }
+      return { ...old, recovery: old.recovery!.filter((_, position) => position !== index) };
+    });
+  }
   save(snapshot: WebNote): Promise<WebNote> {
     return this.mutate(snapshot.key, old => {
       if (!old || old.revision !== snapshot.revision) throw new Error("This note changed while you were editing. Export your edits before reopening it.");

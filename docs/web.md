@@ -39,6 +39,10 @@ Only one web editor can run per browser origin at once. A second tab asks you to
 
 The preview accepts supported text/code extensions, with a 2 MB note limit and a 32 MB download budget per sync pass. Unsupported, internal, and non-Nova files are excluded. Oversized notes, ambiguous roots, and excessively large/deep trees stop the affected sync safely.
 
+## Recovery copies
+
+Replaced text stays in this browser as recovery copies. Open a note’s **Note actions** (three dots) → **Recovery copies (count)** to export or delete individual copies. Close the dialog with its X button or Escape to return to writing. Copies do not add banners above the editor, including on mobile. Deleting requires confirmation and permanently removes only the selected recovery copy from this browser; the current note and Google Drive file are unchanged.
+
 ## Configure Google Drive
 
 1. In **the same Google Cloud project used by Nova's desktop/iOS clients**, enable the Google Drive API and configure the OAuth consent screen. Add the intended account as a test user if the consent app is in testing mode.

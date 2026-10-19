@@ -12,7 +12,7 @@ export function exportText(name: string, text: string) {
   setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
 export type NoteEditorHandle = { flush: () => Promise<void>; export: () => void };
-export default forwardRef<NoteEditorHandle, { note: WebNote; store: WebStore; onSaved: () => void; onSaving: (saving: boolean) => void; panelControl?: ReactNode; focusControl?: ReactNode; onCloud?: () => void }>(function NoteEditor({ note, store, onSaved, onSaving, panelControl, focusControl, onCloud }, handle) {
+export default forwardRef<NoteEditorHandle, { note: WebNote; store: WebStore; onSaved: () => void; onSaving: (saving: boolean) => void; panelControl?: ReactNode; focusControl?: ReactNode; onCloud?: () => void; onRecovery?: () => void }>(function NoteEditor({ note, store, onSaved, onSaving, panelControl, focusControl, onCloud, onRecovery }, handle) {
   const editor = useRef<EditorHandle>(null);
   const saved = useRef(note);
   const queue = useRef(Promise.resolve());
@@ -83,6 +83,7 @@ export default forwardRef<NoteEditorHandle, { note: WebNote; store: WebStore; on
       }}>
         <summary aria-label="Note actions" title="Note actions"><MoreHorizontal size={20}/></summary>
         <div>
+          {!!note.recovery?.length && onRecovery && <button onClick={event => { event.currentTarget.closest("details")?.removeAttribute("open"); onRecovery(); }}>Recovery copies ({note.recovery.length})</button>}
           {onCloud && <button onClick={event => { event.currentTarget.closest("details")?.removeAttribute("open"); onCloud(); }}>Cloud · Advanced…</button>}
           {rich && <button onClick={event => { setMode(mode === "edit" ? "source" : "edit"); event.currentTarget.closest("details")?.removeAttribute("open"); }}>{mode === "edit" ? "Switch to Source" : "Switch to Edit"}</button>}
           <button onClick={event => { event.currentTarget.closest("details")?.removeAttribute("open"); setRenaming(true); }}>Rename</button>

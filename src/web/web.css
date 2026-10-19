@@ -42,7 +42,12 @@ body { background: #101014; }
 .web-conflict p { margin: 0 0 8px; }
 .web-conflict pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 180px; overflow: auto; }
 .web-conflict button { border: 1px solid #ffffff24; margin: 8px 8px 0 0; }
-.web-recovery { padding: 6px 20px; font-size: 11px; color: #b8a5d2; }
+.web-recovery-list { list-style: none; margin: 0; padding: 0; }
+.web-recovery-list li { padding: 12px 0; border-top: 1px solid #ffffff18; overflow-wrap: anywhere; }
+.web-recovery-list strong { font-size: 13px; }
+.web-recovery-list .web-cloud-actions { margin: 8px 0 0; }
+.web-recovery-dialog button { min-height: 44px; }
+.web-recovery-dialog header h2 { min-width: 0; overflow-wrap: anywhere; }
 .web-offline-warning { position: fixed; bottom: 0; padding: 12px; background: #4d3427; width: 100%; z-index: 100; margin: 0; }
 @media (max-width: 700px) {
   .web-library { flex-basis: 100%; border: 0; padding-bottom: max(18px, env(safe-area-inset-bottom)); }
