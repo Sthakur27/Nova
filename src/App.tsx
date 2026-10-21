@@ -160,7 +160,7 @@ const Markdown = lazy(() => import("./Markdown"));
 const mod = navigator.platform.toLowerCase().includes("mac") ? "⌘" : "Ctrl";
 const supportsTranslucency = !mobile;
 // Retain the existing on/off storage values when adding the third mode.
-const backgroundModes = ["on", "off", "frosted"] as const;
+const backgroundModes = ["on", "frosted", "off"] as const;
 const availableBackgroundModes: readonly typeof backgroundModes[number][] = supportsFrosted ? backgroundModes : backgroundModes.filter(mode => mode !== "frosted");
 const backgroundLabels = { on: "Translucent", off: "Black", frosted: "Frosted" };
 const launchMessages = ["Thrusters active", "Orbit stabilized", "Hyperdrive humming", "Stardust calibrated", "Cosmic vibes nominal"];

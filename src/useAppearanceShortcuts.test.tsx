@@ -29,12 +29,12 @@ it.each([true, false])("cycles supported modes without editing or losing focus (
     const editorBinding = vi.fn(); input.addEventListener("keydown", editorBinding);
     const output = host.querySelector("output")!;
     expect((await press("e")).defaultPrevented).toBe(true);
-    expect(output.dataset.background).toBe("off");
+    expect(output.dataset.background).toBe(mac ? "frosted" : "off");
     expect(output.dataset.galaxy).toBe("true");
     expect(editorBinding).not.toHaveBeenCalled();
     expect((await press("e", { repeat: true })).defaultPrevented).toBe(true);
-    expect(output.dataset.background).toBe("off");
-    await press("e"); expect(output.dataset.background).toBe(mac ? "frosted" : "on");
+    expect(output.dataset.background).toBe(mac ? "frosted" : "off");
+    await press("e"); expect(output.dataset.background).toBe(mac ? "off" : "on");
     if (mac) { await press("e"); expect(output.dataset.background).toBe("on"); }
     expect((await press("l")).defaultPrevented).toBe(mac);
     expect(output.dataset.frosted).toBe(String(mac));

@@ -21,7 +21,7 @@ export function useAppearanceShortcuts({ enabled, mac, supportsFrosted, backgrou
       if (event.repeat) return;
       onGalaxy(true);
       if (action === "e") {
-        const modes: Background[] = supportsFrosted ? ["on", "off", "frosted"] : ["on", "off"];
+        const modes: Background[] = supportsFrosted ? ["on", "frosted", "off"] : ["on", "off"];
         const current = !supportsFrosted && background === "frosted" ? "off" : background;
         const next = modes[(modes.indexOf(current) + 1) % modes.length];
         onBackground(next);

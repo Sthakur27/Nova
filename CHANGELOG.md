@@ -6,6 +6,12 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 ## Unreleased
 
+### 2026-10-21
+
+#### Changed
+
+- Command-E and the Mac editor-background button now cycle through Translucent → Frosted → Black.
+
 ### 2026-10-20
 
 #### Fixed
