@@ -29,6 +29,9 @@ export function useCompactLayout() {
       const keyboard = !!focused || covered > 100;
       root.dataset.mobileKeyboard = String(keyboard);
       root.style.setProperty("--mobile-height", `${viewport.height}px`);
+      // WebKit can pan to reveal the caret without resizing. Keep the shell
+      // aligned with the visible viewport, including on scroll-only updates.
+      root.style.setProperty("--mobile-offset-top", `${viewport.offsetTop}px`);
       // Keep the extra scroll canvas fixed while the keyboard changes height.
       // Otherwise the text itself moves when its padding is recalculated.
       if (!keyboard) {
@@ -41,17 +44,20 @@ export function useCompactLayout() {
     const pane = document.querySelector(".document-area");
     if (pane) observer.observe(pane);
     viewport.addEventListener("resize", update);
+    viewport.addEventListener("scroll", update);
     window.addEventListener("resize", update);
     document.addEventListener("focusin", update);
     document.addEventListener("focusout", update);
     return () => {
       observer.disconnect();
       viewport.removeEventListener("resize", update);
+      viewport.removeEventListener("scroll", update);
       window.removeEventListener("resize", update);
       document.removeEventListener("focusin", update);
       document.removeEventListener("focusout", update);
       delete root.dataset.mobileKeyboard;
       root.style.removeProperty("--mobile-height");
+      root.style.removeProperty("--mobile-offset-top");
       root.style.removeProperty("--mobile-scroll-space");
     };
   }, [compact]);

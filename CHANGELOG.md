@@ -6,6 +6,12 @@ See [available builds](https://github.com/Sthakur27/Nova/releases) for published
 
 ## Unreleased
 
+### 2026-10-20
+
+#### Fixed
+
+- The mobile editor follows iOS keyboard viewport panning, addressing a blank gap above the keyboard and clipped top controls when WebKit moves the page to reveal the caret.
+
 ### 2026-10-19
 
 #### Added

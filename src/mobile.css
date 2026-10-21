@@ -1,5 +1,9 @@
 /* Also available in a narrow browser preview; native builds use this on iPad too. */
 .app-shell[data-compact="true"] {
+  position: fixed;
+  top: var(--mobile-offset-top, 0px);
+  left: 0;
+  right: 0;
   min-width: 0;
   height: var(--mobile-height, 100dvh);
   padding: env(safe-area-inset-top) env(safe-area-inset-right) calc(64px + env(safe-area-inset-bottom)) env(safe-area-inset-left);

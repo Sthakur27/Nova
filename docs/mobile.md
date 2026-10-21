@@ -27,6 +27,8 @@ Desktop terminal, desktop voice engine, new windows, folder pickers, and file-lo
 
 These controls also appear in the narrow browser preview. Browser checks do not verify iOS keyboard or touch behavior; repeat the native checklist below on an iPhone/iPad.
 
+Keyboard regression check: repeatedly focus text near the bottom of a long note, dismiss the keyboard, and focus again after scrolling. Repeat in Source, Edit, and Focus mode, including rotation with the keyboard open. Outside Focus mode, the top controls should stay visible; in every mode, the note area should reach the keyboard accessory tray without a blank strip. Viewport tests cover resize and caret-pan events; this fix still needs verification with the native iOS keyboard.
+
 ## Browser alternative
 
 A separate [Cloud-only web preview](web.md) can be hosted on Vercel and added to the iPhone Home Screen without Xcode signing. It shares the editor but has fewer controls than the native app. It needs its own Google Web OAuth configuration, and physical iPhone/Home Screen behavior is not yet verified. See the web guide for setup and limits.

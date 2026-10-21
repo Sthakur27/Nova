@@ -8,7 +8,7 @@ vi.mock("./platform", () => ({ mobile: true }));
 
 let root: Root;
 let host: HTMLDivElement;
-let viewport: EventTarget & { height: number; scale: number };
+let viewport: EventTarget & { height: number; scale: number; offsetTop: number };
 function Screen() {
   useCompactLayout();
   return <div className="document-area"><input aria-label="Note" /></div>;
@@ -17,7 +17,7 @@ beforeEach(() => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("innerHeight", 844);
   vi.stubGlobal("innerWidth", 390);
-  viewport = Object.assign(new EventTarget(), { height: 844, scale: 1 });
+  viewport = Object.assign(new EventTarget(), { height: 844, scale: 1, offsetTop: 0 });
   vi.stubGlobal("visualViewport", viewport);
   vi.stubGlobal("matchMedia", () => ({ matches: true, addEventListener() {}, removeEventListener() {} }));
   vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
@@ -66,4 +66,34 @@ it("hides navigation for the iOS accessory tray even without a viewport resize",
   expect(document.documentElement.dataset.mobileKeyboard).toBe("true");
   act(() => { host.querySelector("input")!.blur(); });
   expect(document.documentElement.dataset.mobileKeyboard).toBe("false");
+});
+
+it("follows keyboard caret panning on scroll-only viewport updates", () => {
+  const html = document.documentElement;
+  act(() => {
+    host.querySelector("input")!.focus();
+    viewport.height = 480;
+    viewport.dispatchEvent(new Event("resize"));
+    viewport.offsetTop = 72;
+    viewport.dispatchEvent(new Event("scroll"));
+  });
+  expect(html.style.getPropertyValue("--mobile-offset-top")).toBe("72px");
+  expect(html.style.getPropertyValue("--mobile-height")).toBe("480px");
+  expect(html.style.getPropertyValue("--mobile-scroll-space")).toBe("440px");
+  act(() => {
+    host.querySelector("input")!.blur();
+    viewport.height = 844;
+    viewport.offsetTop = 0;
+    viewport.dispatchEvent(new Event("resize"));
+  });
+  expect(html.style.getPropertyValue("--mobile-offset-top")).toBe("0px");
+  expect(html.dataset.mobileKeyboard).toBe("false");
+});
+
+it("removes viewport tracking when the mobile layout unmounts", () => {
+  act(() => root.render(null));
+  viewport.offsetTop = 72;
+  viewport.dispatchEvent(new Event("scroll"));
+  expect(document.documentElement.style.getPropertyValue("--mobile-offset-top")).toBe("");
+  expect(document.documentElement.style.getPropertyValue("--mobile-height")).toBe("");
 });
