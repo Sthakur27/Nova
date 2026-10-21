@@ -56,6 +56,8 @@ On desktop, **Dictate** turns spoken English into text. Download the speech mode
 
 Use **Open files** to choose a note, **New note** to start one, and swipe left or right across the editor to move between open notes. The focus button hides the surrounding controls; the small top-right button brings them back. Mobile uses Cloud notes; desktop features such as split panes and saved states aren’t available there.
 
+Tap text to write with the system keyboard. Tap outside the text or use **Done** to dismiss it. Formatting buttons keep your editing selection available.
+
 ## In the web preview
 
 Open the [web preview](https://nova-indol-pi.vercel.app) in your browser to use Cloud notes. Use the cloud icon in the bottom-left corner controls to connect, reconnect, or disconnect Google Drive, then choose a downloaded note or use **+** to create one. Use **Edit** or **Source**, search downloaded notes from the sidebar, and use **Export** to keep an extra copy. When creating or renaming a note, enter its filename in the dialog, then press Enter to save or Escape to cancel. Hide or show the sidebar with the panel button beside your note title. The corner Appearance button switches between Focused and Wide writing widths for the current session.

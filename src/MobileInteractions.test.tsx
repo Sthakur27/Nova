@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, type PointerEvent as ReactPointerEvent } from "react";
+import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import MobileFileBar from "./MobileFileBar";
@@ -63,10 +63,53 @@ it("dismisses for blank note padding while preserving caret taps and formatting 
   const editable = container.firstElementChild as HTMLElement;
   const preventDefault = vi.fn();
   editable.focus();
-  const tap = (target: Element) => dismissKeyboardOutsideEditor({ target, preventDefault } as unknown as ReactPointerEvent<HTMLElement>);
+  const tap = (target: Element) => dismissKeyboardOutsideEditor({ target, preventDefault });
   tap(editable.firstElementChild!); expect(document.activeElement).toBe(editable);
   tap(container.querySelector("button")!); expect(document.activeElement).toBe(editable);
   tap(editable); expect(document.activeElement).not.toBe(editable); expect(preventDefault).toHaveBeenCalledOnce();
+});
+
+it.each(["mobile-file-bar", "file-heading", "dialog", "format-toolbar"])("dismisses on %s background taps without cancelling the tap", async className => {
+  const onClick = vi.fn();
+  await act(async () => root.render(<div onClickCapture={dismissKeyboardOutsideEditor}>
+    <div contentEditable suppressContentEditableWarning tabIndex={0}>Note</div>
+    <div className={className} role={className === "dialog" ? "dialog" : undefined} onClick={onClick}>Background</div>
+  </div>));
+  const editable = container.querySelector<HTMLElement>('[contenteditable="true"]')!;
+  editable.focus();
+  const event = new MouseEvent("click", { bubbles: true, cancelable: true });
+  await act(async () => container.querySelector(`.${className}`)!.dispatchEvent(event));
+  expect(document.activeElement).not.toBe(editable);
+  expect(event.defaultPrevented).toBe(false);
+  expect(onClick).toHaveBeenCalledOnce();
+});
+
+it("dismisses the note keyboard before opening the file picker", async () => {
+  await act(async () => root.render(<div onClickCapture={dismissKeyboardOutsideEditor}>
+    <div contentEditable suppressContentEditableWarning tabIndex={0}>Note</div>
+    <MobileFileBar tabs={tabs} selected={tabId(tabs[0])} onSelect={vi.fn()} onNew={vi.fn()} onCloseTab={vi.fn()} />
+  </div>));
+  const editable = container.querySelector<HTMLElement>('[contenteditable="true"]')!;
+  editable.focus();
+  await act(async () => container.querySelector<HTMLButtonElement>(".mobile-file-picker")!.click());
+  expect(document.activeElement).not.toBe(editable);
+  expect(container.querySelector("dialog[open]")).not.toBeNull();
+});
+
+it("dismisses a dialog input keyboard on its background but preserves field taps", async () => {
+  await act(async () => root.render(<div onClickCapture={dismissKeyboardOutsideEditor}>
+    <dialog open><input aria-label="Name" /><textarea aria-label="Details" /><p>Dialog background</p></dialog>
+  </div>));
+  const input = container.querySelector("input")!;
+  input.focus();
+  await act(async () => input.click());
+  expect(document.activeElement).toBe(input);
+  const textarea = container.querySelector("textarea")!;
+  textarea.focus();
+  await act(async () => textarea.click());
+  expect(document.activeElement).toBe(textarea);
+  await act(async () => container.querySelector("p")!.click());
+  expect(document.activeElement).not.toBe(textarea);
 });
 
 it("enters focus from the file bar without changing the note or opening the file sheet", async () => {
